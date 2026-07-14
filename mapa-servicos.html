@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Serviços · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Mapa de serviços</p>
+    <h1 class="page-title">Protocolos por tempo de atendimento</h1>
+    <p class="page-sub">Lista e georreferenciamento dos serviços em aberto — cidade, bairro, projeto e status de prazo.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Protocolo, bairro...">
+    </div>
+    <div class="field">
+      <label for="f-cidade">Cidade</label>
+      <select id="f-cidade"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+      <label for="f-tipo">Tipo de serviço</label>
+      <select id="f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-prazo">Status</label>
+      <select id="f-prazo">
+        <option value="">Todos</option>
+        <option value="dentro">Dentro do prazo</option>
+        <option value="fora">Fora do prazo</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <div class="view-toggle" id="view-toggle">
+      <button data-view="split" class="active">Lista + Mapa</button>
+      <button data-view="list">Lista</button>
+      <button data-view="map">Mapa</button>
+    </div>
+    <button class="btn primary" id="btn-add">＋ Adicionar</button>
+    <button class="btn" id="btn-import">⇪ Importar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
+    <input type="file" id="file-import" accept=".csv" style="display:none">
+  </div>
+
+  <div class="split" id="split-view">
+    <div class="panel" id="table-panel">
+      <div class="table-wrap">
+        <table class="services">
+          <thead>
+            <tr>
+              <th data-sort="protocolo">Protocolo</th>
+              <th data-sort="titulo">Serviço</th>
+              <th data-sort="cidade">Cidade</th>
+              <th data-sort="bairro">Bairro</th>
+              <th data-sort="tempo">Tempo (h)</th>
+              <th data-sort="prazoStatus">Prazo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="empty-state" style="display:none">
+        <div class="glyph">🗂️</div>
+        <h3>Nenhum registro ainda</h3>
+        <p>Importe sua planilha em CSV ou adicione um protocolo manualmente.</p>
+        <button class="btn primary" id="btn-add-empty">＋ Adicionar primeiro registro</button>
+      </div>
+    </div>
+
+    <div class="panel map-panel" id="map-panel">
+      <div class="map-head">
+        <span class="title">📍 Localização dos protocolos</span>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
+          <span><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
+          <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: adicionar / editar registro -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title">Adicionar protocolo</h3>
+    <p class="modal-sub">Preencha os dados do serviço. Coordenadas são opcionais — sem elas, usamos o ponto central da cidade no mapa.</p>
+    <form id="form-record">
+      <input type="hidden" id="rec-id">
+      <div class="grid2">
+        <div class="field"><label>Protocolo</label><input class="input" id="rec-protocolo" required></div>
+        <div class="field"><label>Projeto</label><input class="input" id="rec-projeto" value="OP-INST-VT-RN"></div>
+      </div>
+      <div class="field"><label>Título do serviço</label><input class="input" id="rec-titulo" required placeholder="Ex: OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)"></div>
+      <div class="grid2">
+        <div class="field"><label>Cidade</label><input class="input" id="rec-cidade" required></div>
+        <div class="field"><label>Bairro</label><input class="input" id="rec-bairro"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Tempo atual (h)</label><input class="input" type="number" min="0" id="rec-tempo" required></div>
+        <div class="field"><label>Status do prazo</label>
+          <select id="rec-prazo">
+            <option value="dentro">Dentro do prazo</option>
+            <option value="fora">Fora do prazo</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Latitude (opcional)</label><input class="input" id="rec-lat" placeholder="-5.1989"></div>
+        <div class="field"><label>Longitude (opcional)</label><input class="input" id="rec-lng" placeholder="-35.4608"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/seed-data.js"></script>
+<script>
+requireAuthThenInit('mapa-servicos.html', 'Mapa de Serviços');
+
+let records = OPS.load();
+if (!records){
+  records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() }));
+  OPS.save(records);
+}
+
+let sortKey = null, sortDir = 1;
+let leafletMap = null, markerLayer = null;
+
+const els = {
+  search: document.getElementById('f-search'),
+  cidade: document.getElementById('f-cidade'),
+  tipo: document.getElementById('f-tipo'),
+  prazo: document.getElementById('f-prazo'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function populateFilterOptions(){
+  const cidades = [...new Set(records.map(r => r.cidade))].sort();
+  els.cidade.innerHTML = '<option value="">Todas</option>' +
+    cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  els.tipo.innerHTML = '<option value="">Todos</option>' +
+    OPS.allTypes().map(t => `<option value="${t.key}">${t.icon} ${t.label}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const cidade = els.cidade.value;
+  const tipo = els.tipo.value;
+  const prazo = els.prazo.value;
+
+  return records.filter(r => {
+    if (cidade && r.cidade !== cidade) return false;
+    if (prazo && r.prazoStatus !== prazo) return false;
+    if (tipo && OPS.classifyType(r.titulo).key !== tipo) return false;
+    if (q){
+      const hay = OPS.normalize(r.protocolo + ' ' + r.titulo + ' ' + r.bairro);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function computeStats(list){
+  const total = list.length;
+  const dentro = list.filter(r => r.prazoStatus === 'dentro').length;
+  const fora = total - dentro;
+  const tempoMedio = total ? (list.reduce((s,r) => s + Number(r.tempo||0), 0) / total) : 0;
+  return { total, dentro, fora, tempoMedio };
+}
+
+function renderStats(){
+  const s = computeStats(getFiltered());
+  const pctDentro = s.total ? Math.round(s.dentro / s.total * 100) : 0;
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${s.total}</div></div>
+    <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${s.dentro} <small>(${pctDentro}%)</small></div></div>
+    <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${s.fora}</div></div>
+    <div class="stat-card"><div class="label">Tempo médio</div><div class="value">${s.tempoMedio.toFixed(1)}<small>h</small></div></div>
+  `;
+}
+
+function runwayColor(rec){
+  if (rec.prazoStatus === 'fora') return 'crit';
+  if (Number(rec.tempo) > 48) return 'warn';
+  return 'ok';
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey){
+    list = [...list].sort((a,b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'tempo'){ av = Number(av); bv = Number(bv); }
+      else { av = OPS.normalize(av); bv = OPS.normalize(bv); }
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+
+  els.emptyState.style.display = records.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
+
+  els.tbody.innerHTML = list.map(r => {
+    const type = OPS.classifyType(r.titulo);
+    const pct = Math.min(Number(r.tempo)/72*100, 100);
+    const color = runwayColor(r);
+    return `
+      <tr data-id="${r.id}">
+        <td class="proto">${r.protocolo}</td>
+        <td><span class="svc-type"><span class="icon">${type.icon}</span>${r.titulo}</span></td>
+        <td>${r.cidade}</td>
+        <td>${r.bairro || '—'}</td>
+        <td>
+          <div class="runway">
+            <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
+            <div class="meta">${r.tempo}h</div>
+          </div>
+        </td>
+        <td>
+          <span class="badge ${r.prazoStatus === 'dentro' ? 'ok' : 'crit'}">
+            <span class="dot"></span>${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}
+          </span>
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
+            <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function initMap(){
+  leafletMap = L.map('map', { zoomControl: true }).setView([OPS.DEFAULT_CENTER.lat, OPS.DEFAULT_CENTER.lng], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+  markerLayer = L.layerGroup().addTo(leafletMap);
+}
+
+function renderMap(){
+  markerLayer.clearLayers();
+  const list = getFiltered();
+  const bounds = [];
+
+  list.forEach(r => {
+    const coords = OPS.resolveCoords(r);
+    const type = OPS.classifyType(r.titulo);
+    const statusClass = r.prazoStatus === 'dentro' ? 'ok' : 'crit';
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="marker-emoji ${statusClass}"><span>${type.icon}</span></div>`,
+      iconSize: [26,26],
+      iconAnchor: [13,22],
+    });
+
+    const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(markerLayer);
+    marker.bindPopup(`
+      <div class="popup-svc">
+        <span class="proto">${r.protocolo}</span>
+        <div class="title">${type.icon} ${r.titulo}</div>
+        <div class="meta">${r.cidade}${r.bairro ? ' · ' + r.bairro : ''}</div>
+        <div class="meta">${r.tempo}h · ${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</div>
+        ${coords.approx ? '<div class="approx">◇ Local aproximado (centro da cidade)</div>' : ''}
+      </div>
+    `);
+    bounds.push([coords.lat, coords.lng]);
+  });
+
+  if (bounds.length){
+    leafletMap.fitBounds(bounds, { padding: [30,30], maxZoom: 12 });
+  }
+}
+
+function renderAll(){
+  renderStats();
+  renderTable();
+  renderMap();
+}
+
+// ---------- filtros ----------
+[els.search, els.cidade, els.tipo, els.prazo].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+// ---------- ordenação ----------
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+// ---------- ações da linha ----------
+els.tbody.addEventListener('click', (e) => {
+  const editId = e.target.dataset.edit;
+  const delId = e.target.dataset.del;
+  if (editId) openModal(records.find(r => r.id === editId));
+  if (delId){
+    if (confirm('Excluir este protocolo?')){
+      records = records.filter(r => r.id !== delId);
+      OPS.save(records);
+      populateFilterOptions();
+      renderAll();
+    }
+  }
+});
+
+// ---------- modal adicionar/editar ----------
+const modal = document.getElementById('modal');
+function openModal(rec){
+  document.getElementById('modal-title').textContent = rec ? 'Editar protocolo' : 'Adicionar protocolo';
+  document.getElementById('rec-id').value = rec ? rec.id : '';
+  document.getElementById('rec-protocolo').value = rec ? rec.protocolo : '';
+  document.getElementById('rec-projeto').value = rec ? rec.projeto : 'OP-INST-VT-RN';
+  document.getElementById('rec-titulo').value = rec ? rec.titulo : '';
+  document.getElementById('rec-cidade').value = rec ? rec.cidade : '';
+  document.getElementById('rec-bairro').value = rec ? rec.bairro : '';
+  document.getElementById('rec-tempo').value = rec ? rec.tempo : '';
+  document.getElementById('rec-prazo').value = rec ? rec.prazoStatus : 'dentro';
+  document.getElementById('rec-lat').value = rec && rec.lat != null ? rec.lat : '';
+  document.getElementById('rec-lng').value = rec && rec.lng != null ? rec.lng : '';
+  modal.style.display = 'flex';
+}
+function closeModal(){ modal.style.display = 'none'; }
+document.getElementById('btn-add').onclick = () => openModal(null);
+document.getElementById('btn-add-empty').onclick = () => openModal(null);
+document.getElementById('btn-cancel').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+document.getElementById('form-record').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('rec-id').value;
+  const latVal = document.getElementById('rec-lat').value.trim();
+  const lngVal = document.getElementById('rec-lng').value.trim();
+  const data = {
+    protocolo: document.getElementById('rec-protocolo').value.trim(),
+    projeto: document.getElementById('rec-projeto').value.trim(),
+    titulo: document.getElementById('rec-titulo').value.trim(),
+    cidade: document.getElementById('rec-cidade').value.trim(),
+    bairro: document.getElementById('rec-bairro').value.trim(),
+    tempo: Number(document.getElementById('rec-tempo').value),
+    prazoStatus: document.getElementById('rec-prazo').value,
+    lat: latVal ? Number(latVal) : undefined,
+    lng: lngVal ? Number(lngVal) : undefined,
+  };
+  if (id){
+    records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  } else {
+    records.push({ ...data, id: OPS.uid() });
+  }
+  OPS.save(records);
+  populateFilterOptions();
+  renderAll();
+  closeModal();
+});
+
+// ---------- importar / exportar CSV ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQuotes){
+      if (c === '"' && text[i+1] === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r'){
+        if (c === '\r' && text[i+1] === '\n') continue;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function mapHeader(h){
+  const n = OPS.normalize(h);
+  if (n.includes('protocolo')) return 'protocolo';
+  if (n.includes('titulo')) return 'titulo';
+  if (n === 'cidade') return 'cidade';
+  if (n === 'bairro') return 'bairro';
+  if (n.includes('projeto')) return 'projeto';
+  if (n.includes('tempo')) return 'tempo';
+  if (n.includes('prazo')) return 'prazoRaw';
+  if (n.includes('lat')) return 'lat';
+  if (n.includes('lon') || n.includes('lng')) return 'lng';
+  return null;
+}
+
+document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+document.getElementById('file-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCSV(reader.result).filter(r => r.some(c => c.trim() !== ''));
+    if (rows.length < 2){ alert('CSV vazio ou sem dados.'); return; }
+    const headers = rows[0].map(mapHeader);
+    const imported = rows.slice(1).map(cols => {
+      const rec = { id: OPS.uid() };
+      headers.forEach((key, idx) => {
+        if (!key) return;
+        const val = (cols[idx] || '').trim();
+        if (key === 'tempo') rec.tempo = Number(val.replace(',', '.')) || 0;
+        else if (key === 'lat' || key === 'lng') { if (val) rec[key] = Number(val.replace(',', '.')); }
+        else if (key === 'prazoRaw') rec.prazoStatus = OPS.normalize(val).includes('fora') ? 'fora' : 'dentro';
+        else rec[key] = val;
+      });
+      if (!rec.prazoStatus) rec.prazoStatus = 'dentro';
+      return rec;
+    }).filter(r => r.protocolo);
+
+    if (!imported.length){ alert('Não encontrei colunas reconhecíveis. Verifique os cabeçalhos (PROTOCOLO, TÍTULO SERVIÇO, CIDADE, BAIRRO, PROJETO, TEMPO ATUAL (H), PRAZO).'); return; }
+
+    const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
+    records = mode ? imported : [...records, ...imported];
+    OPS.save(records);
+    populateFilterOptions();
+    renderAll();
+    e.target.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','PROJETO','TEMPO ATUAL (H)','PRAZO','LAT','LNG'];
+  const lines = [headers.join(',')];
+  records.forEach(r => {
+    const row = [r.protocolo, r.titulo, r.cidade, r.bairro, r.projeto, r.tempo,
+      r.prazoStatus === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO', r.lat ?? '', r.lng ?? ''];
+    lines.push(row.map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mapa-servicos-touros.csv';
+  a.click();
+};
+
+document.getElementById('btn-clear').onclick = () => {
+  if (confirm('Isso vai apagar TODOS os registros deste navegador. Deseja continuar?')){
+    records = [];
+    OPS.save(records);
+    populateFilterOptions();
+    renderAll();
+  }
+};
+
+// ---------- alternância de visualização (lista/mapa/split) ----------
+const splitView = document.getElementById('split-view');
+document.getElementById('view-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const view = btn.dataset.view;
+  document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
+  document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
+  splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+});
+
+// ---------- init ----------
+populateFilterOptions();
+initMap();
+renderAll();
+</script>
+</body>
+</html>

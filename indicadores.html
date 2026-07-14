@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indicadores · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Indicadores de desempenho</p>
+    <h1 class="page-title">Plano de Ação KPI · Serviços</h1>
+    <p class="page-sub">SLA 24h/48h, Ativação e MDE 72h, erro de projeto e pareto por cidade.</p>
+  </div>
+
+  <div class="sla-tabs" id="sla-tabs"></div>
+  <div id="indicadores-content"></div>
+</div>
+
+<script src="assets/common.js"></script>
+<script>
+requireAuthThenInit('indicadores.html', 'Indicadores');
+
+/* =========================================================
+   Dados — mesmos protocolos enviados na base atual do painel.
+   Quando quiser conectar com a planilha real: publique cada
+   aba como CSV no Google Sheets e substitua os arrays abaixo
+   por um fetch() das URLs publicadas.
+========================================================= */
+const SLA24 = [
+  {prot:'8451931/1',titulo:'SEM ACESSO',        cidade:'CAIÇARA DO NORTE',     bairro:'NOVA CAICARA',      tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451875/1',titulo:'SEM ACESSO',        cidade:'CAIÇARA DO NORTE',     bairro:'CJ SANTA RITA',    tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8450045/1',titulo:'DIFICULDADE ACESSO',cidade:'GUAMARÉ',              bairro:'BAIXA DO MEIO',    tempo:6, status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8451198/1',titulo:'DIFICULDADE ACESSO',cidade:'JOÃO CÂMARA',          bairro:'CENTRO',           tempo:3, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451848/1',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'CENTRO',           tempo:2, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450272/1',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'BELA VISTA',       tempo:5, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8446282/2',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'QUEIMADAS',        tempo:1, status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8450059/1',titulo:'DIFICULDADE ACESSO',cidade:'RIO DO FOGO',          bairro:'PUNAU',            tempo:6, status:'OS c/ Técnico em Deslocamento', sla:'PODE ESPERAR'},
+  {prot:'8450328/1',titulo:'SEM ACESSO',        cidade:'RIO DO FOGO',          bairro:'PUNAU',            tempo:5, status:'Interromper Deslocamento',      sla:'PODE ESPERAR'},
+  {prot:'8451176/1',titulo:'SEM ACESSO',        cidade:'SÃO BENTO DO NORTE',   bairro:'CENTRO',           tempo:3, status:'OS c/ Técnico em Deslocamento', sla:'PODE ESPERAR'},
+  {prot:'8452262/1',titulo:'SEM ACESSO',        cidade:'SÃO MIGUEL DO GOSTOSO',bairro:'CENTRO',           tempo:1, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8448822/1',titulo:'DIFICULDADE ACESSO',cidade:'TOUROS',               bairro:'BOA CICA',         tempo:7, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451517/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'PRAIA DO FAROL',   tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8450967/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'NOVO HORIZONTE',   tempo:3, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450528/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ISRAEL',      tempo:4, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450292/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ISRAEL',      tempo:5, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8448806/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ASSIS',       tempo:7, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8448206/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'POVO. BOQUEIRÃO',  tempo:8, status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+];
+const SLA48 = [
+  {prot:'8440111/1',titulo:'SEM SINAL',  cidade:'TOUROS',               bairro:'CENTRO',        tempo:30,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8441220/1',titulo:'LENTIDÃO',   cidade:'JOÃO CÂMARA',          bairro:'CENTRO',        tempo:25,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8443500/1',titulo:'SEM SINAL',  cidade:'GUAMARÉ',              bairro:'BOA ESPERANÇA', tempo:20,status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+  {prot:'8444100/1',titulo:'LENTIDÃO',   cidade:'RIO DO FOGO',          bairro:'PUNAU',         tempo:10,status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8445200/1',titulo:'SEM SINAL',  cidade:'SÃO MIGUEL DO GOSTOSO',bairro:'CENTRO',        tempo:35,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+];
+const ATIVACAO = [
+  {prot:'8430001/1',titulo:'ATIVAÇÃO',cidade:'TOUROS',           bairro:'NOVA CONQUISTA',tempo:50,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8430002/1',titulo:'ATIVAÇÃO',cidade:'JOÃO CÂMARA',      bairro:'ALTO BONITO',   tempo:40,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8430003/1',titulo:'ATIVAÇÃO',cidade:'GUAMARÉ',          bairro:'CENTRO',        tempo:60,status:'Atendimento Iniciado',          sla:'VENCIDO'},
+  {prot:'8430004/1',titulo:'ATIVAÇÃO',cidade:'CAIÇARA DO NORTE', bairro:'CENTRO',        tempo:20,status:'Aberta Aguardando Agendamento', sla:'ATENDER HOJE'},
+];
+const MDE = [
+  {prot:'8420001/1',titulo:'MUDANÇA ENDEREÇO',cidade:'TOUROS',      bairro:'BOA CICA',  tempo:65,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8420002/1',titulo:'MUDANÇA ENDEREÇO',cidade:'JOÃO CÂMARA', bairro:'QUEIMADAS', tempo:45,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8420003/1',titulo:'MUDANÇA ENDEREÇO',cidade:'RIO DO FOGO', bairro:'PUNAU',     tempo:30,status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+];
+const ERRO_PROJ = [
+  {prot:'8410001/1',titulo:'ERRO DE PROJETO',cidade:'TOUROS',             bairro:'PRAIA DO FAROL',tempo:15,status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8410002/1',titulo:'ERRO DE PROJETO',cidade:'GUAMARÉ',            bairro:'BAIXA DO MEIO', tempo:22,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8410003/1',titulo:'ERRO DE PROJETO',cidade:'SÃO BENTO DO NORTE', bairro:'CENTRO',        tempo:8, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+];
+
+const DATASETS = { sla24:SLA24, sla48:SLA48, ativacao:ATIVACAO, mde:MDE, erro:ERRO_PROJ };
+const DS_LABELS = { visao:'Visão Geral', sla24:'SLA 24HS', sla48:'SLA 48HS', ativacao:'Ativação 72HS', mde:'MDE 72HS', erro:'Erro de Projeto', pareto:'Pareto Cidades', alertas:'Alertas' };
+
+function slaClass(s){ return s==='VENCIDO' ? 'vencido' : s==='ATENDER HOJE' ? 'hoje' : 'ok'; }
+function slaLabel(s){ return s==='VENCIDO' ? '🔴 VENCIDO' : s==='ATENDER HOJE' ? '⚠️ ATENDER HOJE' : '✓ OK'; }
+
+function pareto(dataset){
+  const map = {};
+  dataset.forEach(o => {
+    if (!map[o.cidade]) map[o.cidade] = { total:0, vencido:0, hoje:0, ok:0 };
+    map[o.cidade].total++;
+    if (o.sla === 'VENCIDO') map[o.cidade].vencido++;
+    else if (o.sla === 'ATENDER HOJE') map[o.cidade].hoje++;
+    else map[o.cidade].ok++;
+  });
+  return Object.entries(map).sort((a,b) => b[1].total - a[1].total);
+}
+
+function countAll(){
+  let v=0,h=0,ok=0;
+  Object.values(DATASETS).forEach(ds => ds.forEach(o => {
+    if (o.sla==='VENCIDO') v++; else if (o.sla==='ATENDER HOJE') h++; else ok++;
+  }));
+  return { v, h, ok, total: v+h+ok };
+}
+
+function buildVisao(){
+  const tot = countAll();
+  const allOS = Object.values(DATASETS).flat();
+  const kpis = `
+  <div class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    <div class="kpi cyan"><div class="kpi-label">Total OS Abertas</div><div class="kpi-value">${allOS.length}</div><div class="kpi-sub">todas as abas</div></div>
+    <div class="kpi red"><div class="kpi-label">SLA Vencido</div><div class="kpi-value">${tot.v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender Hoje</div><div class="kpi-value">${tot.h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Dentro do Prazo</div><div class="kpi-value">${tot.ok}</div><div class="kpi-sub">pode esperar</div></div>
+    <div class="kpi purple"><div class="kpi-label">SLA 24HS</div><div class="kpi-value">${SLA24.length}</div><div class="kpi-sub">${SLA24.filter(o=>o.sla==='VENCIDO').length} vencida(s)</div></div>
+    <div class="kpi orange"><div class="kpi-label">Ativação + MDE</div><div class="kpi-value">${ATIVACAO.length+MDE.length}</div><div class="kpi-sub">${[...ATIVACAO,...MDE].filter(o=>o.sla==='VENCIDO').length} vencida(s)</div></div>
+  </div>`;
+
+  const slaCards = `
+  <div class="sec-hdr">SLA por tipo de serviço</div>
+  <div class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    ${Object.entries(DATASETS).map(([key, ds]) => {
+      const v = ds.filter(o=>o.sla==='VENCIDO').length;
+      const h = ds.filter(o=>o.sla==='ATENDER HOJE').length;
+      const cor = v>0 ? 'red' : h>0 ? 'yellow' : 'green';
+      return `<div class="kpi ${cor}" style="cursor:pointer" onclick="setTab('${key}')">
+        <div class="kpi-label">${DS_LABELS[key]}</div>
+        <div class="kpi-value">${ds.length}</div>
+        <div class="kpi-sub">${v>0 ? v+' vencida(s)' : h>0 ? h+' hoje' : '✓ ok'}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  const allCityMap = {};
+  Object.values(DATASETS).forEach(ds => ds.forEach(o => {
+    if (!allCityMap[o.cidade]) allCityMap[o.cidade] = { total:0, v:0, h:0, ok:0 };
+    allCityMap[o.cidade].total++;
+    if (o.sla==='VENCIDO') allCityMap[o.cidade].v++;
+    else if (o.sla==='ATENDER HOJE') allCityMap[o.cidade].h++;
+    else allCityMap[o.cidade].ok++;
+  }));
+  const cities = Object.entries(allCityMap).sort((a,b) => b[1].total - a[1].total);
+  const maxTotal = cities[0]?.[1].total || 1;
+
+  const cityPareto = `
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>📍 Pareto por cidade — consolidado</h3><span class="cnt-badge">${cities.length} cidades</span></div>
+      <div class="city-list">
+        ${cities.map(([cidade, d]) => {
+          const pct = Math.round(d.total/maxTotal*100);
+          const barColor = d.v>0 ? 'red' : d.h>0 ? 'yellow' : 'green';
+          return `<div class="city-row">
+            <div class="city-meta">
+              <span class="city-name">${cidade}</span>
+              <div class="city-nums">
+                <span class="city-total">${d.total} OS</span>
+                ${d.v>0 ? `<span class="city-alert">${d.v} venc.</span>` : ''}
+                ${d.h>0 ? `<span class="city-warn">${d.h} hoje</span>` : ''}
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill ${barColor}" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="card">
+        <div class="card-head"><h3>Status geral</h3></div>
+        <div class="status-list">
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--crit)"></span>SLA vencido</span><span class="status-val" style="color:var(--crit)">${tot.v}</span></div>
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--warn)"></span>Atender hoje</span><span class="status-val" style="color:var(--warn)">${tot.h}</span></div>
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--ok)"></span>Dentro do prazo</span><span class="status-val" style="color:var(--ok)">${tot.ok}</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>⚡ Destaques</h3></div>
+        <div class="status-list">
+          ${cities.slice(0,3).map(([c,d],i) => `<div class="status-row"><span class="status-name" style="font-size:.8em">${['🥇','🥈','🥉'][i]} ${c}</span><span class="status-val" style="color:var(--brand)">${d.total}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  const criticas = allOS.filter(o => o.sla === 'VENCIDO').slice(0, 8);
+  const tabelaCrit = criticas.length ? `
+  <div class="sec-hdr">🔴 OS vencidas — ação imediata</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Protocolo</th><th>Serviço</th><th>Cidade</th><th>Bairro</th><th>Tempo (h)</th><th>Status</th><th>SLA</th></tr></thead>
+    <tbody>${criticas.map(o => `<tr>
+      <td class="proto">${o.prot}</td><td>${o.titulo}</td><td>${o.cidade}</td>
+      <td style="color:var(--ink-dim);font-size:.85em">${o.bairro}</td>
+      <td class="proto" style="color:var(--crit);font-weight:700">${o.tempo}h</td>
+      <td><span class="badge-status">${o.status}</span></td>
+      <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : '';
+
+  return kpis + slaCards + cityPareto + tabelaCrit;
+}
+
+function buildSLAPage(key){
+  const ds = DATASETS[key];
+  const label = DS_LABELS[key];
+  const v = ds.filter(o=>o.sla==='VENCIDO').length;
+  const h = ds.filter(o=>o.sla==='ATENDER HOJE').length;
+  const ok = ds.filter(o=>o.sla==='PODE ESPERAR').length;
+  const cities = pareto(ds);
+  const maxT = cities[0]?.[1].total || 1;
+
+  const kpis = `
+  <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi cyan"><div class="kpi-label">Total OS</div><div class="kpi-value">${ds.length}</div><div class="kpi-sub">${label}</div></div>
+    <div class="kpi red"><div class="kpi-label">SLA vencido</div><div class="kpi-value">${v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender hoje</div><div class="kpi-value">${h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Dentro do prazo</div><div class="kpi-value">${ok}</div><div class="kpi-sub">pode esperar</div></div>
+  </div>`;
+
+  const cityBlock = `
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>📍 Pareto por cidade</h3></div>
+      <div class="city-list">
+        ${cities.map(([cidade, d]) => {
+          const pct = Math.round(d.total/maxT*100);
+          const barColor = d.vencido>0 ? 'red' : d.hoje>0 ? 'yellow' : 'green';
+          return `<div class="city-row">
+            <div class="city-meta">
+              <span class="city-name">${cidade}</span>
+              <div class="city-nums">
+                <span class="city-total">${d.total} OS</span>
+                ${d.vencido>0 ? `<span class="city-alert">${d.vencido} venc.</span>` : ''}
+                ${d.hoje>0 ? `<span class="city-warn">${d.hoje} hoje</span>` : ''}
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill ${barColor}" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Status das OS</h3></div>
+      <div class="status-list">
+        ${[...new Set(ds.map(o=>o.status))].map(s => `<div class="status-row"><span class="status-name" style="font-size:.85em">${s}</span><span class="status-val" style="color:var(--brand)">${ds.filter(o=>o.status===s).length}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+
+  const tabela = `
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Protocolo</th><th>Serviço</th><th>Cidade</th><th>Bairro</th><th>Tempo (h)</th><th>Status</th><th>SLA</th></tr></thead>
+    <tbody>${[...ds].sort((a,b) => {
+      const ord = { VENCIDO:0, 'ATENDER HOJE':1, 'PODE ESPERAR':2 };
+      return (ord[a.sla]??3) - (ord[b.sla]??3);
+    }).map(o => `<tr>
+      <td class="proto">${o.prot}</td><td>${o.titulo}</td><td>${o.cidade}</td>
+      <td style="color:var(--ink-dim);font-size:.85em">${o.bairro}</td>
+      <td class="proto" style="color:${o.sla==='VENCIDO'?'var(--crit)':o.sla==='ATENDER HOJE'?'var(--warn)':'var(--ok)'};font-weight:700">${o.tempo}h</td>
+      <td><span class="badge-status">${o.status}</span></td>
+      <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+
+  return kpis + cityBlock + tabela;
+}
+
+function buildParetoPage(){
+  const cityMap = {};
+  Object.values(DATASETS).flat().forEach(o => {
+    if (!cityMap[o.cidade]) cityMap[o.cidade] = { total:0, v:0, h:0, ok:0, sla24:0, sla48:0, ativ:0, mde:0, erro:0 };
+    const c = cityMap[o.cidade];
+    c.total++;
+    if (o.sla==='VENCIDO') c.v++; else if (o.sla==='ATENDER HOJE') c.h++; else c.ok++;
+  });
+  SLA24.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].sla24++; });
+  SLA48.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].sla48++; });
+  ATIVACAO.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].ativ++; });
+  MDE.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].mde++; });
+  ERRO_PROJ.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].erro++; });
+
+  const cities = Object.entries(cityMap).sort((a,b) => b[1].total - a[1].total);
+  return `
+  <div class="sec-hdr">Pareto por cidade — todas as abas</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Cidade</th><th>Total</th><th>Vencido</th><th>Hoje</th><th>OK</th><th>SLA 24h</th><th>SLA 48h</th><th>Ativação</th><th>MDE</th><th>Erro proj.</th></tr></thead>
+    <tbody>${cities.map(([cidade,d]) => `<tr>
+      <td style="font-weight:700">${cidade}</td>
+      <td class="proto" style="color:var(--brand);font-weight:700">${d.total}</td>
+      <td class="proto" style="color:${d.v>0?'var(--crit)':'var(--ink-dim)'};font-weight:700">${d.v||'—'}</td>
+      <td class="proto" style="color:${d.h>0?'var(--warn)':'var(--ink-dim)'};font-weight:700">${d.h||'—'}</td>
+      <td class="proto" style="color:var(--ok)">${d.ok}</td>
+      <td style="color:var(--ink-dim)">${d.sla24||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.sla48||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.ativ||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.mde||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.erro||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function buildAlertas(){
+  const criticas = Object.entries(DATASETS).flatMap(([k,ds]) =>
+    ds.filter(o => o.sla==='VENCIDO' || o.sla==='ATENDER HOJE').map(o => ({...o, tipo: DS_LABELS[k]}))
+  ).sort((a,b) => b.tempo - a.tempo);
+  const v = criticas.filter(o=>o.sla==='VENCIDO').length;
+  const h = criticas.filter(o=>o.sla==='ATENDER HOJE').length;
+
+  return `
+  <div class="kpi-strip" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi red"><div class="kpi-label">SLA vencido</div><div class="kpi-value">${v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender hoje</div><div class="kpi-value">${h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Total de alertas</div><div class="kpi-value">${criticas.length}</div><div class="kpi-sub">pendentes</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <div class="card-head"><h3>⚡ Todas as OS críticas</h3><span class="cnt-badge">${criticas.length}</span></div>
+    <table>
+      <thead><tr><th>Protocolo</th><th>Tipo SLA</th><th>Serviço</th><th>Cidade</th><th>Tempo (h)</th><th>Status</th><th>Prioridade</th></tr></thead>
+      <tbody>${criticas.map(o => `<tr>
+        <td class="proto">${o.prot}</td>
+        <td style="font-size:.8em;color:var(--accent2)">${o.tipo}</td>
+        <td>${o.titulo}</td><td>${o.cidade}</td>
+        <td class="proto" style="color:${o.sla==='VENCIDO'?'var(--crit)':'var(--warn)'};font-weight:700">${o.tempo}h</td>
+        <td><span class="badge-status">${o.status}</span></td>
+        <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+let currentTab = 'visao';
+function setTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.sla-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  const c = document.getElementById('indicadores-content');
+  if (tab === 'visao') c.innerHTML = buildVisao();
+  else if (tab === 'pareto') c.innerHTML = buildParetoPage();
+  else if (tab === 'alertas') c.innerHTML = buildAlertas();
+  else c.innerHTML = buildSLAPage(tab);
+}
+
+document.getElementById('sla-tabs').innerHTML = Object.keys(DS_LABELS).map(key => {
+  let count = '';
+  if (DATASETS[key]) count = `<span class="cnt-badge" style="margin-left:6px">${DATASETS[key].length}</span>`;
+  return `<div class="sla-tab" data-tab="${key}" onclick="setTab('${key}')">${DS_LABELS[key]}${count}</div>`;
+}).join('');
+
+setTab('visao');
+</script>
+</body>
+</html>
