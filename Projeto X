@@ -1,0 +1,1698 @@
+/* Carga inicial de exemplo — baseada no modelo da planilha
+   "Plano de Ação KPI (Serviços) - Unidade Touros".
+   Substitua importando seu CSV real (botão "Importar planilha").
+   Algumas linhas trazem lat/lng próprios (para mostrar o pino exato);
+   as demais ficam sem coordenada própria, caindo no ponto central
+   da cidade automaticamente. */
+const OPS_SEED_DATA = [
+  { protocolo:'8596631/1', titulo:'OPERAÇÕES - SERVIÇOS ADICIONAIS',            cidade:'Acari',                bairro:'Dinarte Mariz',              projeto:'OP-INST-VT-RN', tempo:4,   prazoStatus:'dentro' },
+  { protocolo:'8596364/1', titulo:'OPERAÇÕES - TROCA DE ENDEREÇO',              cidade:'Canguaretama',         bairro:'Vila Vintém (rua de trás)',  projeto:'OP-INST-VT-RN', tempo:4,   prazoStatus:'dentro', lat:-6.379, lng:-35.131 },
+  { protocolo:'8596206/1', titulo:'OPERAÇÕES - CABO BAIXO',                     cidade:'Carnaúba dos Dantas',  bairro:'Dom José Adelino Dantas',    projeto:'OP-INST-VT-RN', tempo:4,   prazoStatus:'dentro' },
+  { protocolo:'8595934/1', titulo:'OPERAÇÕES - SEM ACESSO',                     cidade:'Carnaúba dos Dantas',  bairro:'Conjunto Seu Anísio',        projeto:'OP-INST-VT-RN', tempo:5,   prazoStatus:'dentro', lat:-6.551, lng:-36.649 },
+  { protocolo:'8598265/1', titulo:'OPERAÇÕES - DIFICULDADES DE ACESSO',         cidade:'Ceará-Mirim',          bairro:'Planalto',                   projeto:'OP-INST-VT-RN', tempo:0,   prazoStatus:'dentro' },
+  { protocolo:'8595430/1', titulo:'OPERAÇÕES - SEM ACESSO',                     cidade:'Ceará-Mirim',          bairro:'Muriú',                      projeto:'OP-INST-VT-RN', tempo:6,   prazoStatus:'dentro', lat:-5.556, lng:-35.365 },
+  { protocolo:'8593117/1', titulo:'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)',    cidade:'Extremoz',             bairro:'Sport Club Natureza',        projeto:'OP-INST-VT-RN', tempo:45,  prazoStatus:'dentro' },
+  { protocolo:'8557522/2', titulo:'BOT - FIBRA ATIVAÇÃO',                       cidade:'Jardim do Seridó',     bairro:'Bela Vista',                 projeto:'OP-INST-VT-RN', tempo:172, prazoStatus:'fora' },
+  { protocolo:'8596904/1', titulo:'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)',    cidade:'Natal',                bairro:'Felipe Camarão',             projeto:'OP-INST-VT-RN', tempo:3,   prazoStatus:'dentro', lat:-5.812, lng:-35.246 },
+  { protocolo:'8597833/1', titulo:'OPERAÇÕES - RECOLHIMENTO/TROCA DE ENDEREÇO', cidade:'Parelhas',             bairro:'Ivan Bezerra',               projeto:'OP-INST-VT-RN', tempo:1,   prazoStatus:'dentro' },
+  { protocolo:'8597815/1', titulo:'OPERAÇÕES - TROCA DE ENDEREÇO',              cidade:'Parelhas',             bairro:'Ivan Bezerra',               projeto:'OP-INST-VT-RN', tempo:1,   prazoStatus:'dentro' },
+  { protocolo:'8597042/1', titulo:'OPERAÇÕES - RECOLHIMENTO/TROCA DE ENDEREÇO', cidade:'Parelhas',             bairro:'Ivan Bezerra',               projeto:'OP-INST-VT-RN', tempo:3,   prazoStatus:'dentro', lat:-6.676, lng:-36.655 },
+  { protocolo:'8595129/1', titulo:'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)',    cidade:'Parelhas',             bairro:'Maria Terceira',             projeto:'OP-INST-VT-RN', tempo:6,   prazoStatus:'dentro' },
+  { protocolo:'8591338/3', titulo:'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)',    cidade:'Parelhas',             bairro:'Ivan Bezerra',               projeto:'OP-INST-VT-RN', tempo:0,   prazoStatus:'dentro' },
+  { protocolo:'8584930/3', titulo:'BOT - FIBRA ATIVAÇÃO',                       cidade:'Parelhas',             bairro:'Ivan Bezerra',               projeto:'OP-INST-VT-RN', tempo:4,   prazoStatus:'dentro' },
+  { protocolo:'8583762/4', titulo:'OPERAÇÕES - RETENÇÃO CLIENTE CRÍTICO',       cidade:'Parelhas',             bairro:'Centro',                     projeto:'OP-INST-VT-RN', tempo:24,  prazoStatus:'dentro' },
+  { protocolo:'8458046/1', titulo:'OPERAÇÕES - RECOLHIMENTO/TROCA DE ENDEREÇO', cidade:'Parelhas',             bairro:'Maria Terceira',             projeto:'OP-INST-VT-RN', tempo:3,   prazoStatus:'dentro' },
+  { protocolo:'8596444/1', titulo:'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)',    cidade:'São José de Mipibu',   bairro:'Taborda',                    projeto:'OP-INST-VT-RN', tempo:4,   prazoStatus:'dentro', lat:-6.065, lng:-35.241 },
+];
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coordenação de Operações · Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Coordenação de operações</p>
+    <h1 class="page-title">Unidade Touros</h1>
+    <p class="page-sub">Painel central com pessoas, frota, desligamentos, indicadores e o mapa de serviços da unidade.</p>
+  </div>
+
+  <div class="module-grid">
+    <a class="module-card" href="mapa-servicos.html">
+      <span class="tag live">Ativo</span>
+      <span class="icon">📍</span>
+      <h3>Mapa de Serviços</h3>
+      <p>Protocolos por tempo de atendimento, filtros por cidade/tipo e localização no mapa.</p>
+    </a>
+
+    <a class="module-card" href="gestao-pessoas.html">
+      <span class="tag soon">Em construção</span>
+      <span class="icon">👥</span>
+      <h3>Gestão de Pessoas</h3>
+      <p>Organograma, cadastro de colaboradores e centro de custo.</p>
+    </a>
+
+    <a class="module-card" href="frotas.html">
+      <span class="tag soon">Em construção</span>
+      <span class="icon">🚚</span>
+      <h3>Frotas</h3>
+      <p>Veículos da unidade, responsáveis e manutenção.</p>
+    </a>
+
+    <a class="module-card" href="desligamentos.html">
+      <span class="tag soon">Em construção</span>
+      <span class="icon">📤</span>
+      <h3>Desligamentos</h3>
+      <p>Histórico de desligamentos e motivos.</p>
+    </a>
+
+    <a class="module-card" href="indicadores.html">
+      <span class="tag soon">Em construção</span>
+      <span class="icon">📊</span>
+      <h3>Indicadores de Desempenho</h3>
+      <p>KPIs da unidade — SLA, produtividade e metas.</p>
+    </a>
+  </div>
+</div>
+
+<script src="assets/common.js"></script>
+<script>requireAuthThenInit('index.html', 'Início');</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Serviços · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Mapa de serviços</p>
+    <h1 class="page-title">Protocolos por tempo de atendimento</h1>
+    <p class="page-sub">Lista e georreferenciamento dos serviços em aberto — cidade, bairro, projeto e status de prazo.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Protocolo, bairro...">
+    </div>
+    <div class="field">
+      <label for="f-cidade">Cidade</label>
+      <select id="f-cidade"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+      <label for="f-tipo">Tipo de serviço</label>
+      <select id="f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-prazo">Status</label>
+      <select id="f-prazo">
+        <option value="">Todos</option>
+        <option value="dentro">Dentro do prazo</option>
+        <option value="fora">Fora do prazo</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <div class="view-toggle" id="view-toggle">
+      <button data-view="split" class="active">Lista + Mapa</button>
+      <button data-view="list">Lista</button>
+      <button data-view="map">Mapa</button>
+    </div>
+    <button class="btn primary" id="btn-add">＋ Adicionar</button>
+    <button class="btn" id="btn-import">⇪ Importar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
+    <input type="file" id="file-import" accept=".csv" style="display:none">
+  </div>
+
+  <div class="split" id="split-view">
+    <div class="panel" id="table-panel">
+      <div class="table-wrap">
+        <table class="services">
+          <thead>
+            <tr>
+              <th data-sort="protocolo">Protocolo</th>
+              <th data-sort="titulo">Serviço</th>
+              <th data-sort="cidade">Cidade</th>
+              <th data-sort="bairro">Bairro</th>
+              <th data-sort="tempo">Tempo (h)</th>
+              <th data-sort="prazoStatus">Prazo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="empty-state" style="display:none">
+        <div class="glyph">🗂️</div>
+        <h3>Nenhum registro ainda</h3>
+        <p>Importe sua planilha em CSV ou adicione um protocolo manualmente.</p>
+        <button class="btn primary" id="btn-add-empty">＋ Adicionar primeiro registro</button>
+      </div>
+    </div>
+
+    <div class="panel map-panel" id="map-panel">
+      <div class="map-head">
+        <span class="title">📍 Localização dos protocolos</span>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
+          <span><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
+          <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: adicionar / editar registro -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title">Adicionar protocolo</h3>
+    <p class="modal-sub">Preencha os dados do serviço. Coordenadas são opcionais — sem elas, usamos o ponto central da cidade no mapa.</p>
+    <form id="form-record">
+      <input type="hidden" id="rec-id">
+      <div class="grid2">
+        <div class="field"><label>Protocolo</label><input class="input" id="rec-protocolo" required></div>
+        <div class="field"><label>Projeto</label><input class="input" id="rec-projeto" value="OP-INST-VT-RN"></div>
+      </div>
+      <div class="field"><label>Título do serviço</label><input class="input" id="rec-titulo" required placeholder="Ex: OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)"></div>
+      <div class="grid2">
+        <div class="field"><label>Cidade</label><input class="input" id="rec-cidade" required></div>
+        <div class="field"><label>Bairro</label><input class="input" id="rec-bairro"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Tempo atual (h)</label><input class="input" type="number" min="0" id="rec-tempo" required></div>
+        <div class="field"><label>Status do prazo</label>
+          <select id="rec-prazo">
+            <option value="dentro">Dentro do prazo</option>
+            <option value="fora">Fora do prazo</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Latitude (opcional)</label><input class="input" id="rec-lat" placeholder="-5.1989"></div>
+        <div class="field"><label>Longitude (opcional)</label><input class="input" id="rec-lng" placeholder="-35.4608"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/seed-data.js"></script>
+<script>
+requireAuthThenInit('mapa-servicos.html', 'Mapa de Serviços');
+
+let records = OPS.load();
+if (!records){
+  records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() }));
+  OPS.save(records);
+}
+
+let sortKey = null, sortDir = 1;
+let leafletMap = null, markerLayer = null;
+
+const els = {
+  search: document.getElementById('f-search'),
+  cidade: document.getElementById('f-cidade'),
+  tipo: document.getElementById('f-tipo'),
+  prazo: document.getElementById('f-prazo'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function populateFilterOptions(){
+  const cidades = [...new Set(records.map(r => r.cidade))].sort();
+  els.cidade.innerHTML = '<option value="">Todas</option>' +
+    cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  els.tipo.innerHTML = '<option value="">Todos</option>' +
+    OPS.allTypes().map(t => `<option value="${t.key}">${t.icon} ${t.label}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const cidade = els.cidade.value;
+  const tipo = els.tipo.value;
+  const prazo = els.prazo.value;
+
+  return records.filter(r => {
+    if (cidade && r.cidade !== cidade) return false;
+    if (prazo && r.prazoStatus !== prazo) return false;
+    if (tipo && OPS.classifyType(r.titulo).key !== tipo) return false;
+    if (q){
+      const hay = OPS.normalize(r.protocolo + ' ' + r.titulo + ' ' + r.bairro);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function computeStats(list){
+  const total = list.length;
+  const dentro = list.filter(r => r.prazoStatus === 'dentro').length;
+  const fora = total - dentro;
+  const tempoMedio = total ? (list.reduce((s,r) => s + Number(r.tempo||0), 0) / total) : 0;
+  return { total, dentro, fora, tempoMedio };
+}
+
+function renderStats(){
+  const s = computeStats(getFiltered());
+  const pctDentro = s.total ? Math.round(s.dentro / s.total * 100) : 0;
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${s.total}</div></div>
+    <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${s.dentro} <small>(${pctDentro}%)</small></div></div>
+    <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${s.fora}</div></div>
+    <div class="stat-card"><div class="label">Tempo médio</div><div class="value">${s.tempoMedio.toFixed(1)}<small>h</small></div></div>
+  `;
+}
+
+function runwayColor(rec){
+  if (rec.prazoStatus === 'fora') return 'crit';
+  if (Number(rec.tempo) > 48) return 'warn';
+  return 'ok';
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey){
+    list = [...list].sort((a,b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'tempo'){ av = Number(av); bv = Number(bv); }
+      else { av = OPS.normalize(av); bv = OPS.normalize(bv); }
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+
+  els.emptyState.style.display = records.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
+
+  els.tbody.innerHTML = list.map(r => {
+    const type = OPS.classifyType(r.titulo);
+    const pct = Math.min(Number(r.tempo)/72*100, 100);
+    const color = runwayColor(r);
+    return `
+      <tr data-id="${r.id}">
+        <td class="proto">${r.protocolo}</td>
+        <td><span class="svc-type"><span class="icon">${type.icon}</span>${r.titulo}</span></td>
+        <td>${r.cidade}</td>
+        <td>${r.bairro || '—'}</td>
+        <td>
+          <div class="runway">
+            <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
+            <div class="meta">${r.tempo}h</div>
+          </div>
+        </td>
+        <td>
+          <span class="badge ${r.prazoStatus === 'dentro' ? 'ok' : 'crit'}">
+            <span class="dot"></span>${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}
+          </span>
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
+            <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function initMap(){
+  leafletMap = L.map('map', { zoomControl: true }).setView([OPS.DEFAULT_CENTER.lat, OPS.DEFAULT_CENTER.lng], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+  markerLayer = L.layerGroup().addTo(leafletMap);
+}
+
+function renderMap(){
+  markerLayer.clearLayers();
+  const list = getFiltered();
+  const bounds = [];
+
+  list.forEach(r => {
+    const coords = OPS.resolveCoords(r);
+    const type = OPS.classifyType(r.titulo);
+    const statusClass = r.prazoStatus === 'dentro' ? 'ok' : 'crit';
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="marker-emoji ${statusClass}"><span>${type.icon}</span></div>`,
+      iconSize: [26,26],
+      iconAnchor: [13,22],
+    });
+
+    const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(markerLayer);
+    marker.bindPopup(`
+      <div class="popup-svc">
+        <span class="proto">${r.protocolo}</span>
+        <div class="title">${type.icon} ${r.titulo}</div>
+        <div class="meta">${r.cidade}${r.bairro ? ' · ' + r.bairro : ''}</div>
+        <div class="meta">${r.tempo}h · ${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</div>
+        ${coords.approx ? '<div class="approx">◇ Local aproximado (centro da cidade)</div>' : ''}
+      </div>
+    `);
+    bounds.push([coords.lat, coords.lng]);
+  });
+
+  if (bounds.length){
+    leafletMap.fitBounds(bounds, { padding: [30,30], maxZoom: 12 });
+  }
+}
+
+function renderAll(){
+  renderStats();
+  renderTable();
+  renderMap();
+}
+
+// ---------- filtros ----------
+[els.search, els.cidade, els.tipo, els.prazo].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+// ---------- ordenação ----------
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+// ---------- ações da linha ----------
+els.tbody.addEventListener('click', (e) => {
+  const editId = e.target.dataset.edit;
+  const delId = e.target.dataset.del;
+  if (editId) openModal(records.find(r => r.id === editId));
+  if (delId){
+    if (confirm('Excluir este protocolo?')){
+      records = records.filter(r => r.id !== delId);
+      OPS.save(records);
+      populateFilterOptions();
+      renderAll();
+    }
+  }
+});
+
+// ---------- modal adicionar/editar ----------
+const modal = document.getElementById('modal');
+function openModal(rec){
+  document.getElementById('modal-title').textContent = rec ? 'Editar protocolo' : 'Adicionar protocolo';
+  document.getElementById('rec-id').value = rec ? rec.id : '';
+  document.getElementById('rec-protocolo').value = rec ? rec.protocolo : '';
+  document.getElementById('rec-projeto').value = rec ? rec.projeto : 'OP-INST-VT-RN';
+  document.getElementById('rec-titulo').value = rec ? rec.titulo : '';
+  document.getElementById('rec-cidade').value = rec ? rec.cidade : '';
+  document.getElementById('rec-bairro').value = rec ? rec.bairro : '';
+  document.getElementById('rec-tempo').value = rec ? rec.tempo : '';
+  document.getElementById('rec-prazo').value = rec ? rec.prazoStatus : 'dentro';
+  document.getElementById('rec-lat').value = rec && rec.lat != null ? rec.lat : '';
+  document.getElementById('rec-lng').value = rec && rec.lng != null ? rec.lng : '';
+  modal.style.display = 'flex';
+}
+function closeModal(){ modal.style.display = 'none'; }
+document.getElementById('btn-add').onclick = () => openModal(null);
+document.getElementById('btn-add-empty').onclick = () => openModal(null);
+document.getElementById('btn-cancel').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+document.getElementById('form-record').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('rec-id').value;
+  const latVal = document.getElementById('rec-lat').value.trim();
+  const lngVal = document.getElementById('rec-lng').value.trim();
+  const data = {
+    protocolo: document.getElementById('rec-protocolo').value.trim(),
+    projeto: document.getElementById('rec-projeto').value.trim(),
+    titulo: document.getElementById('rec-titulo').value.trim(),
+    cidade: document.getElementById('rec-cidade').value.trim(),
+    bairro: document.getElementById('rec-bairro').value.trim(),
+    tempo: Number(document.getElementById('rec-tempo').value),
+    prazoStatus: document.getElementById('rec-prazo').value,
+    lat: latVal ? Number(latVal) : undefined,
+    lng: lngVal ? Number(lngVal) : undefined,
+  };
+  if (id){
+    records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  } else {
+    records.push({ ...data, id: OPS.uid() });
+  }
+  OPS.save(records);
+  populateFilterOptions();
+  renderAll();
+  closeModal();
+});
+
+// ---------- importar / exportar CSV ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQuotes){
+      if (c === '"' && text[i+1] === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r'){
+        if (c === '\r' && text[i+1] === '\n') continue;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function mapHeader(h){
+  const n = OPS.normalize(h);
+  if (n.includes('protocolo')) return 'protocolo';
+  if (n.includes('titulo')) return 'titulo';
+  if (n === 'cidade') return 'cidade';
+  if (n === 'bairro') return 'bairro';
+  if (n.includes('projeto')) return 'projeto';
+  if (n.includes('tempo')) return 'tempo';
+  if (n.includes('prazo')) return 'prazoRaw';
+  if (n.includes('lat')) return 'lat';
+  if (n.includes('lon') || n.includes('lng')) return 'lng';
+  return null;
+}
+
+document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+document.getElementById('file-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCSV(reader.result).filter(r => r.some(c => c.trim() !== ''));
+    if (rows.length < 2){ alert('CSV vazio ou sem dados.'); return; }
+    const headers = rows[0].map(mapHeader);
+    const imported = rows.slice(1).map(cols => {
+      const rec = { id: OPS.uid() };
+      headers.forEach((key, idx) => {
+        if (!key) return;
+        const val = (cols[idx] || '').trim();
+        if (key === 'tempo') rec.tempo = Number(val.replace(',', '.')) || 0;
+        else if (key === 'lat' || key === 'lng') { if (val) rec[key] = Number(val.replace(',', '.')); }
+        else if (key === 'prazoRaw') rec.prazoStatus = OPS.normalize(val).includes('fora') ? 'fora' : 'dentro';
+        else rec[key] = val;
+      });
+      if (!rec.prazoStatus) rec.prazoStatus = 'dentro';
+      return rec;
+    }).filter(r => r.protocolo);
+
+    if (!imported.length){ alert('Não encontrei colunas reconhecíveis. Verifique os cabeçalhos (PROTOCOLO, TÍTULO SERVIÇO, CIDADE, BAIRRO, PROJETO, TEMPO ATUAL (H), PRAZO).'); return; }
+
+    const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
+    records = mode ? imported : [...records, ...imported];
+    OPS.save(records);
+    populateFilterOptions();
+    renderAll();
+    e.target.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','PROJETO','TEMPO ATUAL (H)','PRAZO','LAT','LNG'];
+  const lines = [headers.join(',')];
+  records.forEach(r => {
+    const row = [r.protocolo, r.titulo, r.cidade, r.bairro, r.projeto, r.tempo,
+      r.prazoStatus === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO', r.lat ?? '', r.lng ?? ''];
+    lines.push(row.map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mapa-servicos-touros.csv';
+  a.click();
+};
+
+document.getElementById('btn-clear').onclick = () => {
+  if (confirm('Isso vai apagar TODOS os registros deste navegador. Deseja continuar?')){
+    records = [];
+    OPS.save(records);
+    populateFilterOptions();
+    renderAll();
+  }
+};
+
+// ---------- alternância de visualização (lista/mapa/split) ----------
+const splitView = document.getElementById('split-view');
+document.getElementById('view-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const view = btn.dataset.view;
+  document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
+  document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
+  splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+});
+
+// ---------- init ----------
+populateFilterOptions();
+initMap();
+renderAll();
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Pessoas · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="page">
+  <div class="panel placeholder">
+    <div class="glyph">👥</div>
+    <h2>Gestão de Pessoas</h2>
+    <p class="page-sub">Módulo em construção — próximo passo do projeto.</p>
+    <ul><li>Cadastro de colaboradores com dados do organograma</li><li>Centro de custo por colaborador</li><li>Vínculo com cargo, unidade e liderança</li><li>Busca e exportação da base</li></ul>
+  </div>
+</div>
+<script src="assets/common.js"></script>
+<script>requireAuthThenInit('gestao-pessoas.html', 'Gestão de Pessoas');</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frotas · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="page">
+  <div class="panel placeholder">
+    <div class="glyph">🚚</div>
+    <h2>Frotas</h2>
+    <p class="page-sub">Módulo em construção.</p>
+    <ul><li>Cadastro de veículos e responsáveis</li><li>Documentação e vencimentos</li><li>Manutenções e quilometragem</li></ul>
+  </div>
+</div>
+<script src="assets/common.js"></script>
+<script>requireAuthThenInit('frotas.html', 'Frotas');</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desligamentos · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="page">
+  <div class="panel placeholder">
+    <div class="glyph">📤</div>
+    <h2>Desligamentos</h2>
+    <p class="page-sub">Módulo em construção.</p>
+    <ul><li>Histórico de desligamentos por colaborador</li><li>Motivo e tipo de desligamento</li><li>Indicadores de turnover</li></ul>
+  </div>
+</div>
+<script src="assets/common.js"></script>
+<script>requireAuthThenInit('desligamentos.html', 'Desligamentos');</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indicadores · OPS Touros</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Indicadores de desempenho</p>
+    <h1 class="page-title">Plano de Ação KPI · Serviços</h1>
+    <p class="page-sub">SLA 24h/48h, Ativação e MDE 72h, erro de projeto e pareto por cidade.</p>
+  </div>
+
+  <div class="sla-tabs" id="sla-tabs"></div>
+  <div id="indicadores-content"></div>
+</div>
+
+<script src="assets/common.js"></script>
+<script>
+requireAuthThenInit('indicadores.html', 'Indicadores');
+
+/* =========================================================
+   Dados — mesmos protocolos enviados na base atual do painel.
+   Quando quiser conectar com a planilha real: publique cada
+   aba como CSV no Google Sheets e substitua os arrays abaixo
+   por um fetch() das URLs publicadas.
+========================================================= */
+const SLA24 = [
+  {prot:'8451931/1',titulo:'SEM ACESSO',        cidade:'CAIÇARA DO NORTE',     bairro:'NOVA CAICARA',      tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451875/1',titulo:'SEM ACESSO',        cidade:'CAIÇARA DO NORTE',     bairro:'CJ SANTA RITA',    tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8450045/1',titulo:'DIFICULDADE ACESSO',cidade:'GUAMARÉ',              bairro:'BAIXA DO MEIO',    tempo:6, status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8451198/1',titulo:'DIFICULDADE ACESSO',cidade:'JOÃO CÂMARA',          bairro:'CENTRO',           tempo:3, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451848/1',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'CENTRO',           tempo:2, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450272/1',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'BELA VISTA',       tempo:5, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8446282/2',titulo:'SEM ACESSO',        cidade:'JOÃO CÂMARA',          bairro:'QUEIMADAS',        tempo:1, status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8450059/1',titulo:'DIFICULDADE ACESSO',cidade:'RIO DO FOGO',          bairro:'PUNAU',            tempo:6, status:'OS c/ Técnico em Deslocamento', sla:'PODE ESPERAR'},
+  {prot:'8450328/1',titulo:'SEM ACESSO',        cidade:'RIO DO FOGO',          bairro:'PUNAU',            tempo:5, status:'Interromper Deslocamento',      sla:'PODE ESPERAR'},
+  {prot:'8451176/1',titulo:'SEM ACESSO',        cidade:'SÃO BENTO DO NORTE',   bairro:'CENTRO',           tempo:3, status:'OS c/ Técnico em Deslocamento', sla:'PODE ESPERAR'},
+  {prot:'8452262/1',titulo:'SEM ACESSO',        cidade:'SÃO MIGUEL DO GOSTOSO',bairro:'CENTRO',           tempo:1, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8448822/1',titulo:'DIFICULDADE ACESSO',cidade:'TOUROS',               bairro:'BOA CICA',         tempo:7, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8451517/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'PRAIA DO FAROL',   tempo:2, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8450967/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'NOVO HORIZONTE',   tempo:3, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450528/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ISRAEL',      tempo:4, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+  {prot:'8450292/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ISRAEL',      tempo:5, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8448806/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'VILA ASSIS',       tempo:7, status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8448206/1',titulo:'SEM ACESSO',        cidade:'TOUROS',               bairro:'POVO. BOQUEIRÃO',  tempo:8, status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+];
+const SLA48 = [
+  {prot:'8440111/1',titulo:'SEM SINAL',  cidade:'TOUROS',               bairro:'CENTRO',        tempo:30,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8441220/1',titulo:'LENTIDÃO',   cidade:'JOÃO CÂMARA',          bairro:'CENTRO',        tempo:25,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8443500/1',titulo:'SEM SINAL',  cidade:'GUAMARÉ',              bairro:'BOA ESPERANÇA', tempo:20,status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+  {prot:'8444100/1',titulo:'LENTIDÃO',   cidade:'RIO DO FOGO',          bairro:'PUNAU',         tempo:10,status:'Aberta Aguardando Agendamento', sla:'PODE ESPERAR'},
+  {prot:'8445200/1',titulo:'SEM SINAL',  cidade:'SÃO MIGUEL DO GOSTOSO',bairro:'CENTRO',        tempo:35,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+];
+const ATIVACAO = [
+  {prot:'8430001/1',titulo:'ATIVAÇÃO',cidade:'TOUROS',           bairro:'NOVA CONQUISTA',tempo:50,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8430002/1',titulo:'ATIVAÇÃO',cidade:'JOÃO CÂMARA',      bairro:'ALTO BONITO',   tempo:40,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8430003/1',titulo:'ATIVAÇÃO',cidade:'GUAMARÉ',          bairro:'CENTRO',        tempo:60,status:'Atendimento Iniciado',          sla:'VENCIDO'},
+  {prot:'8430004/1',titulo:'ATIVAÇÃO',cidade:'CAIÇARA DO NORTE', bairro:'CENTRO',        tempo:20,status:'Aberta Aguardando Agendamento', sla:'ATENDER HOJE'},
+];
+const MDE = [
+  {prot:'8420001/1',titulo:'MUDANÇA ENDEREÇO',cidade:'TOUROS',      bairro:'BOA CICA',  tempo:65,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8420002/1',titulo:'MUDANÇA ENDEREÇO',cidade:'JOÃO CÂMARA', bairro:'QUEIMADAS', tempo:45,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8420003/1',titulo:'MUDANÇA ENDEREÇO',cidade:'RIO DO FOGO', bairro:'PUNAU',     tempo:30,status:'Atendimento Iniciado',          sla:'ATENDER HOJE'},
+];
+const ERRO_PROJ = [
+  {prot:'8410001/1',titulo:'ERRO DE PROJETO',cidade:'TOUROS',             bairro:'PRAIA DO FAROL',tempo:15,status:'Aberta Aguardando Atendimento',sla:'PODE ESPERAR'},
+  {prot:'8410002/1',titulo:'ERRO DE PROJETO',cidade:'GUAMARÉ',            bairro:'BAIXA DO MEIO', tempo:22,status:'Aberta Aguardando Atendimento',sla:'VENCIDO'},
+  {prot:'8410003/1',titulo:'ERRO DE PROJETO',cidade:'SÃO BENTO DO NORTE', bairro:'CENTRO',        tempo:8, status:'Atendimento Iniciado',          sla:'PODE ESPERAR'},
+];
+
+const DATASETS = { sla24:SLA24, sla48:SLA48, ativacao:ATIVACAO, mde:MDE, erro:ERRO_PROJ };
+const DS_LABELS = { visao:'Visão Geral', sla24:'SLA 24HS', sla48:'SLA 48HS', ativacao:'Ativação 72HS', mde:'MDE 72HS', erro:'Erro de Projeto', pareto:'Pareto Cidades', alertas:'Alertas' };
+
+function slaClass(s){ return s==='VENCIDO' ? 'vencido' : s==='ATENDER HOJE' ? 'hoje' : 'ok'; }
+function slaLabel(s){ return s==='VENCIDO' ? '🔴 VENCIDO' : s==='ATENDER HOJE' ? '⚠️ ATENDER HOJE' : '✓ OK'; }
+
+function pareto(dataset){
+  const map = {};
+  dataset.forEach(o => {
+    if (!map[o.cidade]) map[o.cidade] = { total:0, vencido:0, hoje:0, ok:0 };
+    map[o.cidade].total++;
+    if (o.sla === 'VENCIDO') map[o.cidade].vencido++;
+    else if (o.sla === 'ATENDER HOJE') map[o.cidade].hoje++;
+    else map[o.cidade].ok++;
+  });
+  return Object.entries(map).sort((a,b) => b[1].total - a[1].total);
+}
+
+function countAll(){
+  let v=0,h=0,ok=0;
+  Object.values(DATASETS).forEach(ds => ds.forEach(o => {
+    if (o.sla==='VENCIDO') v++; else if (o.sla==='ATENDER HOJE') h++; else ok++;
+  }));
+  return { v, h, ok, total: v+h+ok };
+}
+
+function buildVisao(){
+  const tot = countAll();
+  const allOS = Object.values(DATASETS).flat();
+  const kpis = `
+  <div class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    <div class="kpi cyan"><div class="kpi-label">Total OS Abertas</div><div class="kpi-value">${allOS.length}</div><div class="kpi-sub">todas as abas</div></div>
+    <div class="kpi red"><div class="kpi-label">SLA Vencido</div><div class="kpi-value">${tot.v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender Hoje</div><div class="kpi-value">${tot.h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Dentro do Prazo</div><div class="kpi-value">${tot.ok}</div><div class="kpi-sub">pode esperar</div></div>
+    <div class="kpi purple"><div class="kpi-label">SLA 24HS</div><div class="kpi-value">${SLA24.length}</div><div class="kpi-sub">${SLA24.filter(o=>o.sla==='VENCIDO').length} vencida(s)</div></div>
+    <div class="kpi orange"><div class="kpi-label">Ativação + MDE</div><div class="kpi-value">${ATIVACAO.length+MDE.length}</div><div class="kpi-sub">${[...ATIVACAO,...MDE].filter(o=>o.sla==='VENCIDO').length} vencida(s)</div></div>
+  </div>`;
+
+  const slaCards = `
+  <div class="sec-hdr">SLA por tipo de serviço</div>
+  <div class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    ${Object.entries(DATASETS).map(([key, ds]) => {
+      const v = ds.filter(o=>o.sla==='VENCIDO').length;
+      const h = ds.filter(o=>o.sla==='ATENDER HOJE').length;
+      const cor = v>0 ? 'red' : h>0 ? 'yellow' : 'green';
+      return `<div class="kpi ${cor}" style="cursor:pointer" onclick="setTab('${key}')">
+        <div class="kpi-label">${DS_LABELS[key]}</div>
+        <div class="kpi-value">${ds.length}</div>
+        <div class="kpi-sub">${v>0 ? v+' vencida(s)' : h>0 ? h+' hoje' : '✓ ok'}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  const allCityMap = {};
+  Object.values(DATASETS).forEach(ds => ds.forEach(o => {
+    if (!allCityMap[o.cidade]) allCityMap[o.cidade] = { total:0, v:0, h:0, ok:0 };
+    allCityMap[o.cidade].total++;
+    if (o.sla==='VENCIDO') allCityMap[o.cidade].v++;
+    else if (o.sla==='ATENDER HOJE') allCityMap[o.cidade].h++;
+    else allCityMap[o.cidade].ok++;
+  }));
+  const cities = Object.entries(allCityMap).sort((a,b) => b[1].total - a[1].total);
+  const maxTotal = cities[0]?.[1].total || 1;
+
+  const cityPareto = `
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>📍 Pareto por cidade — consolidado</h3><span class="cnt-badge">${cities.length} cidades</span></div>
+      <div class="city-list">
+        ${cities.map(([cidade, d]) => {
+          const pct = Math.round(d.total/maxTotal*100);
+          const barColor = d.v>0 ? 'red' : d.h>0 ? 'yellow' : 'green';
+          return `<div class="city-row">
+            <div class="city-meta">
+              <span class="city-name">${cidade}</span>
+              <div class="city-nums">
+                <span class="city-total">${d.total} OS</span>
+                ${d.v>0 ? `<span class="city-alert">${d.v} venc.</span>` : ''}
+                ${d.h>0 ? `<span class="city-warn">${d.h} hoje</span>` : ''}
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill ${barColor}" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="card">
+        <div class="card-head"><h3>Status geral</h3></div>
+        <div class="status-list">
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--crit)"></span>SLA vencido</span><span class="status-val" style="color:var(--crit)">${tot.v}</span></div>
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--warn)"></span>Atender hoje</span><span class="status-val" style="color:var(--warn)">${tot.h}</span></div>
+          <div class="status-row"><span class="status-name"><span class="status-dot" style="background:var(--ok)"></span>Dentro do prazo</span><span class="status-val" style="color:var(--ok)">${tot.ok}</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>⚡ Destaques</h3></div>
+        <div class="status-list">
+          ${cities.slice(0,3).map(([c,d],i) => `<div class="status-row"><span class="status-name" style="font-size:.8em">${['🥇','🥈','🥉'][i]} ${c}</span><span class="status-val" style="color:var(--brand)">${d.total}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  const criticas = allOS.filter(o => o.sla === 'VENCIDO').slice(0, 8);
+  const tabelaCrit = criticas.length ? `
+  <div class="sec-hdr">🔴 OS vencidas — ação imediata</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Protocolo</th><th>Serviço</th><th>Cidade</th><th>Bairro</th><th>Tempo (h)</th><th>Status</th><th>SLA</th></tr></thead>
+    <tbody>${criticas.map(o => `<tr>
+      <td class="proto">${o.prot}</td><td>${o.titulo}</td><td>${o.cidade}</td>
+      <td style="color:var(--ink-dim);font-size:.85em">${o.bairro}</td>
+      <td class="proto" style="color:var(--crit);font-weight:700">${o.tempo}h</td>
+      <td><span class="badge-status">${o.status}</span></td>
+      <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : '';
+
+  return kpis + slaCards + cityPareto + tabelaCrit;
+}
+
+function buildSLAPage(key){
+  const ds = DATASETS[key];
+  const label = DS_LABELS[key];
+  const v = ds.filter(o=>o.sla==='VENCIDO').length;
+  const h = ds.filter(o=>o.sla==='ATENDER HOJE').length;
+  const ok = ds.filter(o=>o.sla==='PODE ESPERAR').length;
+  const cities = pareto(ds);
+  const maxT = cities[0]?.[1].total || 1;
+
+  const kpis = `
+  <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi cyan"><div class="kpi-label">Total OS</div><div class="kpi-value">${ds.length}</div><div class="kpi-sub">${label}</div></div>
+    <div class="kpi red"><div class="kpi-label">SLA vencido</div><div class="kpi-value">${v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender hoje</div><div class="kpi-value">${h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Dentro do prazo</div><div class="kpi-value">${ok}</div><div class="kpi-sub">pode esperar</div></div>
+  </div>`;
+
+  const cityBlock = `
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>📍 Pareto por cidade</h3></div>
+      <div class="city-list">
+        ${cities.map(([cidade, d]) => {
+          const pct = Math.round(d.total/maxT*100);
+          const barColor = d.vencido>0 ? 'red' : d.hoje>0 ? 'yellow' : 'green';
+          return `<div class="city-row">
+            <div class="city-meta">
+              <span class="city-name">${cidade}</span>
+              <div class="city-nums">
+                <span class="city-total">${d.total} OS</span>
+                ${d.vencido>0 ? `<span class="city-alert">${d.vencido} venc.</span>` : ''}
+                ${d.hoje>0 ? `<span class="city-warn">${d.hoje} hoje</span>` : ''}
+              </div>
+            </div>
+            <div class="bar-track"><div class="bar-fill ${barColor}" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Status das OS</h3></div>
+      <div class="status-list">
+        ${[...new Set(ds.map(o=>o.status))].map(s => `<div class="status-row"><span class="status-name" style="font-size:.85em">${s}</span><span class="status-val" style="color:var(--brand)">${ds.filter(o=>o.status===s).length}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+
+  const tabela = `
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Protocolo</th><th>Serviço</th><th>Cidade</th><th>Bairro</th><th>Tempo (h)</th><th>Status</th><th>SLA</th></tr></thead>
+    <tbody>${[...ds].sort((a,b) => {
+      const ord = { VENCIDO:0, 'ATENDER HOJE':1, 'PODE ESPERAR':2 };
+      return (ord[a.sla]??3) - (ord[b.sla]??3);
+    }).map(o => `<tr>
+      <td class="proto">${o.prot}</td><td>${o.titulo}</td><td>${o.cidade}</td>
+      <td style="color:var(--ink-dim);font-size:.85em">${o.bairro}</td>
+      <td class="proto" style="color:${o.sla==='VENCIDO'?'var(--crit)':o.sla==='ATENDER HOJE'?'var(--warn)':'var(--ok)'};font-weight:700">${o.tempo}h</td>
+      <td><span class="badge-status">${o.status}</span></td>
+      <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+
+  return kpis + cityBlock + tabela;
+}
+
+function buildParetoPage(){
+  const cityMap = {};
+  Object.values(DATASETS).flat().forEach(o => {
+    if (!cityMap[o.cidade]) cityMap[o.cidade] = { total:0, v:0, h:0, ok:0, sla24:0, sla48:0, ativ:0, mde:0, erro:0 };
+    const c = cityMap[o.cidade];
+    c.total++;
+    if (o.sla==='VENCIDO') c.v++; else if (o.sla==='ATENDER HOJE') c.h++; else c.ok++;
+  });
+  SLA24.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].sla24++; });
+  SLA48.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].sla48++; });
+  ATIVACAO.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].ativ++; });
+  MDE.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].mde++; });
+  ERRO_PROJ.forEach(o => { if (cityMap[o.cidade]) cityMap[o.cidade].erro++; });
+
+  const cities = Object.entries(cityMap).sort((a,b) => b[1].total - a[1].total);
+  return `
+  <div class="sec-hdr">Pareto por cidade — todas as abas</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Cidade</th><th>Total</th><th>Vencido</th><th>Hoje</th><th>OK</th><th>SLA 24h</th><th>SLA 48h</th><th>Ativação</th><th>MDE</th><th>Erro proj.</th></tr></thead>
+    <tbody>${cities.map(([cidade,d]) => `<tr>
+      <td style="font-weight:700">${cidade}</td>
+      <td class="proto" style="color:var(--brand);font-weight:700">${d.total}</td>
+      <td class="proto" style="color:${d.v>0?'var(--crit)':'var(--ink-dim)'};font-weight:700">${d.v||'—'}</td>
+      <td class="proto" style="color:${d.h>0?'var(--warn)':'var(--ink-dim)'};font-weight:700">${d.h||'—'}</td>
+      <td class="proto" style="color:var(--ok)">${d.ok}</td>
+      <td style="color:var(--ink-dim)">${d.sla24||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.sla48||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.ativ||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.mde||'—'}</td>
+      <td style="color:var(--ink-dim)">${d.erro||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function buildAlertas(){
+  const criticas = Object.entries(DATASETS).flatMap(([k,ds]) =>
+    ds.filter(o => o.sla==='VENCIDO' || o.sla==='ATENDER HOJE').map(o => ({...o, tipo: DS_LABELS[k]}))
+  ).sort((a,b) => b.tempo - a.tempo);
+  const v = criticas.filter(o=>o.sla==='VENCIDO').length;
+  const h = criticas.filter(o=>o.sla==='ATENDER HOJE').length;
+
+  return `
+  <div class="kpi-strip" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi red"><div class="kpi-label">SLA vencido</div><div class="kpi-value">${v}</div><div class="kpi-sub">ação imediata</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Atender hoje</div><div class="kpi-value">${h}</div><div class="kpi-sub">risco de vencer</div></div>
+    <div class="kpi green"><div class="kpi-label">Total de alertas</div><div class="kpi-value">${criticas.length}</div><div class="kpi-sub">pendentes</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <div class="card-head"><h3>⚡ Todas as OS críticas</h3><span class="cnt-badge">${criticas.length}</span></div>
+    <table>
+      <thead><tr><th>Protocolo</th><th>Tipo SLA</th><th>Serviço</th><th>Cidade</th><th>Tempo (h)</th><th>Status</th><th>Prioridade</th></tr></thead>
+      <tbody>${criticas.map(o => `<tr>
+        <td class="proto">${o.prot}</td>
+        <td style="font-size:.8em;color:var(--accent2)">${o.tipo}</td>
+        <td>${o.titulo}</td><td>${o.cidade}</td>
+        <td class="proto" style="color:${o.sla==='VENCIDO'?'var(--crit)':'var(--warn)'};font-weight:700">${o.tempo}h</td>
+        <td><span class="badge-status">${o.status}</span></td>
+        <td><span class="badge-sla ${slaClass(o.sla)}">${slaLabel(o.sla)}</span></td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+let currentTab = 'visao';
+function setTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.sla-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  const c = document.getElementById('indicadores-content');
+  if (tab === 'visao') c.innerHTML = buildVisao();
+  else if (tab === 'pareto') c.innerHTML = buildParetoPage();
+  else if (tab === 'alertas') c.innerHTML = buildAlertas();
+  else c.innerHTML = buildSLAPage(tab);
+}
+
+document.getElementById('sla-tabs').innerHTML = Object.keys(DS_LABELS).map(key => {
+  let count = '';
+  if (DATASETS[key]) count = `<span class="cnt-badge" style="margin-left:6px">${DATASETS[key].length}</span>`;
+  return `<div class="sla-tab" data-tab="${key}" onclick="setTab('${key}')">${DS_LABELS[key]}${count}</div>`;
+}).join('');
+
+setTab('visao');
+</script>
+</body>
+</html>
+
+/* ===================================================================
+   Coordenação de Operações · Touros — Design tokens
+   Painel de operações de campo (fibra/telecom): denso em dados,
+   feito para leitura rápida de status (prazo) e localização geográfica.
+=================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root{
+  /* superfícies */
+  --bg:            #0b0f1a;
+  --bg-panel:      #121929;
+  --bg-panel-2:    #1a2236;
+  --bg-raised:     #1e2740;
+  --line:          #1e2d47;
+  --line-soft:     #16203a;
+
+  /* texto */
+  --ink:           #e2eaf5;
+  --ink-dim:       #5e7a9e;
+  --ink-faint:     #3d5470;
+
+  /* marca / acento primário — ciano do painel de operações */
+  --brand:         #00d4ff;
+  --brand-dim:     #0099cc;
+  --brand-wash:    rgba(0,212,255,0.12);
+
+  /* sinalização de prazo */
+  --ok:            #00e5a0;
+  --ok-wash:       rgba(0,229,160,0.12);
+  --warn:          #ffd166;
+  --warn-wash:     rgba(255,209,102,0.12);
+  --crit:          #ff4d6d;
+  --crit-wash:     rgba(255,77,109,0.12);
+
+  /* acento secundário (usado em destaques/indicadores) */
+  --accent2:       #a78bfa;
+  --accent2-wash:  rgba(167,139,250,0.12);
+  --accent3:       #ff9a3c;
+
+  /* tipografia */
+  --f-display:     'JetBrains Mono', ui-monospace, monospace;
+  --f-body:        'Inter', system-ui, sans-serif;
+
+  --radius:        10px;
+  --radius-sm:     6px;
+  --shadow:        0 8px 24px rgba(0,0,0,0.35);
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{ color:inherit; }
+button, input, select{ font-family:inherit; font-size:inherit; }
+::selection{ background:var(--brand-wash); color:var(--ink); }
+
+/* faint grid texture behind everything, evokes a coverage/coordinate grid */
+.grid-field{
+  position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size:40px 40px;
+  -webkit-mask-image: radial-gradient(ellipse at 20% 0%, black 0%, transparent 70%);
+          mask-image: radial-gradient(ellipse at 20% 0%, black 0%, transparent 70%);
+  opacity:.5;
+}
+
+/* ---------------- app shell: sidebar + topbar ---------------- */
+body.has-shell{ display:flex; height:100vh; overflow:hidden; }
+
+.sidebar{
+  width:210px; flex-shrink:0; background:var(--bg-panel);
+  border-right:1px solid var(--line);
+  display:flex; flex-direction:column; height:100vh; overflow-y:auto;
+}
+.sidebar .sb-brand{ padding:18px 16px 14px; border-bottom:1px solid var(--line); }
+.sidebar .sb-brand .tag{
+  font-size:10.5px; font-weight:700; letter-spacing:.14em; color:var(--brand);
+  text-transform:uppercase; margin-bottom:3px;
+}
+.sidebar .sb-brand h1{ font-size:14.5px; font-weight:700; margin:0; }
+.sidebar .sb-brand p{ font-size:11.5px; color:var(--ink-dim); margin:2px 0 0; }
+.sidebar .sb-section{
+  padding:14px 12px 4px; font-size:10.5px; color:var(--ink-faint);
+  text-transform:uppercase; letter-spacing:.1em;
+}
+.sidebar a.sb-item{
+  display:flex; align-items:center; gap:8px; padding:9px 12px; margin:1px 6px;
+  border-radius:7px; cursor:pointer; font-size:13.5px; color:var(--ink-dim);
+  text-decoration:none; user-select:none;
+}
+.sidebar a.sb-item:hover{ background:var(--bg-panel-2); color:var(--ink); }
+.sidebar a.sb-item.active{ background:var(--brand-wash); color:var(--brand); font-weight:600; }
+.sidebar .sb-item .ico{ font-size:14px; width:18px; text-align:center; }
+.sidebar .sb-footer{ margin-top:auto; padding:12px; border-top:1px solid var(--line); }
+.sidebar .sb-update{ font-size:10px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px; }
+.sidebar .sb-date{ font-size:12.5px; color:var(--brand); font-family:var(--f-display); font-weight:600; }
+
+.shell-main{ flex:1; display:flex; flex-direction:column; overflow:hidden; height:100vh; }
+
+.topbar{
+  height:52px; flex-shrink:0; background:var(--bg-panel);
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; padding:0 22px; gap:10px;
+}
+.topbar .crumb{ display:flex; align-items:center; gap:8px; font-size:13px; }
+.topbar .crumb .unit{ color:var(--ink-dim); }
+.topbar .crumb .sep{ color:var(--ink-faint); }
+.topbar .crumb .page{ font-weight:600; color:var(--brand); }
+.topbar .spacer{ flex:1; }
+.topbar .clock{ font-family:var(--f-display); font-size:12px; color:var(--ink-faint); }
+.topbar .user-pill{
+  background:var(--brand-wash); border:1px solid rgba(0,212,255,.25); border-radius:20px;
+  padding:4px 11px; font-size:12.5px; color:var(--brand); cursor:pointer; border-width:1px;
+}
+.topbar .user-pill:hover{ background:var(--crit-wash); border-color:rgba(255,77,109,.3); color:var(--crit); }
+
+.shell-content{ flex:1; overflow-y:auto; }
+
+/* ---------------- layout shells ---------------- */
+.page{ max-width:1360px; margin:0 auto; padding:28px 24px 64px; }
+.page-head{ margin-bottom:22px; }
+.eyebrow{
+  font-family:var(--f-display); font-size:11.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--brand); margin:0 0 6px;
+}
+h1.page-title{ font-size:26px; margin:0 0 4px; font-weight:800; letter-spacing:-.01em; }
+.page-sub{ color:var(--ink-dim); font-size:14px; margin:0; }
+
+.panel{
+  background:var(--bg-panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+}
+
+/* ---------------- stat cards ---------------- */
+.stat-row{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:12px; margin-bottom:20px;
+}
+.stat-card{
+  background:var(--bg-panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:16px 18px;
+  position:relative; overflow:hidden;
+}
+.stat-card .label{
+  font-size:11.5px; color:var(--ink-faint); text-transform:uppercase;
+  letter-spacing:.08em; font-weight:600; margin-bottom:8px;
+}
+.stat-card .value{
+  font-family:var(--f-display); font-size:28px; font-weight:700; letter-spacing:-.01em;
+}
+.stat-card .value small{ font-size:14px; color:var(--ink-dim); font-weight:500; }
+.stat-card.ok .value{ color:var(--ok); }
+.stat-card.crit .value{ color:var(--crit); }
+.stat-card.brand .value{ color:var(--brand); }
+
+/* ---------------- toolbar / filters ---------------- */
+.toolbar{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  padding:14px 16px; margin-bottom:16px;
+}
+.field{ display:flex; flex-direction:column; gap:4px; }
+.field label{ font-size:11px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+select, .input{
+  background:var(--bg-raised); color:var(--ink);
+  border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:8px 10px; min-width:150px;
+}
+select:focus, .input:focus, button:focus-visible{
+  outline:2px solid var(--brand); outline-offset:1px;
+}
+.btn{
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--bg-raised); color:var(--ink);
+  border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:9px 14px; font-weight:600; font-size:13.5px;
+  cursor:pointer; text-decoration:none;
+}
+.btn:hover{ border-color:var(--brand); color:var(--brand); }
+.btn.primary{ background:var(--brand); border-color:var(--brand); color:#0B1512; }
+.btn.primary:hover{ background:var(--brand-dim); color:#0B1512; }
+.btn.ghost{ background:transparent; }
+.btn.danger:hover{ border-color:var(--crit); color:var(--crit); }
+.btn[disabled]{ opacity:.45; cursor:not-allowed; }
+
+/* ---------------- view toggle (tabs) ---------------- */
+.view-toggle{ display:flex; gap:2px; background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius-sm); padding:3px; }
+.view-toggle button{
+  border:none; background:transparent; color:var(--ink-dim);
+  padding:7px 14px; border-radius:5px; font-weight:600; font-size:13px; cursor:pointer;
+}
+.view-toggle button.active{ background:var(--brand); color:#0B1512; }
+
+/* ---------------- split layout: table + map ---------------- */
+.split{
+  display:grid; grid-template-columns:1.15fr 1fr; gap:16px; align-items:start;
+}
+@media (max-width:980px){ .split{ grid-template-columns:1fr; } }
+
+/* ---------------- table ---------------- */
+.table-wrap{ overflow:auto; max-height:640px; }
+table.services{ width:100%; border-collapse:collapse; font-size:13.3px; }
+table.services thead th{
+  position:sticky; top:0; background:var(--bg-panel-2);
+  text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--ink-faint); border-bottom:1px solid var(--line);
+  cursor:pointer; white-space:nowrap;
+}
+table.services thead th:hover{ color:var(--ink); }
+table.services tbody td{
+  padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:middle;
+}
+table.services tbody tr:hover{ background:var(--bg-panel-2); }
+.proto{ font-family:var(--f-display); color:var(--ink-dim); font-size:12.5px; }
+.svc-type{ display:inline-flex; align-items:center; gap:6px; }
+.svc-type .icon{ font-size:14px; }
+
+/* runway bar — signature element: tempo atual vs. limite do prazo */
+.runway{ width:110px; }
+.runway .track{
+  position:relative; height:6px; border-radius:4px; background:var(--bg-raised);
+  overflow:hidden; margin-bottom:4px;
+}
+.runway .fill{ position:absolute; inset:0 auto 0 0; height:100%; border-radius:4px; }
+.runway .fill.ok{ background:var(--ok); }
+.runway .fill.warn{ background:var(--warn); }
+.runway .fill.crit{ background:var(--crit); }
+.runway .meta{ font-family:var(--f-display); font-size:11px; color:var(--ink-faint); }
+
+.badge{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 9px; border-radius:99px; font-size:11.5px; font-weight:700;
+  letter-spacing:.02em;
+}
+.badge.ok{ background:var(--ok-wash); color:var(--ok); }
+.badge.crit{ background:var(--crit-wash); color:var(--crit); }
+.badge .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+.row-actions{ display:flex; gap:6px; }
+.icon-btn{
+  background:transparent; border:1px solid var(--line); color:var(--ink-faint);
+  border-radius:5px; width:26px; height:26px; cursor:pointer; font-size:12px;
+}
+.icon-btn:hover{ color:var(--ink); border-color:var(--ink-faint); }
+
+.empty-state{
+  padding:48px 24px; text-align:center; color:var(--ink-dim);
+}
+.empty-state .glyph{ font-size:32px; margin-bottom:10px; }
+.empty-state h3{ margin:0 0 6px; color:var(--ink); }
+.empty-state p{ margin:0 0 16px; font-size:13.5px; }
+
+/* ---------------- map panel ---------------- */
+.map-panel{ height:640px; display:flex; flex-direction:column; overflow:hidden; }
+.map-panel .map-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; border-bottom:1px solid var(--line);
+}
+.map-panel .map-head .title{ font-weight:700; font-size:13.5px; }
+.map-panel .map-head .legend{ display:flex; gap:12px; font-size:11.5px; color:var(--ink-dim); }
+.map-panel .map-head .legend span{ display:inline-flex; align-items:center; gap:5px; }
+.map-panel .map-head .legend .sw{ width:8px; height:8px; border-radius:50%; }
+#map{ flex:1; min-height:0; background:#0c1013; }
+
+.leaflet-popup-content-wrapper{ background:var(--bg-panel-2); color:var(--ink); border-radius:8px; }
+.leaflet-popup-tip{ background:var(--bg-panel-2); }
+.popup-svc .proto{ display:block; margin-bottom:4px; }
+.popup-svc .title{ font-weight:700; font-size:13px; margin-bottom:3px; }
+.popup-svc .meta{ font-size:12px; color:var(--ink-dim); }
+.popup-svc .approx{ color:var(--warn); font-size:11px; margin-top:5px; }
+
+.marker-emoji{
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50% 50% 50% 4px;
+  transform:rotate(45deg); box-shadow:0 2px 6px rgba(0,0,0,.4);
+  border:2px solid rgba(0,0,0,.25);
+}
+.marker-emoji span{ transform:rotate(-45deg); font-size:13px; }
+.marker-emoji.ok{ background:var(--ok); }
+.marker-emoji.crit{ background:var(--crit); }
+
+/* ---------------- modal ---------------- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(6,8,10,.6); backdrop-filter:blur(2px);
+  display:flex; align-items:flex-start; justify-content:center; padding:40px 16px;
+  z-index:200; overflow:auto;
+}
+.modal{
+  width:100%; max-width:560px; background:var(--bg-panel); border:1px solid var(--line);
+  border-radius:var(--radius); box-shadow:var(--shadow); padding:22px;
+}
+.modal h3{ margin:0 0 4px; }
+.modal .modal-sub{ color:var(--ink-dim); font-size:13px; margin:0 0 18px; }
+.modal .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal .field{ margin-bottom:12px; }
+.modal .field label{ margin-bottom:6px; }
+.modal .field select, .modal .field input, .modal textarea{ width:100%; }
+.modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
+
+/* ---------------- hub / home ---------------- */
+.module-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;
+}
+.module-card{
+  display:block; text-decoration:none; color:var(--ink);
+  background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:20px; position:relative; overflow:hidden; transition:border-color .15s;
+}
+.module-card:hover{ border-color:var(--brand); }
+.module-card .icon{ font-size:22px; margin-bottom:10px; display:inline-block; }
+.module-card h3{ margin:0 0 6px; font-size:16px; }
+.module-card p{ margin:0; font-size:13px; color:var(--ink-dim); }
+.module-card .tag{
+  position:absolute; top:16px; right:16px; font-size:10.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; padding:3px 8px; border-radius:99px;
+}
+.module-card .tag.live{ background:var(--ok-wash); color:var(--ok); }
+.module-card .tag.soon{ background:var(--bg-raised); color:var(--ink-faint); }
+
+.placeholder{
+  padding:70px 24px; text-align:center; color:var(--ink-dim);
+}
+.placeholder .glyph{ font-size:40px; margin-bottom:14px; }
+.placeholder h2{ color:var(--ink); margin:0 0 8px; }
+.placeholder ul{ display:inline-block; text-align:left; margin:18px auto 0; color:var(--ink-dim); font-size:13.5px; }
+
+@media (max-width:640px){
+  .topbar{ padding:12px 14px; }
+  .topbar .unit{ display:none; }
+  .page{ padding:18px 14px 48px; }
+}
+
+/* ---------------- login gate ---------------- */
+body:not(.authed) > *:not(#login-wrap){ display:none !important; }
+#login-wrap{
+  position:fixed; inset:0; z-index:999; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 30%, #0d1e3a, #080c14 70%);
+}
+.login-box{
+  background:var(--bg-panel); border:1px solid var(--line); border-radius:16px;
+  padding:44px 40px; width:360px; box-shadow:0 32px 80px rgba(0,0,0,.6);
+}
+.login-box .lbox-brand{ display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+.login-box .lbox-brand .icon{
+  width:40px; height:40px; border-radius:10px; flex-shrink:0;
+  background:linear-gradient(135deg, var(--brand), var(--accent2));
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; color:#04121a; font-family:var(--f-display);
+}
+.login-box .lbox-brand h2{ font-size:14.5px; font-weight:700; margin:0; line-height:1.4; }
+.login-box .lbox-brand p{ font-size:11.5px; color:var(--ink-dim); margin:2px 0 0; }
+.login-box .lfield{ margin-bottom:16px; }
+.login-box .lfield label{
+  display:block; font-size:11px; color:var(--ink-dim); text-transform:uppercase;
+  letter-spacing:.06em; margin-bottom:6px;
+}
+.login-box .lfield input{
+  width:100%; background:var(--bg); border:1px solid var(--line); border-radius:8px;
+  padding:11px 14px; color:var(--ink); font-family:var(--f-display); font-size:14px; outline:none;
+}
+.login-box .lfield input:focus{ border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-wash); }
+.login-box .lbtn{
+  width:100%; margin-top:6px; background:linear-gradient(135deg, var(--brand), var(--brand-dim));
+  border:none; border-radius:8px; padding:12px; color:#04121a; font-weight:700; font-size:14.5px;
+  cursor:pointer; font-family:var(--f-body);
+}
+.login-box .lbtn:hover{ opacity:.9; }
+.login-box .lerr{ color:var(--crit); font-size:12.5px; text-align:center; margin-top:10px; display:none; }
+
+/* ---------------- indicadores: kpi cards / pareto / tabs ---------------- */
+.kpi-strip{ display:grid; gap:10px; margin-bottom:18px; }
+.kpi{ background:var(--bg-panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; position:relative; overflow:hidden; cursor:default; }
+.kpi::before{ content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.kpi.cyan::before{ background:var(--brand); } .kpi.cyan .kpi-value{ color:var(--brand); }
+.kpi.green::before{ background:var(--ok); } .kpi.green .kpi-value{ color:var(--ok); }
+.kpi.red::before{ background:var(--crit); } .kpi.red .kpi-value{ color:var(--crit); }
+.kpi.yellow::before{ background:var(--warn); } .kpi.yellow .kpi-value{ color:var(--warn); }
+.kpi.purple::before{ background:var(--accent2); } .kpi.purple .kpi-value{ color:var(--accent2); }
+.kpi.orange::before{ background:var(--accent3); } .kpi.orange .kpi-value{ color:var(--accent3); }
+.kpi-label{ font-size:11px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:5px; }
+.kpi-value{ font-family:var(--f-display); font-size:26px; font-weight:700; line-height:1; margin-bottom:3px; }
+.kpi-sub{ font-size:11.5px; color:var(--ink-dim); }
+
+.sla-tabs{ display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+.sla-tab{
+  padding:7px 14px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;
+  border:1px solid var(--line); color:var(--ink-dim); background:var(--bg-panel);
+}
+.sla-tab:hover{ border-color:var(--brand); color:var(--ink); }
+.sla-tab.active{ background:var(--brand-wash); border-color:var(--brand); color:var(--brand); }
+
+.two-col{ display:grid; grid-template-columns:1fr 320px; gap:12px; margin-bottom:18px; }
+@media (max-width:900px){ .two-col{ grid-template-columns:1fr; } }
+.card{ background:var(--bg-panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.card-head{ padding:12px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+.card-head h3{ font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:0; }
+.card-head .cnt-badge{ background:var(--brand-wash); color:var(--brand); font-size:11px; font-weight:700; border-radius:10px; padding:2px 8px; font-family:var(--f-display); }
+
+.city-list{ padding:12px 16px; }
+.city-row{ margin-bottom:12px; }
+.city-meta{ display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.city-name{ font-size:13px; font-weight:600; }
+.city-nums{ display:flex; gap:8px; align-items:center; }
+.city-total{ font-family:var(--f-display); font-size:13px; color:var(--brand); }
+.city-alert{ font-family:var(--f-display); font-size:12px; color:var(--crit); background:var(--crit-wash); border-radius:4px; padding:1px 6px; }
+.city-warn{ font-family:var(--f-display); font-size:12px; color:var(--warn); background:var(--warn-wash); border-radius:4px; padding:1px 6px; }
+.bar-track{ height:6px; background:var(--bg-raised); border-radius:3px; overflow:hidden; }
+.bar-fill{ height:100%; border-radius:3px; }
+.bar-fill.red{ background:var(--crit); } .bar-fill.yellow{ background:var(--warn); } .bar-fill.green{ background:var(--ok); }
+
+.status-list{ padding:10px 14px; }
+.status-row{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.status-row:last-child{ border-bottom:none; }
+.status-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-right:7px; display:inline-block; }
+.status-name{ display:flex; align-items:center; color:var(--ink-dim); }
+.status-val{ font-family:var(--f-display); font-weight:700; }
+
+.tbl-wrap{ background:var(--bg-panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:18px; }
+.tbl-wrap table{ width:100%; border-collapse:collapse; }
+.tbl-wrap thead tr{ background:var(--bg-panel-2); }
+.tbl-wrap th{ padding:9px 13px; text-align:left; font-size:11px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+.tbl-wrap td{ padding:9px 13px; font-size:13px; border-top:1px solid var(--line); }
+.tbl-wrap tbody tr:hover{ background:var(--bg-panel-2); }
+
+.badge-sla{ display:inline-flex; align-items:center; padding:2px 8px; border-radius:4px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+.badge-sla.vencido{ background:var(--crit-wash); color:var(--crit); }
+.badge-sla.hoje{ background:var(--warn-wash); color:var(--warn); }
+.badge-sla.ok{ background:var(--ok-wash); color:var(--ok); }
+.badge-status{ display:inline-flex; padding:2px 7px; border-radius:4px; font-size:11.5px; color:var(--ink-dim); background:var(--bg-raised); white-space:nowrap; }
+
+.sec-hdr{ font-size:12px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.sec-hdr::after{ content:''; flex:1; height:1px; background:var(--line); }
+
+/* =========================================================
+   Coordenação de Operações · Touros — núcleo compartilhado
+   Storage local (por navegador), catálogo de cidades/RN com
+   ponto central de fallback, e categorização de serviços.
+========================================================= */
+
+const OPS = (() => {
+
+  const STORAGE_KEY = 'ops_touros_mapa_servicos_v1';
+
+  // Coordenadas centrais aproximadas dos municípios (fallback quando
+  // o registro não tem coordenada própria, ou quando a coordenada
+  // informada cai fora de um raio plausível para a cidade).
+  const CITY_CENTERS = {
+    'touros':                 { lat: -5.1989, lng: -35.4608 },
+    'natal':                  { lat: -5.7945, lng: -35.2110 },
+    'acari':                  { lat: -6.4136, lng: -36.6417 },
+    'canguaretama':           { lat: -6.3800, lng: -35.1289 },
+    'carnauba dos dantas':    { lat: -6.5464, lng: -36.6533 },
+    'ceara mirim':            { lat: -5.5505, lng: -35.3767 },
+    'ceara-mirim':            { lat: -5.5505, lng: -35.3767 },
+    'extremoz':               { lat: -5.6564, lng: -35.2953 },
+    'jardim do serido':       { lat: -6.5539, lng: -36.8619 },
+    'parelhas':               { lat: -6.6822, lng: -36.6608 },
+    'sao jose de mipibu':     { lat: -6.0703, lng: -35.2372 },
+    'sao miguel do gostoso':  { lat: -5.0567, lng: -35.6664 },
+    'joao camara':            { lat: -5.5433, lng: -35.8244 },
+    'maxaranguape':           { lat: -5.4708, lng: -35.3572 },
+    'rio do fogo':            { lat: -5.2761, lng: -35.3831 },
+    'pureza':                 { lat: -5.3611, lng: -35.3922 },
+    'taipu':                  { lat: -5.6547, lng: -35.6297 },
+    'poco branco':            { lat: -5.6667, lng: -35.6167 },
+  };
+
+  const DEFAULT_CENTER = CITY_CENTERS['touros'];
+
+  // raio (km) além do qual consideramos a coordenada informada
+  // "fora da cidade" e usamos o ponto central no lugar dela.
+  const MAX_CITY_RADIUS_KM = 40;
+
+  function normalize(str){
+    return (str || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos
+  }
+
+  function cityCenter(cidade){
+    return CITY_CENTERS[normalize(cidade)] || null;
+  }
+
+  function haversineKm(a, b){
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI/180;
+    const dLng = (b.lng - a.lng) * Math.PI/180;
+    const s = Math.sin(dLat/2)**2 +
+      Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  // Resolve a coordenada "efetiva" de um registro para exibição no mapa.
+  // Retorna { lat, lng, approx } — approx=true quando usamos o ponto
+  // central da cidade (coordenada ausente ou fora do raio esperado).
+  function resolveCoords(record){
+    const center = cityCenter(record.cidade) || DEFAULT_CENTER;
+    const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
+      && !isNaN(record.lat) && !isNaN(record.lng);
+
+    if (!hasOwn){
+      return { lat: center.lat, lng: center.lng, approx: true };
+    }
+    const dist = haversineKm(center, { lat: record.lat, lng: record.lng });
+    if (dist > MAX_CITY_RADIUS_KM){
+      return { lat: center.lat, lng: center.lng, approx: true };
+    }
+    return { lat: record.lat, lng: record.lng, approx: false };
+  }
+
+  // Categorização de tipo de serviço a partir do título — usado para
+  // ícone no mapa e filtro por tipo.
+  const TYPE_RULES = [
+    { key: 'ativacao',    label: 'Ativação (instalação)',    icon: '📡', test: /fibra ativa|instala/i },
+    { key: 'troca',       label: 'Troca de endereço',        icon: '🔀', test: /troca de endere/i },
+    { key: 'recolhimento',label: 'Recolhimento',             icon: '📦', test: /recolhimento/i },
+    { key: 'sem_acesso',  label: 'Sem acesso / dificuldade',  icon: '🚧', test: /sem acesso|dificuldade/i },
+    { key: 'cabo_baixo',  label: 'Cabo baixo',               icon: '🔌', test: /cabo baixo/i },
+    { key: 'retencao',    label: 'Retenção de cliente',      icon: '🛡️', test: /retencao|reten..o/i },
+    { key: 'adicional',   label: 'Serviços adicionais',      icon: '➕', test: /adicion/i },
+  ];
+  const TYPE_OTHER = { key: 'outros', label: 'Outros', icon: '⚙️' };
+
+  function classifyType(titulo){
+    const t = normalize(titulo);
+    for (const rule of TYPE_RULES){
+      if (rule.test.test(t)) return rule;
+    }
+    return TYPE_OTHER;
+  }
+
+  function allTypes(){ return [...TYPE_RULES, TYPE_OTHER]; }
+
+  // -------- storage --------
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
+  }
+  function save(records){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+  function clearAll(){
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function uid(){
+    return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+
+  return {
+    STORAGE_KEY, CITY_CENTERS, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
+    normalize, cityCenter, haversineKm, resolveCoords,
+    classifyType, allTypes, TYPE_OTHER,
+    load, save, clearAll, uid,
+  };
+})();
+
+/* ---------------- login + shell (sidebar) compartilhados ----------------
+   Gate simples de usuário/senha (mesmo esquema já usado no painel de
+   Indicadores) protegendo o site inteiro. É uma trava informal, não uma
+   autenticação segura — usuário e senha ficam visíveis no código-fonte. */
+
+const OPS_USERS = { coordenador: 'ops2024', admin: 'touros2025' };
+const OPS_NAV_LINKS = [
+  { href: 'index.html',           label: 'Início',            icon: '📊' },
+  { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
+  { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
+  { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
+  { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },
+  { href: 'indicadores.html',      label: 'Indicadores',        icon: '📈' },
+];
+
+function requireAuthThenInit(active, pageTitle){
+  if (sessionStorage.getItem('ops_user')){
+    initShell(active, pageTitle);
+  } else {
+    showLogin(() => initShell(active, pageTitle));
+  }
+}
+
+function showLogin(onSuccess){
+  const wrap = document.createElement('div');
+  wrap.id = 'login-wrap';
+  wrap.innerHTML = `
+    <div class="login-box">
+      <div class="lbox-brand">
+        <div class="icon">OPS</div>
+        <div><h2>Coordenação de Operações</h2><p>Unidade Touros</p></div>
+      </div>
+      <div class="lfield"><label>Usuário</label><input type="text" id="lg-usr" placeholder="coordenador" autocomplete="username"></div>
+      <div class="lfield"><label>Senha</label><input type="password" id="lg-pwd" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="lbtn" id="lg-btn">Entrar no sistema</button>
+      <div class="lerr" id="lg-err">Usuário ou senha incorretos.</div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  function attempt(){
+    const u = document.getElementById('lg-usr').value.trim();
+    const p = document.getElementById('lg-pwd').value;
+    if (OPS_USERS[u] && OPS_USERS[u] === p){
+      sessionStorage.setItem('ops_user', u);
+      wrap.remove();
+      onSuccess();
+    } else {
+      document.getElementById('lg-err').style.display = 'block';
+    }
+  }
+  document.getElementById('lg-btn').addEventListener('click', attempt);
+  wrap.querySelectorAll('input').forEach(inp =>
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); })
+  );
+  wrap.querySelector('#lg-usr').focus();
+}
+
+function initShell(active, pageTitle){
+  document.body.classList.add('has-shell', 'authed');
+
+  // move todo o conteúdo já presente no body (exceto <script>) para dentro do shell
+  const contentNodes = Array.from(document.body.children).filter(el => el.tagName !== 'SCRIPT');
+
+  const sidebar = document.createElement('aside');
+  sidebar.className = 'sidebar';
+  sidebar.innerHTML = `
+    <div class="sb-brand">
+      <div class="tag">OPS · Coord.</div>
+      <h1>Coord. Regional</h1>
+      <p>Unidade Touros</p>
+    </div>
+    <div class="sb-section">Painéis</div>
+    ${OPS_NAV_LINKS.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
+    <div class="sb-footer">
+      <div class="sb-update">Última atualização</div>
+      <div class="sb-date" id="sb-date">--/--/----</div>
+    </div>
+  `;
+
+  const topbar = document.createElement('div');
+  topbar.className = 'topbar';
+  topbar.innerHTML = `
+    <div class="crumb">
+      <span class="unit">OPS · Coordenação</span>
+      <span class="sep">·</span>
+      <span class="page">${pageTitle}</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="clock" id="ops-clock"></div>
+    <span class="user-pill" id="user-pill" title="Sair">${(sessionStorage.getItem('ops_user') || 'usuário')} ×</span>
+  `;
+
+  const shellMain = document.createElement('div');
+  shellMain.className = 'shell-main';
+  const shellContent = document.createElement('div');
+  shellContent.className = 'shell-content';
+  contentNodes.forEach(n => shellContent.appendChild(n));
+  shellMain.appendChild(topbar);
+  shellMain.appendChild(shellContent);
+
+  document.body.appendChild(sidebar);
+  document.body.appendChild(shellMain);
+
+  const clockEl = topbar.querySelector('#ops-clock');
+  function tick(){
+    const now = new Date();
+    clockEl.textContent = now.toLocaleDateString('pt-BR') + ' · ' + now.toLocaleTimeString('pt-BR');
+  }
+  tick(); setInterval(tick, 1000);
+
+  const now = new Date();
+  sidebar.querySelector('#sb-date').textContent =
+    `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+
+  topbar.querySelector('#user-pill').addEventListener('click', () => {
+    sessionStorage.removeItem('ops_user');
+    location.reload();
+  });
+}
