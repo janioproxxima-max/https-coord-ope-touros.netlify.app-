@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -47,10 +48,10 @@
       <button data-view="map">Mapa</button>
     </div>
     <button class="btn primary" id="btn-add">＋ Adicionar</button>
-    <button class="btn" id="btn-import">⇪ Importar CSV</button>
+    <button class="btn" id="btn-import">⇪ Importar planilha (Excel/CSV)</button>
     <button class="btn" id="btn-export">⇩ Exportar CSV</button>
     <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
-    <input type="file" id="file-import" accept=".csv" style="display:none">
+    <input type="file" id="file-import" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
 
   <div class="split" id="split-view">
@@ -383,31 +384,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
   closeModal();
 });
 
-// ---------- importar / exportar CSV ----------
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for (let i = 0; i < text.length; i++){
-    const c = text[i];
-    if (inQuotes){
-      if (c === '"' && text[i+1] === '"'){ field += '"'; i++; }
-      else if (c === '"'){ inQuotes = false; }
-      else field += c;
-    } else {
-      if (c === '"'){ inQuotes = true; }
-      else if (c === ','){ row.push(field); field = ''; }
-      else if (c === '\n' || c === '\r'){
-        if (c === '\r' && text[i+1] === '\n') continue;
-        row.push(field); field = '';
-        if (row.length > 1 || row[0] !== '') rows.push(row);
-        row = [];
-      } else field += c;
-    }
-  }
-  if (field !== '' || row.length){ row.push(field); rows.push(row); }
-  return rows;
-}
-
+// ---------- importar / exportar planilha ----------
 function mapHeader(h){
   const n = OPS.normalize(h);
   if (n.includes('protocolo')) return 'protocolo';
@@ -426,10 +403,8 @@ document.getElementById('btn-import').onclick = () => document.getElementById('f
 document.getElementById('file-import').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const rows = parseCSV(reader.result).filter(r => r.some(c => c.trim() !== ''));
-    if (rows.length < 2){ alert('CSV vazio ou sem dados.'); return; }
+  OPS.readSpreadsheetFile(file, (rows) => {
+    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
     const headers = rows[0].map(mapHeader);
     const imported = rows.slice(1).map(cols => {
       const rec = { id: OPS.uid() };
@@ -453,8 +428,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     populateFilterOptions();
     renderAll();
     e.target.value = '';
-  };
-  reader.readAsText(file, 'UTF-8');
+  });
 });
 
 document.getElementById('btn-export').onclick = () => {

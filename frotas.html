@@ -7,15 +7,274 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <div class="page">
-  <div class="panel placeholder">
-    <div class="glyph">🚚</div>
-    <h2>Frotas</h2>
-    <p class="page-sub">Módulo em construção.</p>
-    <ul><li>Cadastro de veículos e responsáveis</li><li>Documentação e vencimentos</li><li>Manutenções e quilometragem</li></ul>
+  <div class="page-head">
+    <p class="eyebrow">Frotas</p>
+    <h1 class="page-title">Veículos da unidade</h1>
+    <p class="page-sub">Responsáveis, base, documentação e quilometragem.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Placa, veículo, responsável...">
+    </div>
+    <div class="field">
+      <label for="f-base">Base / cidade</label>
+      <select id="f-base"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+      <label for="f-status">Status</label>
+      <select id="f-status">
+        <option value="">Todos</option>
+        <option value="ativo">Ativo</option>
+        <option value="manutencao">Em manutenção</option>
+        <option value="inativo">Inativo</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="btn-add">＋ Adicionar veículo</button>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+  </div>
+
+  <div class="panel" id="table-panel">
+    <div class="table-wrap">
+      <table class="services">
+        <thead>
+          <tr>
+            <th data-sort="placa">Placa</th>
+            <th data-sort="veiculo">Veículo</th>
+            <th data-sort="responsavel">Responsável</th>
+            <th data-sort="base">Base</th>
+            <th data-sort="km">KM atual</th>
+            <th data-sort="vencDoc">Venc. documento</th>
+            <th data-sort="status">Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="glyph">🚚</div>
+      <h3>Nenhum veículo cadastrado</h3>
+      <p>Adicione o primeiro veículo da frota.</p>
+      <button class="btn primary" id="btn-add-empty">＋ Adicionar veículo</button>
+    </div>
   </div>
 </div>
+
+<!-- Modal: adicionar / editar veículo -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title">Adicionar veículo</h3>
+    <p class="modal-sub">Dados do veículo, responsável e documentação.</p>
+    <form id="form-record">
+      <input type="hidden" id="rec-id">
+      <div class="grid2">
+        <div class="field"><label>Placa</label><input class="input" id="rec-placa" required placeholder="ABC-1D23"></div>
+        <div class="field"><label>Veículo / Modelo</label><input class="input" id="rec-veiculo" required placeholder="Fiat Strada"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Responsável</label><input class="input" id="rec-resp"></div>
+        <div class="field"><label>Base / Cidade</label><input class="input" id="rec-base" value="Touros"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>KM atual</label><input class="input" type="number" min="0" id="rec-km"></div>
+        <div class="field"><label>Vencimento documentação</label><input class="input" type="date" id="rec-venc"></div>
+      </div>
+      <div class="field"><label>Status</label>
+        <select id="rec-status">
+          <option value="ativo">Ativo</option>
+          <option value="manutencao">Em manutenção</option>
+          <option value="inativo">Inativo</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="common.js"></script>
-<script>requireAuthThenInit('frotas.html', 'Frotas');</script>
+<script>
+requireAuthThenInit('frotas.html', 'Frotas');
+
+const STORAGE_KEY = 'ops_touros_frotas_v1';
+let records = OPS.loadData(STORAGE_KEY) || [];
+let sortKey = null, sortDir = 1;
+
+const els = {
+  search: document.getElementById('f-search'),
+  base: document.getElementById('f-base'),
+  status: document.getElementById('f-status'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function populateFilterOptions(){
+  const bases = [...new Set(records.map(r => r.base).filter(Boolean))].sort();
+  els.base.innerHTML = '<option value="">Todas</option>' + bases.map(b => `<option value="${b}">${b}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const base = els.base.value;
+  const status = els.status.value;
+  return records.filter(r => {
+    if (base && r.base !== base) return false;
+    if (status && r.status !== status) return false;
+    if (q){
+      const hay = OPS.normalize(r.placa + ' ' + r.veiculo + ' ' + r.responsavel);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function docStatus(venc){
+  if (!venc) return null;
+  const d = new Date(venc + 'T00:00:00');
+  const diffDays = Math.ceil((d - new Date()) / 86400000);
+  if (diffDays < 0) return 'crit';
+  if (diffDays <= 30) return 'warn';
+  return 'ok';
+}
+
+function renderStats(){
+  const list = getFiltered();
+  const ativos = list.filter(r => r.status === 'ativo').length;
+  const manut = list.filter(r => r.status === 'manutencao').length;
+  const vencendo = list.filter(r => docStatus(r.vencDoc) === 'crit' || docStatus(r.vencDoc) === 'warn').length;
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Veículos</div><div class="value">${list.length}</div></div>
+    <div class="stat-card ok"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
+    <div class="stat-card"><div class="label">Em manutenção</div><div class="value">${manut}</div></div>
+    <div class="stat-card crit"><div class="label">Doc. vencendo/vencida</div><div class="value">${vencendo}</div></div>
+  `;
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey){
+    list = [...list].sort((a,b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'km'){ av = Number(av)||0; bv = Number(bv)||0; }
+      else { av = OPS.normalize(av); bv = OPS.normalize(bv); }
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+  els.emptyState.style.display = records.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
+
+  const statusLabel = { ativo:'Ativo', manutencao:'Em manutenção', inativo:'Inativo' };
+  els.tbody.innerHTML = list.map(r => {
+    const ds = docStatus(r.vencDoc);
+    const docColor = ds === 'crit' ? 'var(--crit)' : ds === 'warn' ? 'var(--warn)' : 'var(--ink-dim)';
+    return `
+    <tr data-id="${r.id}">
+      <td class="proto">${r.placa}</td>
+      <td style="font-weight:600">${r.veiculo}</td>
+      <td>${r.responsavel || '—'}</td>
+      <td>${r.base}</td>
+      <td class="proto">${r.km ? Number(r.km).toLocaleString('pt-BR') : '—'}</td>
+      <td class="proto" style="color:${docColor}">${r.vencDoc ? new Date(r.vencDoc+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td><span class="badge ${r.status === 'ativo' ? 'ok' : r.status === 'inativo' ? 'crit' : ''}" style="${r.status==='manutencao' ? 'background:var(--warn-wash);color:var(--warn)' : ''}"><span class="dot"></span>${statusLabel[r.status]}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
+          <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
+        </div>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+function renderAll(){ renderStats(); renderTable(); }
+
+[els.search, els.base, els.status].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+els.tbody.addEventListener('click', (e) => {
+  const editId = e.target.dataset.edit;
+  const delId = e.target.dataset.del;
+  if (editId) openModal(records.find(r => r.id === editId));
+  if (delId){
+    if (confirm('Excluir este veículo?')){
+      records = records.filter(r => r.id !== delId);
+      OPS.saveData(STORAGE_KEY, records);
+      populateFilterOptions();
+      renderAll();
+    }
+  }
+});
+
+const modal = document.getElementById('modal');
+function openModal(rec){
+  document.getElementById('modal-title').textContent = rec ? 'Editar veículo' : 'Adicionar veículo';
+  document.getElementById('rec-id').value = rec ? rec.id : '';
+  document.getElementById('rec-placa').value = rec ? rec.placa : '';
+  document.getElementById('rec-veiculo').value = rec ? rec.veiculo : '';
+  document.getElementById('rec-resp').value = rec ? rec.responsavel : '';
+  document.getElementById('rec-base').value = rec ? rec.base : 'Touros';
+  document.getElementById('rec-km').value = rec ? rec.km : '';
+  document.getElementById('rec-venc').value = rec ? rec.vencDoc : '';
+  document.getElementById('rec-status').value = rec ? rec.status : 'ativo';
+  modal.style.display = 'flex';
+}
+function closeModal(){ modal.style.display = 'none'; }
+document.getElementById('btn-add').onclick = () => openModal(null);
+document.getElementById('btn-add-empty').onclick = () => openModal(null);
+document.getElementById('btn-cancel').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+document.getElementById('form-record').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('rec-id').value;
+  const data = {
+    placa: document.getElementById('rec-placa').value.trim().toUpperCase(),
+    veiculo: document.getElementById('rec-veiculo').value.trim(),
+    responsavel: document.getElementById('rec-resp').value.trim(),
+    base: document.getElementById('rec-base').value.trim(),
+    km: Number(document.getElementById('rec-km').value) || 0,
+    vencDoc: document.getElementById('rec-venc').value,
+    status: document.getElementById('rec-status').value,
+  };
+  if (id) records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  else records.push({ ...data, id: OPS.uid() });
+  OPS.saveData(STORAGE_KEY, records);
+  populateFilterOptions();
+  renderAll();
+  closeModal();
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['PLACA','VEÍCULO','RESPONSÁVEL','BASE','KM','VENCIMENTO DOC','STATUS'];
+  const rows = records.map(r => [r.placa, r.veiculo, r.responsavel, r.base, r.km, r.vencDoc, r.status]);
+  OPS.downloadCSV('frotas-touros.csv', headers, rows);
+};
+
+populateFilterOptions();
+renderAll();
+</script>
 </body>
 </html>

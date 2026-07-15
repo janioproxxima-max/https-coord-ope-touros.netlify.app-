@@ -115,6 +115,83 @@ const OPS = (() => {
     localStorage.removeItem(STORAGE_KEY);
   }
 
+  // -------- storage genérico (usado por outros módulos: pessoas, frotas, desligamentos) --------
+  function loadData(key){
+    try{
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
+  }
+  function saveData(key, val){
+    localStorage.setItem(key, JSON.stringify(val));
+  }
+
+  // -------- CSV --------
+  function parseCSV(text){
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++){
+      const c = text[i];
+      if (inQuotes){
+        if (c === '"' && text[i+1] === '"'){ field += '"'; i++; }
+        else if (c === '"'){ inQuotes = false; }
+        else field += c;
+      } else {
+        if (c === '"'){ inQuotes = true; }
+        else if (c === ','){ row.push(field); field = ''; }
+        else if (c === '\n' || c === '\r'){
+          if (c === '\r' && text[i+1] === '\n') continue;
+          row.push(field); field = '';
+          if (row.length > 1 || row[0] !== '') rows.push(row);
+          row = [];
+        } else field += c;
+      }
+    }
+    if (field !== '' || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function downloadCSV(filename, headers, dataRows){
+    const lines = [headers.join(',')];
+    dataRows.forEach(row => {
+      lines.push(row.map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  }
+
+  // Lê um arquivo CSV ou Excel (.xlsx/.xls) e devolve uma matriz de linhas
+  // (array de arrays) igual ao parseCSV — pronto pra mapear colunas.
+  // callback(rows) é chamado quando terminar de ler.
+  function readSpreadsheetFile(file, callback){
+    const name = (file.name || '').toLowerCase();
+    const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls');
+    const reader = new FileReader();
+    if (isExcel){
+      reader.onload = () => {
+        try{
+          const data = new Uint8Array(reader.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
+            .map(r => r.map(c => (c === null || c === undefined) ? '' : String(c)));
+          callback(rows);
+        }catch(e){
+          console.error('Falha ao ler Excel', e);
+          alert('Não consegui ler esse arquivo Excel. Verifique se é um .xlsx/.xls válido.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = () => callback(parseCSV(reader.result).filter(r => r.some(c => (c||'').trim() !== '')));
+      reader.readAsText(file, 'UTF-8');
+    }
+  }
+
   function uid(){
     return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
@@ -124,6 +201,7 @@ const OPS = (() => {
     normalize, cityCenter, haversineKm, resolveCoords,
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid,
+    loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
   };
 })();
 

@@ -7,15 +7,243 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <div class="page">
-  <div class="panel placeholder">
-    <div class="glyph">📤</div>
-    <h2>Desligamentos</h2>
-    <p class="page-sub">Módulo em construção.</p>
-    <ul><li>Histórico de desligamentos por colaborador</li><li>Motivo e tipo de desligamento</li><li>Indicadores de turnover</li></ul>
+  <div class="page-head">
+    <p class="eyebrow">Desligamentos</p>
+    <h1 class="page-title">Histórico de desligamentos</h1>
+    <p class="page-sub">Motivo, tipo e data de saída dos colaboradores.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Nome, cargo, motivo...">
+    </div>
+    <div class="field">
+      <label for="f-tipo">Tipo</label>
+      <select id="f-tipo">
+        <option value="">Todos</option>
+        <option value="voluntario">Voluntário</option>
+        <option value="involuntario">Involuntário</option>
+        <option value="termino_contrato">Término de contrato</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="btn-add">＋ Adicionar desligamento</button>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+  </div>
+
+  <div class="panel" id="table-panel">
+    <div class="table-wrap">
+      <table class="services">
+        <thead>
+          <tr>
+            <th data-sort="nome">Nome</th>
+            <th data-sort="cargo">Cargo</th>
+            <th data-sort="data">Data</th>
+            <th data-sort="tipo">Tipo</th>
+            <th>Motivo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="glyph">📤</div>
+      <h3>Nenhum desligamento registrado</h3>
+      <p>Adicione o primeiro registro de desligamento.</p>
+      <button class="btn primary" id="btn-add-empty">＋ Adicionar desligamento</button>
+    </div>
   </div>
 </div>
+
+<!-- Modal: adicionar / editar desligamento -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title">Adicionar desligamento</h3>
+    <p class="modal-sub">Registro histórico — usado no cálculo de turnover.</p>
+    <form id="form-record">
+      <input type="hidden" id="rec-id">
+      <div class="grid2">
+        <div class="field"><label>Nome do colaborador</label><input class="input" id="rec-nome" required></div>
+        <div class="field"><label>Cargo</label><input class="input" id="rec-cargo"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Data de desligamento</label><input class="input" type="date" id="rec-data" required></div>
+        <div class="field"><label>Tipo</label>
+          <select id="rec-tipo">
+            <option value="voluntario">Voluntário</option>
+            <option value="involuntario">Involuntário</option>
+            <option value="termino_contrato">Término de contrato</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Motivo</label><input class="input" id="rec-motivo" placeholder="Ex: nova oportunidade, baixo desempenho..."></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="common.js"></script>
-<script>requireAuthThenInit('desligamentos.html', 'Desligamentos');</script>
+<script>
+requireAuthThenInit('desligamentos.html', 'Desligamentos');
+
+const STORAGE_KEY = 'ops_touros_desligamentos_v1';
+let records = OPS.loadData(STORAGE_KEY) || [];
+let sortKey = null, sortDir = 1;
+
+const TIPO_LABELS = {
+  voluntario: 'Voluntário',
+  involuntario: 'Involuntário',
+  termino_contrato: 'Término de contrato',
+  outro: 'Outro',
+};
+
+const els = {
+  search: document.getElementById('f-search'),
+  tipo: document.getElementById('f-tipo'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const tipo = els.tipo.value;
+  return records.filter(r => {
+    if (tipo && r.tipo !== tipo) return false;
+    if (q){
+      const hay = OPS.normalize(r.nome + ' ' + r.cargo + ' ' + r.motivo);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats(){
+  const list = getFiltered();
+  const now = new Date();
+  const last12mo = list.filter(r => {
+    if (!r.data) return false;
+    const d = new Date(r.data + 'T00:00:00');
+    return (now - d) / 86400000 <= 365;
+  }).length;
+  const involuntarios = list.filter(r => r.tipo === 'involuntario').length;
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Total registrado</div><div class="value">${list.length}</div></div>
+    <div class="stat-card"><div class="label">Últimos 12 meses</div><div class="value">${last12mo}</div></div>
+    <div class="stat-card crit"><div class="label">Involuntários</div><div class="value">${involuntarios}</div></div>
+  `;
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey){
+    list = [...list].sort((a,b) => {
+      let av = OPS.normalize(a[sortKey]), bv = OPS.normalize(b[sortKey]);
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+  els.emptyState.style.display = records.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
+
+  els.tbody.innerHTML = list.map(r => `
+    <tr data-id="${r.id}">
+      <td style="font-weight:600">${r.nome}</td>
+      <td>${r.cargo || '—'}</td>
+      <td class="proto">${r.data ? new Date(r.data+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td><span class="badge ${r.tipo === 'involuntario' ? 'crit' : 'ok'}"><span class="dot"></span>${TIPO_LABELS[r.tipo] || r.tipo}</span></td>
+      <td style="color:var(--ink-dim);font-size:.9em">${r.motivo || '—'}</td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
+          <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderAll(){ renderStats(); renderTable(); }
+
+[els.search, els.tipo].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+els.tbody.addEventListener('click', (e) => {
+  const editId = e.target.dataset.edit;
+  const delId = e.target.dataset.del;
+  if (editId) openModal(records.find(r => r.id === editId));
+  if (delId){
+    if (confirm('Excluir este registro?')){
+      records = records.filter(r => r.id !== delId);
+      OPS.saveData(STORAGE_KEY, records);
+      renderAll();
+    }
+  }
+});
+
+const modal = document.getElementById('modal');
+function openModal(rec){
+  document.getElementById('modal-title').textContent = rec ? 'Editar desligamento' : 'Adicionar desligamento';
+  document.getElementById('rec-id').value = rec ? rec.id : '';
+  document.getElementById('rec-nome').value = rec ? rec.nome : '';
+  document.getElementById('rec-cargo').value = rec ? rec.cargo : '';
+  document.getElementById('rec-data').value = rec ? rec.data : '';
+  document.getElementById('rec-tipo').value = rec ? rec.tipo : 'voluntario';
+  document.getElementById('rec-motivo').value = rec ? rec.motivo : '';
+  modal.style.display = 'flex';
+}
+function closeModal(){ modal.style.display = 'none'; }
+document.getElementById('btn-add').onclick = () => openModal(null);
+document.getElementById('btn-add-empty').onclick = () => openModal(null);
+document.getElementById('btn-cancel').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+document.getElementById('form-record').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('rec-id').value;
+  const data = {
+    nome: document.getElementById('rec-nome').value.trim(),
+    cargo: document.getElementById('rec-cargo').value.trim(),
+    data: document.getElementById('rec-data').value,
+    tipo: document.getElementById('rec-tipo').value,
+    motivo: document.getElementById('rec-motivo').value.trim(),
+  };
+  if (id) records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  else records.push({ ...data, id: OPS.uid() });
+  OPS.saveData(STORAGE_KEY, records);
+  renderAll();
+  closeModal();
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['NOME','CARGO','DATA','TIPO','MOTIVO'];
+  const rows = records.map(r => [r.nome, r.cargo, r.data, TIPO_LABELS[r.tipo] || r.tipo, r.motivo]);
+  OPS.downloadCSV('desligamentos-touros.csv', headers, rows);
+};
+
+renderAll();
+</script>
 </body>
 </html>

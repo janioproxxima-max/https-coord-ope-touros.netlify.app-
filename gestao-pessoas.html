@@ -7,15 +7,253 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <div class="page">
-  <div class="panel placeholder">
-    <div class="glyph">👥</div>
-    <h2>Gestão de Pessoas</h2>
-    <p class="page-sub">Módulo em construção — próximo passo do projeto.</p>
-    <ul><li>Cadastro de colaboradores com dados do organograma</li><li>Centro de custo por colaborador</li><li>Vínculo com cargo, unidade e liderança</li><li>Busca e exportação da base</li></ul>
+  <div class="page-head">
+    <p class="eyebrow">Gestão de pessoas</p>
+    <h1 class="page-title">Colaboradores da unidade</h1>
+    <p class="page-sub">Organograma, cargo, centro de custo e liderança direta.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Nome, cargo...">
+    </div>
+    <div class="field">
+      <label for="f-cc">Centro de custo</label>
+      <select id="f-cc"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-status">Status</label>
+      <select id="f-status">
+        <option value="">Todos</option>
+        <option value="ativo">Ativo</option>
+        <option value="inativo">Inativo</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="btn-add">＋ Adicionar colaborador</button>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+  </div>
+
+  <div class="panel" id="table-panel">
+    <div class="table-wrap">
+      <table class="services">
+        <thead>
+          <tr>
+            <th data-sort="nome">Nome</th>
+            <th data-sort="cargo">Cargo</th>
+            <th data-sort="centroCusto">Centro de custo</th>
+            <th data-sort="gestor">Gestor</th>
+            <th data-sort="admissao">Admissão</th>
+            <th data-sort="status">Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="glyph">👥</div>
+      <h3>Nenhum colaborador cadastrado</h3>
+      <p>Adicione o primeiro colaborador da unidade.</p>
+      <button class="btn primary" id="btn-add-empty">＋ Adicionar colaborador</button>
+    </div>
   </div>
 </div>
+
+<!-- Modal: adicionar / editar colaborador -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title">Adicionar colaborador</h3>
+    <p class="modal-sub">Dados do organograma e centro de custo do colaborador.</p>
+    <form id="form-record">
+      <input type="hidden" id="rec-id">
+      <div class="field"><label>Nome completo</label><input class="input" id="rec-nome" required></div>
+      <div class="grid2">
+        <div class="field"><label>Cargo / Função</label><input class="input" id="rec-cargo" required></div>
+        <div class="field"><label>Centro de custo</label><input class="input" id="rec-cc" required placeholder="Ex: CC-TOUROS-OPS"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Setor / Unidade</label><input class="input" id="rec-setor" value="Unidade Touros"></div>
+        <div class="field"><label>Gestor / Liderança direta</label><input class="input" id="rec-gestor"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Data de admissão</label><input class="input" type="date" id="rec-admissao"></div>
+        <div class="field"><label>Status</label>
+          <select id="rec-status">
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="common.js"></script>
-<script>requireAuthThenInit('gestao-pessoas.html', 'Gestão de Pessoas');</script>
+<script>
+requireAuthThenInit('gestao-pessoas.html', 'Gestão de Pessoas');
+
+const STORAGE_KEY = 'ops_touros_pessoas_v1';
+let records = OPS.loadData(STORAGE_KEY) || [];
+let sortKey = null, sortDir = 1;
+
+const els = {
+  search: document.getElementById('f-search'),
+  cc: document.getElementById('f-cc'),
+  status: document.getElementById('f-status'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function populateFilterOptions(){
+  const ccs = [...new Set(records.map(r => r.centroCusto).filter(Boolean))].sort();
+  els.cc.innerHTML = '<option value="">Todos</option>' + ccs.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const cc = els.cc.value;
+  const status = els.status.value;
+  return records.filter(r => {
+    if (cc && r.centroCusto !== cc) return false;
+    if (status && r.status !== status) return false;
+    if (q){
+      const hay = OPS.normalize(r.nome + ' ' + r.cargo);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats(){
+  const list = getFiltered();
+  const ativos = list.filter(r => r.status === 'ativo').length;
+  const ccCount = new Set(list.map(r => r.centroCusto).filter(Boolean)).size;
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Colaboradores</div><div class="value">${list.length}</div></div>
+    <div class="stat-card ok"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
+    <div class="stat-card crit"><div class="label">Inativos</div><div class="value">${list.length - ativos}</div></div>
+    <div class="stat-card"><div class="label">Centros de custo</div><div class="value">${ccCount}</div></div>
+  `;
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey){
+    list = [...list].sort((a,b) => {
+      let av = OPS.normalize(a[sortKey]), bv = OPS.normalize(b[sortKey]);
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+  els.emptyState.style.display = records.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
+
+  els.tbody.innerHTML = list.map(r => `
+    <tr data-id="${r.id}">
+      <td style="font-weight:600">${r.nome}</td>
+      <td>${r.cargo}</td>
+      <td class="proto">${r.centroCusto}</td>
+      <td>${r.gestor || '—'}</td>
+      <td class="proto">${r.admissao ? new Date(r.admissao+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td><span class="badge ${r.status === 'ativo' ? 'ok' : 'crit'}"><span class="dot"></span>${r.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
+          <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderAll(){ renderStats(); renderTable(); }
+
+[els.search, els.cc, els.status].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+els.tbody.addEventListener('click', (e) => {
+  const editId = e.target.dataset.edit;
+  const delId = e.target.dataset.del;
+  if (editId) openModal(records.find(r => r.id === editId));
+  if (delId){
+    if (confirm('Excluir este colaborador?')){
+      records = records.filter(r => r.id !== delId);
+      OPS.saveData(STORAGE_KEY, records);
+      populateFilterOptions();
+      renderAll();
+    }
+  }
+});
+
+const modal = document.getElementById('modal');
+function openModal(rec){
+  document.getElementById('modal-title').textContent = rec ? 'Editar colaborador' : 'Adicionar colaborador';
+  document.getElementById('rec-id').value = rec ? rec.id : '';
+  document.getElementById('rec-nome').value = rec ? rec.nome : '';
+  document.getElementById('rec-cargo').value = rec ? rec.cargo : '';
+  document.getElementById('rec-cc').value = rec ? rec.centroCusto : '';
+  document.getElementById('rec-setor').value = rec ? rec.setor : 'Unidade Touros';
+  document.getElementById('rec-gestor').value = rec ? rec.gestor : '';
+  document.getElementById('rec-admissao').value = rec ? rec.admissao : '';
+  document.getElementById('rec-status').value = rec ? rec.status : 'ativo';
+  modal.style.display = 'flex';
+}
+function closeModal(){ modal.style.display = 'none'; }
+document.getElementById('btn-add').onclick = () => openModal(null);
+document.getElementById('btn-add-empty').onclick = () => openModal(null);
+document.getElementById('btn-cancel').onclick = closeModal;
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+document.getElementById('form-record').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('rec-id').value;
+  const data = {
+    nome: document.getElementById('rec-nome').value.trim(),
+    cargo: document.getElementById('rec-cargo').value.trim(),
+    centroCusto: document.getElementById('rec-cc').value.trim(),
+    setor: document.getElementById('rec-setor').value.trim(),
+    gestor: document.getElementById('rec-gestor').value.trim(),
+    admissao: document.getElementById('rec-admissao').value,
+    status: document.getElementById('rec-status').value,
+  };
+  if (id) records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  else records.push({ ...data, id: OPS.uid() });
+  OPS.saveData(STORAGE_KEY, records);
+  populateFilterOptions();
+  renderAll();
+  closeModal();
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['NOME','CARGO','CENTRO DE CUSTO','SETOR','GESTOR','ADMISSÃO','STATUS'];
+  const rows = records.map(r => [r.nome, r.cargo, r.centroCusto, r.setor, r.gestor, r.admissao, r.status === 'ativo' ? 'ATIVO' : 'INATIVO']);
+  OPS.downloadCSV('gestao-pessoas-touros.csv', headers, rows);
+};
+
+populateFilterOptions();
+renderAll();
+</script>
 </body>
 </html>
