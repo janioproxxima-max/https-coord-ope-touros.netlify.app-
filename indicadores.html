@@ -6,6 +6,8 @@
 <title>Indicadores · OPS Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -13,35 +15,36 @@
   <div class="page-head">
     <p class="eyebrow">Indicadores de desempenho</p>
     <h1 class="page-title">Painéis da Unidade Touros</h1>
-    <p class="page-sub">Dados vindos direto do Mapa de Serviços — Pareto por cidade, tipos de serviço, supervisão e backlog.</p>
+    <p class="page-sub">Visão geral (Mapa de Serviços) e Produtividade/SLA (planilha de fechamento, importada aqui).</p>
   </div>
 
+  <div class="sec-hdr">Visão geral — Unidade Touros (Mapa de Serviços)</div>
   <div class="stat-row" id="stat-row"></div>
 
   <div class="two-col">
     <div class="card">
-      <div class="card-head"><h3>📍 Pareto por cidade — Unidade Touros</h3></div>
-      <div style="padding:16px"><canvas id="chart-pareto-cidade" height="260"></canvas></div>
+      <div class="card-head"><h3>📍 Pareto por cidade</h3></div>
+      <div class="chart-box"><canvas id="chart-pareto-cidade"></canvas></div>
     </div>
     <div class="card">
       <div class="card-head"><h3>🧩 Quantidade por tipo de serviço</h3></div>
-      <div style="padding:16px"><canvas id="chart-tipo-total" height="260"></canvas></div>
+      <div class="chart-box"><canvas id="chart-tipo-total"></canvas></div>
     </div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
     <div class="card-head"><h3>🏙️ Por cidade × tipo de serviço</h3></div>
-    <div style="padding:16px"><canvas id="chart-cidade-tipo" height="120"></canvas></div>
+    <div class="chart-box tall"><canvas id="chart-cidade-tipo"></canvas></div>
   </div>
 
   <div class="two-col">
     <div class="card">
       <div class="card-head"><h3>🧑‍💼 Quantidade de serviços por supervisão</h3></div>
-      <div style="padding:16px"><canvas id="chart-supervisao" height="240"></canvas></div>
+      <div class="chart-box"><canvas id="chart-supervisao"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>📊 Backlog por cidade</h3><span class="cnt-badge" title="Pontos ÷ equipes ativas ÷ 7,2 (90% da meta prevista)">fórmula: pontos / equipes / 7,2</span></div>
-      <div class="table-wrap" style="max-height:300px">
+      <div class="card-head"><h3>📊 Backlog por cidade</h3><span class="cnt-badge" title="Pontos ÷ equipes ativas ÷ 7,2 (90% da meta prevista)">pontos / equipes / 7,2</span></div>
+      <div class="table-wrap" style="max-height:280px">
         <table class="services">
           <thead><tr><th>Cidade</th><th>Pontos</th><th>Equipes hoje</th><th>Backlog (dias)</th></tr></thead>
           <tbody id="backlog-tbody"></tbody>
@@ -50,9 +53,17 @@
     </div>
   </div>
 
-  <div class="sec-hdr">SLA (%) e Produtividade — serviços encerrados</div>
+  <div class="sec-hdr">Produtividade &amp; SLA — planilha de fechamento</div>
 
   <div class="panel toolbar">
+    <div class="field">
+      <label for="f-periodo">Período</label>
+      <input class="input" type="month" id="f-periodo">
+    </div>
+    <div class="field">
+      <label for="f-colaborador">Colaborador</label>
+      <select id="f-colaborador"><option value="">Todos</option></select>
+    </div>
     <div class="field">
       <label for="f-tipo-sla">Tipo de serviço</label>
       <select id="f-tipo-sla"><option value="">Todos</option></select>
@@ -61,18 +72,39 @@
       <label for="f-supervisor-sla">Supervisor</label>
       <select id="f-supervisor-sla"><option value="">Todos</option></select>
     </div>
-    <div class="field">
-      <label for="f-tecnico-sla">Técnico</label>
-      <select id="f-tecnico-sla"><option value="">Todos</option></select>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="btn-import-fechamento">⇪ Importar planilha de fechamento</button>
+    <button class="btn" id="btn-export-fechamento">⇩ Exportar CSV</button>
+    <input type="file" id="file-import-fechamento" accept=".csv,.xlsx,.xls" style="display:none">
+  </div>
+  <p class="page-sub" id="fechamento-info" style="margin:-6px 0 16px"></p>
+
+  <div class="sla-grid" id="sla-cards"></div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head">
+        <h3>🏆 Ranking de colaboradores</h3>
+        <input class="input" id="f-busca-ranking" placeholder="Buscar..." style="max-width:160px;margin-left:auto">
+      </div>
+      <div class="table-wrap" style="max-height:340px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Pontos</th><th>Quartil</th><th>Status</th></tr></thead>
+          <tbody id="ranking-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>📐 Distribuição por quartil</h3></div>
+      <div style="padding:18px" id="quartil-dist"></div>
+      <p class="page-sub" style="padding:0 18px 16px;margin:0">Q1: maior pontuação · Q4: menor pontuação</p>
     </div>
   </div>
-
-  <div class="kpi-strip" id="sla-cards" style="grid-template-columns:repeat(4,1fr)"></div>
 
   <div class="two-col">
     <div class="card">
       <div class="card-head"><h3>🧑‍💼 Problemas mais fechados por supervisor</h3></div>
-      <div class="table-wrap" style="max-height:320px">
+      <div class="table-wrap" style="max-height:280px">
         <table class="services">
           <thead><tr><th>Supervisor</th><th>Descrição do encerramento</th><th>Qtd.</th></tr></thead>
           <tbody id="problemas-tbody"></tbody>
@@ -80,13 +112,8 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><h3>🎯 Pontuação por colaborador — mês atual</h3><span class="cnt-badge" title="Meta: 8 pontos por dia trabalhado (domingo conta pontos, não conta pra meta)">meta: 8 pts/dia útil</span></div>
-      <div class="table-wrap" style="max-height:320px">
-        <table class="services">
-          <thead><tr><th>Colaborador</th><th>Pontos no mês</th><th>Dias úteis</th><th>Meta</th><th>% da meta</th></tr></thead>
-          <tbody id="pontuacao-tbody"></tbody>
-        </table>
-      </div>
+      <div class="card-head"><h3>🎯 Pontos por dia útil (mês) × meta de 8</h3></div>
+      <div class="chart-box"><canvas id="chart-pontos-dia"></canvas></div>
     </div>
   </div>
 </div>
@@ -95,7 +122,9 @@
 <script>
 requireAuthThenInit('indicadores.html', 'Indicadores');
 
-// -------- mesmas regras de visibilidade do Mapa de Serviços --------
+// ============================================================
+// PARTE 1 — Visão geral (dados do Mapa de Serviços)
+// ============================================================
 const RECOLHIMENTO_TROCA_ENDERECO = 'operacoes - recolhimento/troca de endereco';
 const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
 function isAlwaysHidden(r){
@@ -109,27 +138,27 @@ function isDefaultHiddenRecolhimento(r){
 function isVisible(r){ return !isAlwaysHidden(r) && !isDefaultHiddenRecolhimento(r); }
 
 const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c','#5eead4','#f472b6','#818cf8','#facc15'];
-
-// sigla/grupo de SLA por tipo de serviço (mesmo agrupamento do Mapa de Serviços)
 const SIGLA_BY_TIPO = {
   'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
   'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT', 'AÇÕES PREVENTIVAS': 'VT',
   'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
 };
 const SLA_GROUPS = {
-  VT: { label: 'Reparo', metaPct: 90, horas: 24 },
-  SA: { label: 'Serviços Adicional', metaPct: 95, horas: 48 },
-  AT: { label: 'Ativação', metaPct: 95, horas: 72 },
-  MD: { label: 'Mudança de Endereço', metaPct: 95, horas: 72 },
+  VT: { label: 'Reparo (24h)', metaPct: 90, horas: 24 },
+  SA: { label: 'Serviços Adicional (48h)', metaPct: 95, horas: 48 },
+  AT: { label: 'Ativação (72h)', metaPct: 95, horas: 72 },
+  MD: { label: 'Mudança de Endereço (72h)', metaPct: 95, horas: 72 },
 };
 
 let mapaRecords = [];
 let pessoas = [];
 let ausencias = [];
 let atestados = [];
+let fechamento = [];
 let charts = {};
 
 function destroyCharts(){ Object.values(charts).forEach(c => c && c.destroy()); charts = {}; }
+const commonChartOpts = { responsive:true, maintainAspectRatio:false };
 
 function unidadeRecords(){
   return mapaRecords.filter(r => isVisible(r) && OPS.isTourosUnitCity(r.cidade));
@@ -139,7 +168,7 @@ function renderStats(){
   const list = unidadeRecords();
   const cidades = new Set(list.map(r => r.cidade)).size;
   const tipos = new Set(list.map(r => r.tipoCurto)).size;
-  const supervisores = new Set(list.map(r => r.supervisor).filter(Boolean)).size;
+  const supervisores = new Set(list.map(r => OPS.supervisorForCity(r.cidade)).filter(Boolean)).size;
   document.getElementById('stat-row').innerHTML = `
     <div class="stat-card brand"><div class="label">Protocolos na Unidade</div><div class="value">${list.length}</div></div>
     <div class="stat-card"><div class="label">Cidades com serviço</div><div class="value">${cidades}</div></div>
@@ -165,8 +194,7 @@ function renderParetoCidade(){
         { type:'line', label:'% acumulado', data: cumPct, borderColor:'#ffd166', backgroundColor:'#ffd166', yAxisID:'y1', order:1, tension:0.25 },
       ],
     },
-    options: {
-      responsive:true,
+    options: { ...commonChartOpts,
       scales:{
         y:{ beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
         y1:{ beginAtZero:true, max:100, position:'right', ticks:{ color:'#8a97ab' }, grid:{ display:false } },
@@ -189,9 +217,8 @@ function renderTipoTotal(){
       labels: entries.map(([t]) => t),
       datasets:[{ label:'Protocolos', data: entries.map(([,v]) => v), backgroundColor: CHART_COLORS }],
     },
-    options:{
+    options:{ ...commonChartOpts,
       indexAxis:'y',
-      responsive:true,
       scales:{
         x:{ beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
         y:{ ticks:{ color:'#e2eaf5' }, grid:{ display:false } },
@@ -214,8 +241,7 @@ function renderCidadeTipo(){
   charts.cidadeTipo = new Chart(document.getElementById('chart-cidade-tipo'), {
     type:'bar',
     data:{ labels: cidades, datasets },
-    options:{
-      responsive:true,
+    options:{ ...commonChartOpts,
       scales:{
         x:{ stacked:true, ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
         y:{ stacked:true, beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
@@ -237,10 +263,9 @@ function renderSupervisao(){
   charts.supervisao = new Chart(document.getElementById('chart-supervisao'), {
     type:'bar',
     data:{ labels: entries.map(([s]) => s), datasets:[{ label:'Protocolos', data: entries.map(([,v]) => v), backgroundColor:'#a78bfa' }] },
-    options:{
-      responsive:true,
+    options:{ ...commonChartOpts,
       scales:{
-        x:{ ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
+        x:{ ticks:{ color:'#8a97ab' }, grid:{ display:false } },
         y:{ beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
       },
       plugins:{ legend:{ display:false } },
@@ -263,17 +288,14 @@ function renderBacklog(){
   const pontosPorCidade = {};
   list.forEach(r => {
     const svc = OPS.lookupService(r.tituloCompleto);
-    const pontos = svc.pontos || 0;
-    pontosPorCidade[r.cidade] = (pontosPorCidade[r.cidade] || 0) + pontos;
+    pontosPorCidade[r.cidade] = (pontosPorCidade[r.cidade] || 0) + (svc.pontos || 0);
   });
-
   const cidades = Object.keys(pontosPorCidade).sort((a,b) => pontosPorCidade[b] - pontosPorCidade[a]);
   const tbody = document.getElementById('backlog-tbody');
   if (!cidades.length){
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-dim);padding:20px">Sem protocolos em aberto na Unidade Touros.</td></tr>';
     return;
   }
-
   tbody.innerHTML = cidades.map(cidade => {
     const pontos = pontosPorCidade[cidade];
     const equipes = equipesAtivasHoje(cidade);
@@ -289,58 +311,161 @@ function renderBacklog(){
   }).join('');
 }
 
-// -------- SLA (%) / produtividade / pontuação (serviços encerrados) --------
-function closedProdutivoRecords(){
-  return unidadeRecords().filter(r => {
-    if (!r.dataFimAtendimento || !r.criadoEm) return false;
+// ============================================================
+// PARTE 2 — Produtividade / SLA (planilha de fechamento própria)
+// ============================================================
+const FECHAMENTO_KEY = 'ops_touros_fechamento_v1';
+const FECHAMENTO_SYNC = 'FechamentoData';
+
+function mapHeaderFechamento(h){
+  const n = OPS.normalize(h);
+  if (n.includes('ordem servico') || n === 'protocolo') return 'protocolo';
+  if (n === 'tipo de servico') return 'tituloCompleto';
+  if (n.includes('titulo') && !n.includes('subtipo')) return 'tituloCompleto';
+  if (n === 'area') return 'cidade';
+  if (n === 'cidade') return 'cidade';
+  if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
+  if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
+  if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
+  if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
+  if (n === 'responsavel') return 'responsavel';
+  if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
+  if (n.includes('abertura original')) return 'dataAberturaOriginal';
+  return null;
+}
+
+document.getElementById('btn-import-fechamento').onclick = () => document.getElementById('file-import-fechamento').click();
+document.getElementById('file-import-fechamento').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  OPS.readSpreadsheetFile(file, async (rows) => {
+    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
+
+    let headerRowIdx = -1, bestScore = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++){
+      const mapped = rows[i].map(mapHeaderFechamento);
+      if (!mapped.includes('protocolo')) continue;
+      const score = mapped.filter(Boolean).length;
+      if (score > bestScore){ bestScore = score; headerRowIdx = i; }
+    }
+    if (headerRowIdx === -1) headerRowIdx = rows.length > 1 ? 1 : 0;
+    const headers = rows[headerRowIdx].map(mapHeaderFechamento);
+
+    const imported = rows.slice(headerRowIdx + 1).map(cols => {
+      const row = {};
+      headers.forEach((key, idx) => { if (key) row[key] = (cols[idx] ?? '').toString().trim(); });
+      if (!row.protocolo) return null;
+
+      const tituloCompleto = row.tituloCompleto || '';
+      const svc = OPS.lookupService(tituloCompleto);
+      const cidade = OPS.canonicalCity(row.cidade || '');
+
+      const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
+      const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+      const dtCriacao = OPS.parseBRDateTime(row.dataCriacao);
+      const dtOriginal = OPS.parseBRDateTime(row.dataAberturaOriginal);
+      const baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
+      const dtFim = OPS.parseBRDateTime(row.dataFimAtendimento);
+
+      return {
+        id: OPS.uid(),
+        protocolo: row.protocolo,
+        tituloCompleto,
+        tipoCurto: svc.catalogado ? svc.tipoCurto : tituloCompleto,
+        cidade,
+        descricaoEncerramento: row.descricaoEncerramento || '',
+        planoProduto: row.planoProduto || '',
+        responsavel: row.responsavel || '',
+        tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
+        criadoEm: baseDt ? baseDt.toISOString() : null,
+        dataFimAtendimento: dtFim ? dtFim.toISOString() : null,
+      };
+    }).filter(Boolean);
+
+    if (!imported.length){ alert('Não encontrei registros válidos nessa planilha de fechamento.'); return; }
+
+    const mode = confirm(`Foram lidos ${imported.length} registros de fechamento.\nOK = substituir a base atual.\nCancelar = adicionar aos registros existentes.`);
+    fechamento = mode ? imported : [...fechamento, ...imported];
+    OPS.saveData(FECHAMENTO_KEY, fechamento);
+    await OPS.syncPushWithToast(FECHAMENTO_SYNC, fechamento);
+    OPS.saveData('ops_touros_fechamento_import_meta_v1', { data: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || 'desconhecido' });
+    e.target.value = '';
+    populateFechamentoFilters();
+    renderFechamentoInfo();
+    renderFechamentoSection();
+  });
+});
+
+function renderFechamentoInfo(){
+  const meta = OPS.loadData('ops_touros_fechamento_import_meta_v1');
+  const el = document.getElementById('fechamento-info');
+  if (!meta){ el.textContent = 'Nenhuma planilha de fechamento importada ainda.'; return; }
+  const dt = new Date(meta.data);
+  el.textContent = `📥 Última importação de fechamento: ${dt.toLocaleDateString('pt-BR')} · ${dt.toLocaleTimeString('pt-BR').slice(0,5)} por ${meta.usuario} · ${fechamento.length} registros`;
+}
+
+document.getElementById('btn-export-fechamento').onclick = () => {
+  const headers = ['PROTOCOLO','TIPO DE SERVIÇO','CIDADE','DESCRIÇÃO DO ENCERRAMENTO','PLANO/PRODUTO','RESPONSÁVEL','TÉCNICO AUXILIAR','CRIADO EM','FIM DO ATENDIMENTO'];
+  const rows = fechamento.map(r => [r.protocolo, r.tituloCompleto, r.cidade, r.descricaoEncerramento, r.planoProduto, r.responsavel, r.tecnicoAuxiliar, r.criadoEm || '', r.dataFimAtendimento || '']);
+  OPS.downloadCSV('fechamento-touros.csv', headers, rows);
+};
+
+function produtivoFechamento(){
+  return fechamento.filter(r => {
     const prod = OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto);
-    return prod.produtivo === true;
+    return prod.produtivo === true && r.dataFimAtendimento && r.criadoEm;
   });
 }
 
-function populateSlaFilterOptions(){
-  const list = closedProdutivoRecords();
-  const tipos = [...new Set(list.map(r => r.tipoCurto))].sort();
-  document.getElementById('f-tipo-sla').innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
-  const supervisores = [...new Set(Object.values(OPS.SUPERVISOR_BY_CITY))].sort();
-  document.getElementById('f-supervisor-sla').innerHTML = '<option value="">Todos</option>' + supervisores.map(s => `<option value="${s}">${s}</option>`).join('');
-  const tecnicos = [...new Set(pessoas.map(p => p.nome))].sort();
-  document.getElementById('f-tecnico-sla').innerHTML = '<option value="">Todos</option>' + tecnicos.map(t => `<option value="${t}">${t}</option>`).join('');
+function populateFechamentoFilters(){
+  const list = produtivoFechamento();
+  document.getElementById('f-tipo-sla').innerHTML = '<option value="">Todos</option>' +
+    [...new Set(list.map(r => r.tipoCurto))].sort().map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('f-supervisor-sla').innerHTML = '<option value="">Todos</option>' +
+    [...new Set(Object.values(OPS.SUPERVISOR_BY_CITY))].sort().map(s => `<option value="${s}">${s}</option>`).join('');
+  document.getElementById('f-colaborador').innerHTML = '<option value="">Todos</option>' +
+    [...new Set(pessoas.map(p => p.nome))].sort().map(n => `<option value="${n}">${n}</option>`).join('');
+  if (!document.getElementById('f-periodo').value){
+    const hoje = new Date();
+    document.getElementById('f-periodo').value = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
+  }
 }
 
-function filteredClosedRecords(){
+function filteredFechamento(){
+  const periodo = document.getElementById('f-periodo').value; // YYYY-MM
+  const colaborador = document.getElementById('f-colaborador').value;
   const tipo = document.getElementById('f-tipo-sla').value;
   const supervisor = document.getElementById('f-supervisor-sla').value;
-  const tecnico = document.getElementById('f-tecnico-sla').value;
-  return closedProdutivoRecords().filter(r => {
+  return produtivoFechamento().filter(r => {
+    if (periodo && (r.dataFimAtendimento || '').slice(0,7) !== periodo) return false;
     if (tipo && r.tipoCurto !== tipo) return false;
     if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
-    if (tecnico && r.responsavel !== tecnico && r.tecnicoAuxiliar !== tecnico) return false;
+    if (colaborador && !nomeMatch(r.responsavel, colaborador) && !nomeMatch(r.tecnicoAuxiliar, colaborador)) return false;
     return true;
   });
 }
+function nomeMatch(a, b){ return a && b && OPS.normalize(a) === OPS.normalize(b); }
 
 function renderSlaCards(){
-  const list = filteredClosedRecords();
+  const list = filteredFechamento();
   document.getElementById('sla-cards').innerHTML = Object.entries(SLA_GROUPS).map(([key, cfg]) => {
     const grupoList = list.filter(r => SIGLA_BY_TIPO[r.tipoCurto] === key);
     const total = grupoList.length;
-    const dentro = grupoList.filter(r => {
-      const elapsed = (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000;
-      return elapsed <= cfg.horas;
-    }).length;
+    const dentro = grupoList.filter(r => (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000 <= cfg.horas).length;
     const pct = total ? (dentro / total * 100) : null;
-    const cor = pct == null ? '' : (pct >= cfg.metaPct ? 'ok' : 'crit');
-    return `<div class="kpi ${cor}">
-      <div class="kpi-label">SLA ${cfg.label}</div>
-      <div class="kpi-value">${pct == null ? '—' : pct.toFixed(1) + '%'}</div>
-      <div class="kpi-sub">meta ${cfg.metaPct}% em ${cfg.horas}h · ${total} encerrados</div>
+    const cor = pct == null ? 'neutral' : (pct >= cfg.metaPct ? 'ok' : (pct >= cfg.metaPct - 10 ? 'warn' : 'crit'));
+    const barPct = pct == null ? 0 : Math.min(pct, 100);
+    return `<div class="sla-card ${cor}">
+      <div class="sla-label">${cfg.label}</div>
+      <div class="sla-value">${pct == null ? '—' : pct.toFixed(1) + '%'}</div>
+      <div class="sla-meta">Meta: ${cfg.metaPct}% · ${total} encerrados</div>
+      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${barPct}%"></div><span class="sla-dot"></span></div>
     </div>`;
   }).join('');
 }
 
 function renderProblemas(){
-  const list = filteredClosedRecords();
+  const list = filteredFechamento();
   const counts = {};
   list.forEach(r => {
     const sup = OPS.supervisorForCity(r.cidade) || 'Sem supervisor definido';
@@ -353,58 +478,116 @@ function renderProblemas(){
     .sort((a,b) => b.v - a.v).slice(0, 30);
   document.getElementById('problemas-tbody').innerHTML = entries.length
     ? entries.map(e => `<tr><td>${e.sup}</td><td>${e.desc}</td><td class="proto">${e.v}</td></tr>`).join('')
-    : '<tr><td colspan="3" style="text-align:center;color:var(--ink-dim);padding:16px">Sem dados encerrados ainda.</td></tr>';
+    : '<tr><td colspan="3" style="text-align:center;color:var(--ink-dim);padding:16px">Sem dados no período selecionado.</td></tr>';
 }
 
-function nomeMatch(a, b){ return a && b && OPS.normalize(a) === OPS.normalize(b); }
+function pontosColaborador(nome, list){
+  const meus = list.filter(r => nomeMatch(r.responsavel, nome) || nomeMatch(r.tecnicoAuxiliar, nome));
+  return meus.reduce((s,r) => s + (OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto).pontos || 0), 0);
+}
 
-function renderPontuacao(){
+function diasUteisNoMes(colaborador, ano, mes){
   const hoje = new Date();
-  const anoMes = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
-  const tipo = document.getElementById('f-tipo-sla').value;
-  const supervisor = document.getElementById('f-supervisor-sla').value;
-  const tecnicoFiltro = document.getElementById('f-tecnico-sla').value;
+  const ultimoDia = (ano === hoje.getFullYear() && mes === hoje.getMonth()) ? hoje.getDate() : new Date(ano, mes+1, 0).getDate();
+  let dias = 0;
+  for (let d = 1; d <= ultimoDia; d++){
+    const dia = new Date(ano, mes, d);
+    if (dia.getDay() === 0) continue;
+    if (OPS.isFolgaNoDia(colaborador, dia)) continue;
+    dias++;
+  }
+  return dias;
+}
 
-  const doMes = closedProdutivoRecords().filter(r => (r.dataFimAtendimento || '').slice(0,7) === anoMes)
-    .filter(r => (!tipo || r.tipoCurto === tipo) && (!supervisor || OPS.supervisorForCity(r.cidade) === supervisor));
+function computeRanking(){
+  const list = filteredFechamento();
+  const periodo = document.getElementById('f-periodo').value || '';
+  const [ano, mes] = periodo ? periodo.split('-').map(Number) : [new Date().getFullYear(), new Date().getMonth()+1];
 
-  const rows = pessoas.filter(p => !tecnicoFiltro || p.nome === tecnicoFiltro).map(p => {
-    const meus = doMes.filter(r => nomeMatch(r.responsavel, p.nome) || nomeMatch(r.tecnicoAuxiliar, p.nome));
-    const pontos = meus.reduce((s,r) => s + (OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto).pontos || 0), 0);
-    let diasUteis = 0;
-    for (let d = 1; d <= hoje.getDate(); d++){
-      const dia = new Date(hoje.getFullYear(), hoje.getMonth(), d);
-      if (dia.getDay() === 0) continue; // domingo conta ponto, não conta pra meta
-      if (OPS.isFolgaNoDia(p, dia)) continue;
-      diasUteis++;
-    }
+  const dados = pessoas.map(p => {
+    const pontos = pontosColaborador(p.nome, list);
+    const diasUteis = diasUteisNoMes(p, ano, mes - 1);
     const meta = diasUteis * 8;
-    const pct = meta ? (pontos / meta * 100) : 0;
-    return { nome: p.nome, pontos, diasUteis, meta, pct };
+    return { nome: p.nome, pontos, diasUteis, meta };
   }).sort((a,b) => b.pontos - a.pontos);
 
-  document.getElementById('pontuacao-tbody').innerHTML = rows.length ? rows.map(r => {
-    const cor = r.pct >= 100 ? 'var(--ok)' : r.pct >= 70 ? 'var(--warn)' : 'var(--crit)';
-    return `<tr>
-      <td style="font-weight:600">${r.nome}</td>
-      <td class="proto">${r.pontos.toFixed(2)}</td>
-      <td class="proto">${r.diasUteis}</td>
-      <td class="proto">${r.meta}</td>
-      <td class="proto" style="color:${cor};font-weight:700">${r.pct.toFixed(0)}%</td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--ink-dim);padding:16px">Nenhum colaborador cadastrado na Gestão de Pessoas.</td></tr>';
+  const n = dados.length;
+  dados.forEach((d, i) => {
+    const posicao = n > 1 ? i / (n - 1) : 0; // 0 = melhor, 1 = pior
+    d.quartil = posicao <= 0.25 ? 1 : posicao <= 0.5 ? 2 : posicao <= 0.75 ? 3 : 4;
+  });
+  return dados;
 }
 
-function renderSlaSection(){
+const QUARTIL_STATUS = { 1: 'Excelente', 2: 'Bom', 3: 'Regular', 4: 'Atenção' };
+
+function renderRanking(){
+  const busca = OPS.normalize(document.getElementById('f-busca-ranking').value);
+  const dados = computeRanking().filter(d => !busca || OPS.normalize(d.nome).includes(busca));
+  document.getElementById('ranking-tbody').innerHTML = dados.length ? dados.map(d => `
+    <tr>
+      <td style="font-weight:600">${d.nome}</td>
+      <td class="proto">${d.pontos.toFixed(0)} pts</td>
+      <td><span class="badge-quartil q${d.quartil}">Q${d.quartil}</span></td>
+      <td>${QUARTIL_STATUS[d.quartil]}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--ink-dim);padding:16px">Nenhum colaborador cadastrado na Gestão de Pessoas.</td></tr>';
+}
+
+function renderQuartilDist(){
+  const dados = computeRanking();
+  const total = dados.length || 1;
+  const cores = { 1:'var(--ok)', 2:'var(--brand)', 3:'var(--warn)', 4:'var(--crit)' };
+  const el = document.getElementById('quartil-dist');
+  el.innerHTML = [1,2,3,4].map(q => {
+    const count = dados.filter(d => d.quartil === q).length;
+    const pct = Math.round(count / total * 100);
+    return `<div class="quartil-bar-row">
+      <span class="ql-label">Q${q}</span>
+      <div class="ql-track"><div class="ql-fill" style="width:${pct}%;background:${cores[q]}"></div></div>
+      <span class="ql-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderPontosDiaChart(){
+  const dados = computeRanking();
+  charts.pontosDia = new Chart(document.getElementById('chart-pontos-dia'), {
+    type:'bar',
+    data:{
+      labels: dados.map(d => d.nome),
+      datasets:[
+        { label:'Pontos', data: dados.map(d => +d.pontos.toFixed(1)), backgroundColor:'#00d4ff' },
+        { label:'Meta', data: dados.map(d => d.meta), type:'line', borderColor:'#ffd166', backgroundColor:'#ffd166', tension:0 },
+      ],
+    },
+    options:{ ...commonChartOpts,
+      scales:{
+        x:{ ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
+        y:{ beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
+      },
+      plugins:{ legend:{ labels:{ color:'#e2eaf5' } } },
+    },
+  });
+}
+
+function renderFechamentoSection(){
   renderSlaCards();
   renderProblemas();
-  renderPontuacao();
+  renderRanking();
+  renderQuartilDist();
+  if (charts.pontosDia) charts.pontosDia.destroy();
+  renderPontosDiaChart();
 }
 
-['f-tipo-sla','f-supervisor-sla','f-tecnico-sla'].forEach(id => {
-  document.getElementById(id).addEventListener('change', renderSlaSection);
+['f-periodo','f-colaborador','f-tipo-sla','f-supervisor-sla'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderFechamentoSection);
 });
+document.getElementById('f-busca-ranking').addEventListener('input', renderRanking);
 
+// ============================================================
+// Inicialização
+// ============================================================
 function renderAllCharts(){
   destroyCharts();
   renderStats();
@@ -413,17 +596,19 @@ function renderAllCharts(){
   renderCidadeTipo();
   renderSupervisao();
   renderBacklog();
-  populateSlaFilterOptions();
-  renderSlaSection();
+  populateFechamentoFilters();
+  renderFechamentoInfo();
+  renderFechamentoSection();
 }
 
 async function initPage(){
-  const toast = OPS.showToast('☁️ Buscando dados do Mapa de Serviços e Pessoas...');
-  const [sharedMapa, sharedPessoas, sharedAusencias, sharedAtestados] = await Promise.all([
+  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+  const [sharedMapa, sharedPessoas, sharedAusencias, sharedAtestados, sharedFechamento] = await Promise.all([
     OPS.syncPull('MapaServicosData'),
     OPS.syncPull('PessoasData'),
     OPS.syncPull('AusenciasData'),
     OPS.syncPull('AtestadosData'),
+    OPS.syncPull(FECHAMENTO_SYNC),
   ]);
   await OPS.pullRodizioConfig();
   toast.remove();
@@ -431,6 +616,8 @@ async function initPage(){
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   ausencias = sharedAusencias || OPS.loadData('ops_touros_ausencias_v1') || [];
   atestados = sharedAtestados || OPS.loadData('ops_touros_atestados_v1') || [];
+  fechamento = sharedFechamento || OPS.loadData(FECHAMENTO_KEY) || [];
+  if (sharedFechamento) OPS.saveData(FECHAMENTO_KEY, fechamento);
   renderAllCharts();
 }
 window.OPS_ON_REFRESH = initPage;
