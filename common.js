@@ -108,7 +108,54 @@ const OPS = (() => {
   }
 
   function cityCenter(cidade){
-    return CITY_REGISTRY[normalize(cidade)] || null;
+    const known = CITY_REGISTRY[normalize(cidade)];
+    if (known) return known;
+    const cached = loadGeocodeCache()[normalize(cidade)];
+    return cached || null;
+  }
+
+  // -------- geocodificação automática pra cidades fora do cadastro fixo --------
+  // Guarda num cache local (por navegador) as coordenadas de cidades que não
+  // estão na nossa lista curada (CITY_REGISTRY), pra não ficarem caindo por
+  // padrão em Touros. Busca uma vez via OpenStreetMap (Nominatim) e depois
+  // usa sempre o valor salvo — sem precisar de internet de novo.
+  const GEOCODE_CACHE_KEY = 'ops_touros_geocode_cache_v1';
+  function loadGeocodeCache(){
+    try{ return JSON.parse(localStorage.getItem(GEOCODE_CACHE_KEY) || '{}'); }
+    catch(e){ return {}; }
+  }
+  function saveGeocodeCache(cache){
+    localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+  }
+
+  // Garante que uma cidade tem coordenada conhecida — se não estiver no
+  // cadastro fixo nem no cache, busca no OpenStreetMap e salva. Retorna
+  // { name, lat, lng } ou null se não conseguir localizar de jeito nenhum.
+  async function ensureCityGeocoded(cidadeRaw){
+    const n = normalize(cidadeRaw);
+    if (!n) return null;
+    if (CITY_REGISTRY[n]) return CITY_REGISTRY[n];
+    const cache = loadGeocodeCache();
+    if (cache[n]) return cache[n];
+
+    try{
+      const query = encodeURIComponent(cidadeRaw + ', Rio Grande do Norte, Brasil');
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${query}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data[0]) return null;
+      const found = {
+        name: (cidadeRaw || '').toString().trim().toUpperCase(),
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+      };
+      cache[n] = found;
+      saveGeocodeCache(cache);
+      return found;
+    }catch(e){
+      console.error('Falha ao localizar cidade automaticamente:', cidadeRaw, e);
+      return null;
+    }
   }
 
   // Corrige a grafia/maiúsculas do nome da cidade pro nome canônico
@@ -118,6 +165,8 @@ const OPS = (() => {
     const n = normalize(raw).replace(/\s*\|\s*rn$/, '').trim();
     const found = CITY_REGISTRY[n];
     if (found) return found.name;
+    const cached = loadGeocodeCache()[n];
+    if (cached) return cached.name;
     return (raw || '').toString().trim();
   }
 
@@ -360,6 +409,7 @@ const OPS = (() => {
   return {
     STORAGE_KEY, CITY_CENTERS, CITY_REGISTRY, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
     normalize, cityCenter, canonicalCity, haversineKm, resolveCoords,
+    ensureCityGeocoded, loadGeocodeCache,
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid,
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,

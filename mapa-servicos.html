@@ -52,6 +52,10 @@
         <option value="erro">🚩 Só com erro de projeto</option>
       </select>
     </div>
+    <div class="field">
+      <label for="f-sigla">Sigla</label>
+      <select id="f-sigla"><option value="">Todas</option></select>
+    </div>
     <div style="flex:1"></div>
     <div class="view-toggle" id="view-toggle">
       <button data-view="split" class="active">Lista + Mapa</button>
@@ -180,6 +184,7 @@ const els = {
   tipo: document.getElementById('f-tipo'),
   prazo: document.getElementById('f-prazo'),
   projeto: document.getElementById('f-projeto'),
+  sigla: document.getElementById('f-sigla'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
@@ -219,9 +224,20 @@ function isHiddenRecolhimento(r){
   return r.tipoCurto === 'RECOLHIMENTO' && OPS.normalize(r.tituloCompleto) !== RECOLHIMENTO_TROCA_ENDERECO;
 }
 // Tipos que não interessam nem na lista nem no mapa.
+// Tipos que não interessam nem na lista nem no mapa, sempre (não tem opção
+// de filtrar pra ver — nem entram no menu de tipos).
 const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
-function isFullyHidden(r){
-  return isHiddenRecolhimento(r) || FULLY_HIDDEN_TIPOS.includes(r.tipoCurto);
+function isAlwaysHidden(r){
+  if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
+  // tipos não catalogados de atendimento financeiro/CRE — nunca precisam aparecer
+  if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
+  return false;
+}
+// Os outros tipos de recolhimento (estoque, comodato etc.) ficam escondidos
+// por padrão — só aparecem (lista e mapa) se a pessoa selecionar "RECOLHIMENTO"
+// no filtro de tipo. O recolhimento por troca de endereço nunca é escondido.
+function isDefaultHiddenRecolhimento(r){
+  return isHiddenRecolhimento(r);
 }
 
 // Sigla exibida na figurinha do mapa.
@@ -242,15 +258,28 @@ function populateFilterOptions(){
   selectedCities = new Set([...selectedCities].filter(c => cidades.includes(c)));
 
   els.cidadePanel.innerHTML = `
+    <input class="input" id="ms-city-search" placeholder="Buscar cidade..." style="width:100%;margin-bottom:8px">
     <div class="ms-actions">
+      <button type="button" id="ms-city-touros">📍 Unidade Touros</button>
       <button type="button" id="ms-city-all">Marcar todas</button>
       <button type="button" id="ms-city-none">Limpar</button>
     </div>
-    ${cidades.map(c => `
-      <label><input type="checkbox" value="${c}" ${selectedCities.has(c) ? 'checked' : ''}> ${c}</label>
-    `).join('')}
+    <div id="ms-city-list">
+      ${cidades.map(c => `
+        <label data-city="${c}"><input type="checkbox" value="${c}" ${selectedCities.has(c) ? 'checked' : ''}> ${c}</label>
+      `).join('')}
+    </div>
   `;
   updateCityButtonLabel(cidades.length);
+
+  document.getElementById('ms-city-search').addEventListener('input', (e) => {
+    const q = OPS.normalize(e.target.value);
+    els.cidadePanel.querySelectorAll('#ms-city-list label').forEach(label => {
+      label.style.display = OPS.normalize(label.dataset.city).includes(q) ? 'flex' : 'none';
+    });
+  });
+  // não fecha o painel ao clicar/digitar dentro do campo de busca
+  document.getElementById('ms-city-search').addEventListener('click', e => e.stopPropagation());
 
   els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -259,6 +288,14 @@ function populateFilterOptions(){
       renderAll();
     });
   });
+  document.getElementById('ms-city-touros').onclick = () => {
+    selectedCities = new Set(cidades.filter(c => OPS.isTourosUnitCity(c)));
+    els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = selectedCities.has(cb.value);
+    });
+    updateCityButtonLabel(cidades.length);
+    renderAll();
+  };
   document.getElementById('ms-city-all').onclick = () => {
     selectedCities = new Set(cidades);
     els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
@@ -272,14 +309,22 @@ function populateFilterOptions(){
     renderAll();
   };
 
-  const tipos = [...new Set(records.map(r => r.tipoCurto).filter(Boolean))].sort();
+  const tipos = [...new Set(records.filter(r => !isAlwaysHidden(r)).map(r => r.tipoCurto).filter(Boolean))].sort();
   els.tipo.innerHTML = '<option value="">Todos</option>' +
     tipos.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  const siglas = [...new Set(
+    records.filter(r => !isAlwaysHidden(r) && (!isDefaultHiddenRecolhimento(r))).map(r => getMapLabel(r))
+  )].sort();
+  els.sigla.innerHTML = '<option value="">Todas</option>' +
+    siglas.map(s => `<option value="${s}">${s}</option>`).join('');
 }
 
 function updateCityButtonLabel(total){
   if (selectedCities.size === 0) els.cidadeBtn.textContent = 'Todas as cidades ▾';
   else if (selectedCities.size === total) els.cidadeBtn.textContent = 'Todas as cidades ▾';
+  else if ([...selectedCities].every(c => OPS.isTourosUnitCity(c)) && selectedCities.size >= 3)
+    els.cidadeBtn.textContent = '📍 Unidade Touros ▾';
   else if (selectedCities.size === 1) els.cidadeBtn.textContent = [...selectedCities][0] + ' ▾';
   else els.cidadeBtn.textContent = selectedCities.size + ' cidades ▾';
 }
@@ -299,15 +344,18 @@ function getFiltered(){
   const tipo = els.tipo.value;
   const prazo = els.prazo.value;
   const projetoFiltro = els.projeto.value;
+  const sigla = els.sigla.value;
 
   return records.filter(r => {
-    if (isFullyHidden(r)) return false;
+    if (isAlwaysHidden(r)) return false;
+    if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
     if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
     if (tipo && r.tipoCurto !== tipo) return false;
+    if (sigla && getMapLabel(r) !== sigla) return false;
     if (prazo && getStatus(r) !== prazo) return false;
     if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
     if (q){
-      const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||''));
+      const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||''));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -424,16 +472,41 @@ function initMap(){
   markerLayer = L.layerGroup().addTo(leafletMap);
 }
 
+let markerRegistry = {}; // id do registro -> marcador Leaflet (pra destacar ao clicar na lista)
+
 function renderMap(){
   markerLayer.clearLayers();
+  markerRegistry = {};
   const list = getFiltered();
   const bounds = [];
 
-  list.forEach(r => {
-    const coords = OPS.resolveCoords(r);
+  // primeira passada: resolve coordenadas e agrupa quem cai exatamente no
+  // mesmo ponto (normalmente registros sem coordenada própria, caindo todos
+  // no centro da mesma cidade) — sem isso, um marcador fica escondido atrás
+  // do outro e parece que "sumiu" da tela.
+  const resolved = list.map(r => ({ r, coords: OPS.resolveCoords(r) }));
+  const groups = {};
+  resolved.forEach(item => {
+    const key = item.coords.lat.toFixed(5) + ',' + item.coords.lng.toFixed(5);
+    (groups[key] = groups[key] || []).push(item);
+  });
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    const radius = 0.0035; // ~350m, só pra separar visualmente
+    group.forEach((item, i) => {
+      const angle = (2 * Math.PI * i) / group.length;
+      item.coords = {
+        ...item.coords,
+        lat: item.coords.lat + radius * Math.cos(angle),
+        lng: item.coords.lng + radius * Math.sin(angle),
+      };
+    });
+  });
+
+  resolved.forEach(({ r, coords }) => {
     const label = getMapLabel(r);
     const status = getStatus(r);
-    const color = runwayColor(r); // 'ok' | 'warn' | 'crit' | 'neutral' — mesma lógica de perto-de-vencer da tabela
+    const color = runwayColor(r); // 'ok' | 'warn' | 'crit' | 'neutral'
 
     const markerIcon = L.divIcon({
       className: '',
@@ -453,12 +526,33 @@ function renderMap(){
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
       </div>
     `);
+    markerRegistry[r.id] = marker;
     bounds.push([coords.lat, coords.lng]);
   });
 
   if (bounds.length){
     leafletMap.fitBounds(bounds, { padding: [30,30], maxZoom: 12 });
   }
+}
+
+// Destaca no mapa o marcador do protocolo clicado na lista.
+function focusOnMap(id){
+  const marker = markerRegistry[id];
+  if (!marker) return;
+  // garante que o mapa está visível (troca pra visão dividida se estava só na lista)
+  const activeViewBtn = document.querySelector('#view-toggle button.active');
+  if (activeViewBtn && activeViewBtn.dataset.view === 'list'){
+    document.querySelector('#view-toggle button[data-view="split"]').click();
+  }
+  setTimeout(() => {
+    leafletMap.setView(marker.getLatLng(), Math.max(leafletMap.getZoom(), 13), { animate: true });
+    marker.openPopup();
+    const el = marker.getElement();
+    if (el){
+      el.classList.add('marker-pulse');
+      setTimeout(() => el.classList.remove('marker-pulse'), 1600);
+    }
+  }, 60);
 }
 
 function renderAll(){
@@ -471,7 +565,7 @@ function renderAll(){
 setInterval(renderAll, 60000);
 
 // ---------- filtros ----------
-[els.search, els.tipo, els.prazo, els.projeto].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto, els.sigla].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -518,6 +612,7 @@ els.tbody.addEventListener('click', (e) => {
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
   const viewId = e.target.dataset.view;
+  const protoCell = e.target.closest('td.proto');
   if (viewId) openDetail(records.find(r => r.id === viewId));
   if (editId) openModal(records.find(r => r.id === editId));
   if (delId){
@@ -527,6 +622,10 @@ els.tbody.addEventListener('click', (e) => {
       populateFilterOptions();
       renderAll();
     }
+  }
+  if (protoCell && !editId && !delId && !viewId){
+    const id = protoCell.closest('tr').dataset.id;
+    focusOnMap(id);
   }
 });
 
@@ -615,6 +714,9 @@ document.getElementById('form-record').addEventListener('submit', e => {
   populateFilterOptions();
   renderAll();
   closeModal();
+  if (!OPS.cityCenter(data.cidade)){
+    OPS.ensureCityGeocoded(data.cidade).then(() => renderAll());
+  }
 });
 
 // ---------- importar / exportar planilha ----------
@@ -646,7 +748,7 @@ document.getElementById('btn-import').onclick = () => document.getElementById('f
 document.getElementById('file-import').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  OPS.readSpreadsheetFile(file, (rows) => {
+  OPS.readSpreadsheetFile(file, async (rows) => {
     if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
 
     // Encontra a linha de cabeçalho de verdade — a planilha real tem uma
@@ -719,6 +821,24 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     }).filter(Boolean);
 
     if (!imported.length){ alert('Não encontrei colunas reconhecíveis nessa planilha. Confira se ela tem as colunas "Nº. Ordem Serviço", "Tipo de Serviço", "Área", "Localidade" etc.'); return; }
+
+    // Localiza automaticamente (via OpenStreetMap) cidades que apareceram na
+    // planilha mas não estão no nosso cadastro fixo — assim elas aparecem no
+    // mapa no lugar certo, em vez de cair por padrão em Touros.
+    const cidadesNovas = [...new Set(imported.map(r => r.cidade).filter(Boolean))]
+      .filter(c => !OPS.cityCenter(c));
+
+    if (cidadesNovas.length){
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px;color:var(--ink);font-size:13px;z-index:999;box-shadow:var(--shadow)';
+      document.body.appendChild(toast);
+      for (let i = 0; i < cidadesNovas.length; i++){
+        toast.textContent = `📍 Localizando cidades novas no mapa... (${i+1}/${cidadesNovas.length}: ${cidadesNovas[i]})`;
+        await OPS.ensureCityGeocoded(cidadesNovas[i]);
+        if (i < cidadesNovas.length - 1) await new Promise(res => setTimeout(res, 1100));
+      }
+      toast.remove();
+    }
 
     const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
     records = mode ? imported : [...records, ...imported];

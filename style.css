@@ -223,6 +223,8 @@ table.services tbody td{
 }
 table.services tbody tr:hover{ background:var(--bg-panel-2); }
 .proto{ font-family:var(--f-display); color:var(--ink-dim); font-size:12.5px; }
+table.services td.proto{ cursor:pointer; }
+table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .svc-type{ display:inline-flex; align-items:center; gap:6px; }
 .svc-type .icon{ font-size:14px; }
 
@@ -309,6 +311,13 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
 .marker-label.neutral{ background:var(--bg-raised); border-color:var(--line); }
 .marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim); }
 
+@keyframes marker-pulse{
+  0%   { box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 0 rgba(0,212,255,.7); }
+  70%  { box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 14px rgba(0,212,255,0); }
+  100% { box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 0 rgba(0,212,255,0); }
+}
+.marker-pulse .marker-label{ animation: marker-pulse 0.8s ease-out 2; z-index:1000; }
+
 /* ---------------- modal ---------------- */
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(6,8,10,.6); backdrop-filter:blur(2px);
@@ -369,7 +378,7 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
   padding:8px; min-width:220px; max-height:260px; overflow-y:auto; box-shadow:var(--shadow);
 }
 .multi-select-panel .ms-actions{
-  display:flex; justify-content:space-between; gap:6px; padding:2px 4px 8px;
+  display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:2px 4px 8px;
   margin-bottom:6px; border-bottom:1px solid var(--line);
 }
 .multi-select-panel .ms-actions button{
