@@ -431,6 +431,55 @@ const OPS = (() => {
     return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
+  // -------- sincronização compartilhada (Planilha Google via Apps Script) --------
+  // Mesma URL usada pelo Mapa de Serviços; "collection" escolhe a aba/tipo de
+  // dado (ex: 'PessoasData', 'FrotasData', 'LavagensData').
+  const OPS_SYNC_BASE_URL = 'https://script.google.com/macros/s/AKfycbzkAsAB4_iEMJB-XGCiVyWyi8Ftn0c7yH5wgRv45fnuS8lfbmFw2ufV47YgkQUrzkqP/exec';
+
+  async function syncPull(collection){
+    try{
+      const res = await fetch(`${OPS_SYNC_BASE_URL}?collection=${encodeURIComponent(collection)}&cachebust=${Date.now()}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return Array.isArray(data) ? data : null;
+    }catch(e){
+      console.error('Falha ao buscar dados compartilhados (' + collection + ')', e);
+      return null;
+    }
+  }
+
+  async function syncPush(collection, records){
+    try{
+      const res = await fetch(OPS_SYNC_BASE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ collection, records }),
+      });
+      const data = await res.json();
+      return !!(data && data.ok);
+    }catch(e){
+      console.error('Falha ao sincronizar (' + collection + ')', e);
+      return false;
+    }
+  }
+
+  function showToast(msg){
+    const toast = document.createElement('div');
+    toast.className = 'ops-toast';
+    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px;color:var(--ink);font-size:13px;z-index:999;box-shadow:var(--shadow);max-width:320px';
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    return toast;
+  }
+
+  async function syncPushWithToast(collection, records){
+    const toast = showToast('☁️ Sincronizando com todos os usuários...');
+    const ok = await syncPush(collection, records);
+    toast.textContent = ok ? '✅ Sincronizado com todos os usuários' : '⚠️ Não consegui sincronizar agora (dados salvos só neste navegador)';
+    setTimeout(() => toast.remove(), 3000);
+    return ok;
+  }
+
   return {
     STORAGE_KEY, CITY_CENTERS, CITY_REGISTRY, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
     normalize, cityCenter, canonicalCity, haversineKm, resolveCoords,
@@ -440,6 +489,7 @@ const OPS = (() => {
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     TOUROS_UNIT_CITIES, TOUROS_PROJECT_CODE, isTourosUnitCity, projectUnit, checkProjectError,
+    syncPull, syncPush, syncPushWithToast, showToast,
   };
 })();
 
