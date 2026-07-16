@@ -433,7 +433,7 @@ function renderTable(){
     const pct = elapsed != null ? Math.min(elapsed/maxH*100, 100) : 0;
     const color = runwayColor(r);
     return `
-      <tr data-id="${r.id}">
+      <tr data-id="${r.id}" class="${r.id === lastHighlightedRowId ? 'row-highlight' : ''}">
         <td class="proto">${r.protocolo}${(() => {
           const err = OPS.checkProjectError(r);
           return err ? `<span class="coord-alert" title="Cidade é da Unidade Touros, mas o projeto é ${err.encontrado}${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''} — esperado ${err.esperado}">🚩 projeto</span>` : '';
@@ -568,18 +568,24 @@ function focusOnMap(id){
 
 // Destaca e rola até a linha do protocolo na lista (chamado ao clicar num
 // marcador do mapa) — garante que a lista esteja visível primeiro.
+let lastHighlightedRowId = null;
 function highlightListRow(id){
-  const activeViewBtn = document.querySelector('#view-toggle button.active');
-  if (activeViewBtn && activeViewBtn.dataset.view === 'map'){
-    document.querySelector('#view-toggle button[data-view="split"]').click();
+  // não força trocar de visão — só marca a linha (se a lista estiver visível
+  // agora ela já aparece destacada; se não estiver, fica marcada pra quando
+  // a pessoa for olhar a lista depois)
+  if (lastHighlightedRowId){
+    const prevRow = els.tbody.querySelector(`tr[data-id="${lastHighlightedRowId}"]`);
+    if (prevRow) prevRow.classList.remove('row-highlight');
   }
-  setTimeout(() => {
-    const row = els.tbody.querySelector(`tr[data-id="${id}"]`);
-    if (!row) return;
+  lastHighlightedRowId = id;
+  const row = els.tbody.querySelector(`tr[data-id="${id}"]`);
+  if (!row) return;
+  row.classList.add('row-highlight');
+  const tablePanel = document.getElementById('table-panel');
+  const listaVisivel = tablePanel && tablePanel.style.display !== 'none';
+  if (listaVisivel){
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    row.classList.add('row-highlight');
-    setTimeout(() => row.classList.remove('row-highlight'), 2000);
-  }, 60);
+  }
 }
 
 function renderAll(fitView = true){
@@ -1016,7 +1022,7 @@ document.getElementById('view-toggle').addEventListener('click', (e) => {
   const view = btn.dataset.view;
   document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
   document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
-  splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
+  splitView.classList.toggle('view-list', view === 'list');
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
 });
 
