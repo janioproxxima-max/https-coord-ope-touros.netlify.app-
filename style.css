@@ -236,6 +236,7 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
 .runway .fill.ok{ background:var(--ok); }
 .runway .fill.warn{ background:var(--warn); }
 .runway .fill.crit{ background:var(--crit); }
+.runway .fill.neutral{ background:var(--ink-faint); }
 .runway .meta{ font-family:var(--f-display); font-size:11px; color:var(--ink-faint); }
 
 .badge{
@@ -245,6 +246,7 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
 }
 .badge.ok{ background:var(--ok-wash); color:var(--ok); }
 .badge.crit{ background:var(--crit-wash); color:var(--crit); }
+.badge.neutral{ background:var(--bg-raised); color:var(--ink-dim); }
 .badge .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
 
 .row-actions{ display:flex; gap:6px; }

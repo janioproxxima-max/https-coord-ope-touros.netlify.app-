@@ -15,7 +15,7 @@
   <div class="page-head">
     <p class="eyebrow">Mapa de serviços</p>
     <h1 class="page-title">Protocolos por tempo de atendimento</h1>
-    <p class="page-sub">Lista e georreferenciamento dos serviços em aberto — cidade, bairro, projeto e status de prazo.</p>
+    <p class="page-sub">Tempo decorrido calculado em tempo real a partir da abertura — cidade, bairro e status de prazo por tipo de serviço.</p>
   </div>
 
   <div class="stat-row" id="stat-row"></div>
@@ -39,6 +39,7 @@
         <option value="">Todos</option>
         <option value="dentro">Dentro do prazo</option>
         <option value="fora">Fora do prazo</option>
+        <option value="sem_sla">Sem SLA definido</option>
       </select>
     </div>
     <div style="flex:1"></div>
@@ -61,11 +62,11 @@
           <thead>
             <tr>
               <th data-sort="protocolo">Protocolo</th>
-              <th data-sort="titulo">Serviço</th>
+              <th data-sort="tipoCurto">Serviço</th>
               <th data-sort="cidade">Cidade</th>
               <th data-sort="bairro">Bairro</th>
-              <th data-sort="tempo">Tempo (h)</th>
-              <th data-sort="prazoStatus">Prazo</th>
+              <th>Tempo</th>
+              <th data-sort="__status">Prazo</th>
               <th></th>
             </tr>
           </thead>
@@ -75,7 +76,7 @@
       <div class="empty-state" id="empty-state" style="display:none">
         <div class="glyph">🗂️</div>
         <h3>Nenhum registro ainda</h3>
-        <p>Importe sua planilha em CSV ou adicione um protocolo manualmente.</p>
+        <p>Importe sua planilha (Excel/CSV) ou adicione um protocolo manualmente.</p>
         <button class="btn primary" id="btn-add-empty">＋ Adicionar primeiro registro</button>
       </div>
     </div>
@@ -98,26 +99,29 @@
 <div class="modal-backdrop" id="modal" style="display:none">
   <div class="modal">
     <h3 id="modal-title">Adicionar protocolo</h3>
-    <p class="modal-sub">Preencha os dados do serviço. Coordenadas são opcionais — sem elas, usamos o ponto central da cidade no mapa.</p>
+    <p class="modal-sub">O tipo de serviço é cruzado com o catálogo pra pegar o prazo (SLA) automaticamente.</p>
     <form id="form-record">
       <input type="hidden" id="rec-id">
       <div class="grid2">
-        <div class="field"><label>Protocolo</label><input class="input" id="rec-protocolo" required></div>
+        <div class="field"><label>Protocolo</label><input class="input" id="rec-protocolo" required placeholder="8612919/1"></div>
         <div class="field"><label>Projeto</label><input class="input" id="rec-projeto" value="OP-INST-VT-RN"></div>
       </div>
-      <div class="field"><label>Título do serviço</label><input class="input" id="rec-titulo" required placeholder="Ex: OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)"></div>
+      <div class="field">
+        <label>Tipo de serviço (nome completo)</label>
+        <input class="input" id="rec-titulo" required placeholder="Ex: OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)">
+        <div id="rec-titulo-info" style="font-size:12px;color:var(--ink-dim);margin-top:6px"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>SLA manual (h) <span style="color:var(--ink-faint)">— só se não estiver no catálogo</span></label><input class="input" type="number" min="0" id="rec-sla-manual"></div>
+        <div class="field"><label>Data/hora de abertura</label><input class="input" type="datetime-local" id="rec-abertura" required></div>
+      </div>
       <div class="grid2">
         <div class="field"><label>Cidade</label><input class="input" id="rec-cidade" required></div>
         <div class="field"><label>Bairro</label><input class="input" id="rec-bairro"></div>
       </div>
       <div class="grid2">
-        <div class="field"><label>Tempo atual (h)</label><input class="input" type="number" min="0" id="rec-tempo" required></div>
-        <div class="field"><label>Status do prazo</label>
-          <select id="rec-prazo">
-            <option value="dentro">Dentro do prazo</option>
-            <option value="fora">Fora do prazo</option>
-          </select>
-        </div>
+        <div class="field"><label>Telefone</label><input class="input" id="rec-telefone"></div>
+        <div class="field"><label>Observação</label><input class="input" id="rec-observacao"></div>
       </div>
       <div class="grid2">
         <div class="field"><label>Latitude (opcional)</label><input class="input" id="rec-lat" placeholder="-5.1989"></div>
@@ -131,11 +135,24 @@
   </div>
 </div>
 
+<!-- Modal: detalhes (somente leitura, abre ao clicar na linha) -->
+<div class="modal-backdrop" id="detail-modal" style="display:none">
+  <div class="modal">
+    <h3 id="detail-title">Detalhes do protocolo</h3>
+    <p class="modal-sub" id="detail-sub"></p>
+    <div class="status-list" id="detail-body" style="padding:0"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btn-detail-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script src="common.js"></script>
 <script src="seed-data.js"></script>
 <script>
 requireAuthThenInit('mapa-servicos.html', 'Mapa de Serviços');
 
+const STORAGE_KEY = OPS.STORAGE_KEY;
 let records = OPS.load();
 if (!records){
   records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() }));
@@ -155,13 +172,38 @@ const els = {
   emptyState: document.getElementById('empty-state'),
 };
 
+// -------- cálculo dinâmico (tempo real) --------
+function getElapsedHours(r){
+  const e = OPS.elapsedHoursSince(r.criadoEm);
+  if (e != null) return e;
+  return (r.tempoManual != null) ? r.tempoManual : null;
+}
+function getStatus(r){
+  const elapsed = getElapsedHours(r);
+  if (r.slaHoras == null || r.slaHoras <= 0){
+    return r.prazoManual || 'sem_sla';
+  }
+  if (elapsed == null) return r.prazoManual || 'dentro';
+  return elapsed > r.slaHoras ? 'fora' : 'dentro';
+}
+function getIcon(r){
+  return OPS.lookupService(r.tituloCompleto || r.tipoCurto || '').icon || '⚙️';
+}
+function fmtElapsed(r){
+  const e = getElapsedHours(r);
+  if (e == null) return '—';
+  if (e < 0) return '0h';
+  return e.toFixed(1) + 'h';
+}
+
 function populateFilterOptions(){
-  const cidades = [...new Set(records.map(r => r.cidade))].sort();
+  const cidades = [...new Set(records.map(r => r.cidade).filter(Boolean))].sort();
   els.cidade.innerHTML = '<option value="">Todas</option>' +
     cidades.map(c => `<option value="${c}">${c}</option>`).join('');
 
+  const tipos = [...new Set(records.map(r => r.tipoCurto).filter(Boolean))].sort();
   els.tipo.innerHTML = '<option value="">Todos</option>' +
-    OPS.allTypes().map(t => `<option value="${t.key}">${t.icon} ${t.label}</option>`).join('');
+    tipos.map(t => `<option value="${t}">${t}</option>`).join('');
 }
 
 function getFiltered(){
@@ -172,10 +214,10 @@ function getFiltered(){
 
   return records.filter(r => {
     if (cidade && r.cidade !== cidade) return false;
-    if (prazo && r.prazoStatus !== prazo) return false;
-    if (tipo && OPS.classifyType(r.titulo).key !== tipo) return false;
+    if (tipo && r.tipoCurto !== tipo) return false;
+    if (prazo && getStatus(r) !== prazo) return false;
     if (q){
-      const hay = OPS.normalize(r.protocolo + ' ' + r.titulo + ' ' + r.bairro);
+      const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||''));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -184,10 +226,12 @@ function getFiltered(){
 
 function computeStats(list){
   const total = list.length;
-  const dentro = list.filter(r => r.prazoStatus === 'dentro').length;
-  const fora = total - dentro;
-  const tempoMedio = total ? (list.reduce((s,r) => s + Number(r.tempo||0), 0) / total) : 0;
-  return { total, dentro, fora, tempoMedio };
+  const dentro = list.filter(r => getStatus(r) === 'dentro').length;
+  const fora = list.filter(r => getStatus(r) === 'fora').length;
+  const semSla = list.filter(r => getStatus(r) === 'sem_sla').length;
+  const comTempo = list.map(getElapsedHours).filter(e => e != null);
+  const tempoMedio = comTempo.length ? comTempo.reduce((a,b) => a+b, 0) / comTempo.length : 0;
+  return { total, dentro, fora, semSla, tempoMedio };
 }
 
 function renderStats(){
@@ -197,23 +241,35 @@ function renderStats(){
     <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${s.total}</div></div>
     <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${s.dentro} <small>(${pctDentro}%)</small></div></div>
     <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${s.fora}</div></div>
+    <div class="stat-card"><div class="label">Sem SLA definido</div><div class="value">${s.semSla}</div></div>
     <div class="stat-card"><div class="label">Tempo médio</div><div class="value">${s.tempoMedio.toFixed(1)}<small>h</small></div></div>
   `;
 }
 
-function runwayColor(rec){
-  if (rec.prazoStatus === 'fora') return 'crit';
-  if (Number(rec.tempo) > 48) return 'warn';
+function runwayColor(r){
+  const status = getStatus(r);
+  if (status === 'fora') return 'crit';
+  if (status === 'sem_sla') return 'neutral';
+  const elapsed = getElapsedHours(r);
+  if (elapsed != null && r.slaHoras && elapsed > r.slaHoras * 0.75) return 'warn';
   return 'ok';
+}
+
+function statusBadge(r){
+  const status = getStatus(r);
+  if (status === 'fora') return `<span class="badge crit"><span class="dot"></span>Fora do prazo</span>`;
+  if (status === 'sem_sla') return `<span class="badge neutral"><span class="dot"></span>Sem SLA</span>`;
+  return `<span class="badge ok"><span class="dot"></span>Dentro do prazo</span>`;
 }
 
 function renderTable(){
   let list = getFiltered();
   if (sortKey){
     list = [...list].sort((a,b) => {
-      let av = a[sortKey], bv = b[sortKey];
-      if (sortKey === 'tempo'){ av = Number(av); bv = Number(bv); }
-      else { av = OPS.normalize(av); bv = OPS.normalize(bv); }
+      let av, bv;
+      if (sortKey === '__status'){ av = getStatus(a); bv = getStatus(b); }
+      else { av = a[sortKey]; bv = b[sortKey]; }
+      av = OPS.normalize(av); bv = OPS.normalize(bv);
       if (av < bv) return -1 * sortDir;
       if (av > bv) return 1 * sortDir;
       return 0;
@@ -224,28 +280,32 @@ function renderTable(){
   document.querySelector('.table-wrap').style.display = records.length === 0 ? 'none' : 'block';
 
   els.tbody.innerHTML = list.map(r => {
-    const type = OPS.classifyType(r.titulo);
-    const pct = Math.min(Number(r.tempo)/72*100, 100);
+    const icon = getIcon(r);
+    const elapsed = getElapsedHours(r);
+    const maxH = (r.slaHoras && r.slaHoras > 0) ? r.slaHoras : 96;
+    const pct = elapsed != null ? Math.min(elapsed/maxH*100, 100) : 0;
     const color = runwayColor(r);
     return `
       <tr data-id="${r.id}">
         <td class="proto">${r.protocolo}</td>
-        <td><span class="svc-type"><span class="icon">${type.icon}</span>${r.titulo}</span></td>
-        <td>${r.cidade}</td>
+        <td>
+          <span class="svc-type">
+            <span class="icon">${icon}</span>${r.tipoCurto || r.tituloCompleto || '—'}
+            ${r.catalogado === false ? '<span title="Tipo não encontrado no catálogo" style="color:var(--warn)">•</span>' : ''}
+          </span>
+        </td>
+        <td>${r.cidade || '—'}</td>
         <td>${r.bairro || '—'}</td>
         <td>
           <div class="runway">
             <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
-            <div class="meta">${r.tempo}h</div>
+            <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''}</div>
           </div>
         </td>
-        <td>
-          <span class="badge ${r.prazoStatus === 'dentro' ? 'ok' : 'crit'}">
-            <span class="dot"></span>${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}
-          </span>
-        </td>
+        <td>${statusBadge(r)}</td>
         <td>
           <div class="row-actions">
+            <button class="icon-btn" data-view="${r.id}" title="Detalhes">👁</button>
             <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
             <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
           </div>
@@ -271,23 +331,24 @@ function renderMap(){
 
   list.forEach(r => {
     const coords = OPS.resolveCoords(r);
-    const type = OPS.classifyType(r.titulo);
-    const statusClass = r.prazoStatus === 'dentro' ? 'ok' : 'crit';
+    const icon = getIcon(r);
+    const status = getStatus(r);
+    const statusClass = status === 'fora' ? 'crit' : 'ok';
 
-    const icon = L.divIcon({
+    const markerIcon = L.divIcon({
       className: '',
-      html: `<div class="marker-emoji ${statusClass}"><span>${type.icon}</span></div>`,
+      html: `<div class="marker-emoji ${statusClass}"><span>${icon}</span></div>`,
       iconSize: [26,26],
       iconAnchor: [13,22],
     });
 
-    const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(markerLayer);
+    const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon }).addTo(markerLayer);
     marker.bindPopup(`
       <div class="popup-svc">
         <span class="proto">${r.protocolo}</span>
-        <div class="title">${type.icon} ${r.titulo}</div>
-        <div class="meta">${r.cidade}${r.bairro ? ' · ' + r.bairro : ''}</div>
-        <div class="meta">${r.tempo}h · ${r.prazoStatus === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</div>
+        <div class="title">${icon} ${r.tipoCurto || r.tituloCompleto || ''}</div>
+        <div class="meta">${r.cidade || ''}${r.bairro ? ' · ' + r.bairro : ''}</div>
+        <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''} · ${status === 'dentro' ? 'Dentro do prazo' : status === 'fora' ? 'Fora do prazo' : 'Sem SLA'}</div>
         ${coords.approx ? '<div class="approx">◇ Local aproximado (centro da cidade)</div>' : ''}
       </div>
     `);
@@ -305,6 +366,9 @@ function renderAll(){
   renderMap();
 }
 
+// atualiza os tempos decorridos sozinho, sem precisar recarregar a página
+setInterval(renderAll, 60000);
+
 // ---------- filtros ----------
 [els.search, els.cidade, els.tipo, els.prazo].forEach(el => {
   el.addEventListener('input', renderAll);
@@ -320,10 +384,36 @@ document.querySelectorAll('th[data-sort]').forEach(th => {
   });
 });
 
+// ---------- detalhes ----------
+const detailModal = document.getElementById('detail-modal');
+function openDetail(rec){
+  const icon = getIcon(rec);
+  document.getElementById('detail-title').textContent = `${icon} ${rec.protocolo}`;
+  document.getElementById('detail-sub').textContent = rec.tituloCompleto || rec.tipoCurto || '';
+  const abertura = rec.criadoEm ? new Date(rec.criadoEm).toLocaleString('pt-BR') : '—';
+  document.getElementById('detail-body').innerHTML = `
+    <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
+    <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
+    <div class="status-row"><span class="status-name">Latitude</span><span class="status-val">${rec.lat != null ? rec.lat : '—'}</span></div>
+    <div class="status-row"><span class="status-name">Longitude</span><span class="status-val">${rec.lng != null ? rec.lng : '—'}</span></div>
+    <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val" style="font-size:12.5px">${abertura}</span></div>
+    <div class="status-row"><span class="status-name">SLA</span><span class="status-val">${rec.slaHoras ? rec.slaHoras + 'h' : 'não definido'}</span></div>
+    <div class="status-row" style="display:block">
+      <span class="status-name" style="margin-bottom:6px">Observação</span>
+      <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${rec.observacao || '—'}</div>
+    </div>
+  `;
+  detailModal.style.display = 'flex';
+}
+document.getElementById('btn-detail-close').onclick = () => detailModal.style.display = 'none';
+detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.style.display = 'none'; });
+
 // ---------- ações da linha ----------
 els.tbody.addEventListener('click', (e) => {
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
+  const viewId = e.target.dataset.view;
+  if (viewId) openDetail(records.find(r => r.id === viewId));
   if (editId) openModal(records.find(r => r.id === editId));
   if (delId){
     if (confirm('Excluir este protocolo?')){
@@ -337,18 +427,45 @@ els.tbody.addEventListener('click', (e) => {
 
 // ---------- modal adicionar/editar ----------
 const modal = document.getElementById('modal');
+const tituloInput = document.getElementById('rec-titulo');
+const tituloInfo = document.getElementById('rec-titulo-info');
+const slaManualInput = document.getElementById('rec-sla-manual');
+
+function updateTituloInfo(){
+  const val = tituloInput.value.trim();
+  if (!val){ tituloInfo.textContent = ''; return; }
+  const svc = OPS.lookupService(val);
+  if (svc.catalogado){
+    tituloInfo.innerHTML = `${svc.icon} Detectado: <strong>${svc.tipoCurto}</strong> · SLA ${svc.slaHoras}h`;
+    tituloInfo.style.color = 'var(--ok)';
+    if (!slaManualInput.value) slaManualInput.placeholder = svc.slaHoras;
+  } else {
+    tituloInfo.innerHTML = `⚠️ Não encontrado no catálogo — informe o SLA manual abaixo.`;
+    tituloInfo.style.color = 'var(--warn)';
+  }
+}
+tituloInput.addEventListener('input', updateTituloInfo);
+
+function toLocalInputValue(dt){
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
 function openModal(rec){
   document.getElementById('modal-title').textContent = rec ? 'Editar protocolo' : 'Adicionar protocolo';
   document.getElementById('rec-id').value = rec ? rec.id : '';
   document.getElementById('rec-protocolo').value = rec ? rec.protocolo : '';
   document.getElementById('rec-projeto').value = rec ? rec.projeto : 'OP-INST-VT-RN';
-  document.getElementById('rec-titulo').value = rec ? rec.titulo : '';
+  tituloInput.value = rec ? (rec.tituloCompleto || '') : '';
   document.getElementById('rec-cidade').value = rec ? rec.cidade : '';
   document.getElementById('rec-bairro').value = rec ? rec.bairro : '';
-  document.getElementById('rec-tempo').value = rec ? rec.tempo : '';
-  document.getElementById('rec-prazo').value = rec ? rec.prazoStatus : 'dentro';
+  document.getElementById('rec-telefone').value = rec ? (rec.telefone||'') : '';
+  document.getElementById('rec-observacao').value = rec ? (rec.observacao||'') : '';
+  slaManualInput.value = (rec && !rec.catalogado && rec.slaHoras) ? rec.slaHoras : '';
+  document.getElementById('rec-abertura').value = toLocalInputValue(rec && rec.criadoEm ? new Date(rec.criadoEm) : new Date());
   document.getElementById('rec-lat').value = rec && rec.lat != null ? rec.lat : '';
   document.getElementById('rec-lng').value = rec && rec.lng != null ? rec.lng : '';
+  updateTituloInfo();
   modal.style.display = 'flex';
 }
 function closeModal(){ modal.style.display = 'none'; }
@@ -362,14 +479,25 @@ document.getElementById('form-record').addEventListener('submit', e => {
   const id = document.getElementById('rec-id').value;
   const latVal = document.getElementById('rec-lat').value.trim();
   const lngVal = document.getElementById('rec-lng').value.trim();
+  const tituloCompleto = tituloInput.value.trim();
+  const svc = OPS.lookupService(tituloCompleto);
+  const slaManual = slaManualInput.value ? Number(slaManualInput.value) : null;
+  const aberturaVal = document.getElementById('rec-abertura').value;
+
   const data = {
     protocolo: document.getElementById('rec-protocolo').value.trim(),
     projeto: document.getElementById('rec-projeto').value.trim(),
-    titulo: document.getElementById('rec-titulo').value.trim(),
+    tituloCompleto,
+    tipoCurto: svc.catalogado ? svc.tipoCurto : tituloCompleto,
+    slaHoras: svc.catalogado ? svc.slaHoras : slaManual,
+    catalogado: svc.catalogado,
     cidade: document.getElementById('rec-cidade').value.trim(),
     bairro: document.getElementById('rec-bairro').value.trim(),
-    tempo: Number(document.getElementById('rec-tempo').value),
-    prazoStatus: document.getElementById('rec-prazo').value,
+    telefone: document.getElementById('rec-telefone').value.trim(),
+    observacao: document.getElementById('rec-observacao').value.trim(),
+    criadoEm: aberturaVal ? new Date(aberturaVal).toISOString() : null,
+    tempoManual: null,
+    prazoManual: null,
     lat: latVal ? Number(latVal) : undefined,
     lng: lngVal ? Number(lngVal) : undefined,
   };
@@ -387,15 +515,25 @@ document.getElementById('form-record').addEventListener('submit', e => {
 // ---------- importar / exportar planilha ----------
 function mapHeader(h){
   const n = OPS.normalize(h);
-  if (n.includes('protocolo')) return 'protocolo';
-  if (n.includes('titulo')) return 'titulo';
-  if (n === 'cidade') return 'cidade';
-  if (n === 'bairro') return 'bairro';
+  if (n.includes('ordem servico') || n === 'protocolo') return 'protocolo';
+  if (n === 'tipo de servico') return 'tituloCompleto';
+  if (n.includes('titulo') && !n.includes('subtipo')) return 'tituloCompleto';
+  if (n === 'area') return 'areaCidade';
+  if (n === 'localidade') return 'localidadeBairro';
+  if (n === 'cidade') return 'cidadeLiteral';
+  if (n === 'bairro') return 'bairroLiteral';
+  if (n.includes('telefone principal')) return 'telefone';
   if (n.includes('projeto')) return 'projeto';
-  if (n.includes('tempo')) return 'tempo';
-  if (n.includes('prazo')) return 'prazoRaw';
-  if (n.includes('lat')) return 'lat';
-  if (n.includes('lon') || n.includes('lng')) return 'lng';
+  if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
+  if (n.includes('latitude') && n.includes('longitude')) return 'latlng';
+  if (n.includes('criado em')) return 'criadoEmLegacy';
+  if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
+  if (n.includes('abertura original')) return 'dataAberturaOriginal';
+  if (n.includes('sla horas')) return 'slaLegacy';
+  if (n.includes('tempo')) return 'tempoLegacy';
+  if (n.includes('prazo')) return 'prazoRawLegacy';
+  if (n === 'lat') return 'lat';
+  if (n === 'lng' || n === 'lon') return 'lng';
   return null;
 }
 
@@ -405,22 +543,72 @@ document.getElementById('file-import').addEventListener('change', (e) => {
   if (!file) return;
   OPS.readSpreadsheetFile(file, (rows) => {
     if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
-    const headers = rows[0].map(mapHeader);
-    const imported = rows.slice(1).map(cols => {
-      const rec = { id: OPS.uid() };
-      headers.forEach((key, idx) => {
-        if (!key) return;
-        const val = (cols[idx] || '').trim();
-        if (key === 'tempo') rec.tempo = Number(val.replace(',', '.')) || 0;
-        else if (key === 'lat' || key === 'lng') { if (val) rec[key] = Number(val.replace(',', '.')); }
-        else if (key === 'prazoRaw') rec.prazoStatus = OPS.normalize(val).includes('fora') ? 'fora' : 'dentro';
-        else rec[key] = val;
-      });
-      if (!rec.prazoStatus) rec.prazoStatus = 'dentro';
-      return rec;
-    }).filter(r => r.protocolo);
 
-    if (!imported.length){ alert('Não encontrei colunas reconhecíveis. Verifique os cabeçalhos (PROTOCOLO, TÍTULO SERVIÇO, CIDADE, BAIRRO, PROJETO, TEMPO ATUAL (H), PRAZO).'); return; }
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 5); i++){
+      if (rows[i].some(c => mapHeader(c) === 'protocolo')){ headerRowIdx = i; break; }
+    }
+    const headers = rows[headerRowIdx].map(mapHeader);
+    const missingTypes = new Set();
+
+    const imported = rows.slice(headerRowIdx + 1).map(cols => {
+      const row = {};
+      headers.forEach((key, idx) => { if (key) row[key] = (cols[idx] ?? '').toString().trim(); });
+      if (!row.protocolo) return null;
+
+      const tituloCompleto = row.tituloCompleto || '';
+      const svc = OPS.lookupService(tituloCompleto);
+      if (tituloCompleto && !svc.catalogado) missingTypes.add(tituloCompleto);
+
+      const cidade = row.areaCidade || row.cidadeLiteral || '';
+      const bairro = row.localidadeBairro || row.bairroLiteral || '';
+
+      let lat, lng;
+      if (row.latlng){
+        const parts = row.latlng.split(',').map(s => parseFloat(s.trim()));
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])){ lat = parts[0]; lng = parts[1]; }
+      }
+      if (lat === undefined && row.lat){ const v = parseFloat(row.lat.replace(',', '.')); if (!isNaN(v)) lat = v; }
+      if (lng === undefined && row.lng){ const v = parseFloat(row.lng.replace(',', '.')); if (!isNaN(v)) lng = v; }
+
+      const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
+      const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+      let baseDt = null;
+      if (row.criadoEmLegacy){
+        const d = new Date(row.criadoEmLegacy);
+        if (!isNaN(d.getTime())) baseDt = d;
+      }
+      if (!baseDt){
+        const dtCriacao = OPS.parseBRDateTime(row.dataCriacao);
+        const dtOriginal = OPS.parseBRDateTime(row.dataAberturaOriginal);
+        baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
+      }
+
+      let slaHoras = svc.catalogado ? svc.slaHoras : null;
+      if (row.slaLegacy){ const v = Number(row.slaLegacy.replace(',', '.')); if (!isNaN(v)) slaHoras = v; }
+
+      let tempoManual = null, prazoManual = null;
+      if (!baseDt && row.tempoLegacy){ const v = Number(row.tempoLegacy.replace(',', '.')); if (!isNaN(v)) tempoManual = v; }
+      if (!baseDt && row.prazoRawLegacy) prazoManual = OPS.normalize(row.prazoRawLegacy).includes('fora') ? 'fora' : 'dentro';
+
+      return {
+        id: OPS.uid(),
+        protocolo: row.protocolo,
+        tituloCompleto,
+        tipoCurto: svc.catalogado ? svc.tipoCurto : (tituloCompleto || 'Outros'),
+        slaHoras,
+        catalogado: svc.catalogado,
+        cidade, bairro,
+        telefone: row.telefone || '',
+        projeto: row.projeto || '',
+        observacao: row.observacao || '',
+        lat, lng,
+        criadoEm: baseDt ? baseDt.toISOString() : null,
+        tempoManual, prazoManual,
+      };
+    }).filter(Boolean);
+
+    if (!imported.length){ alert('Não encontrei colunas reconhecíveis nessa planilha. Confira se ela tem as colunas "Nº. Ordem Serviço", "Tipo de Serviço", "Área", "Localidade" etc.'); return; }
 
     const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
     records = mode ? imported : [...records, ...imported];
@@ -428,22 +616,24 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     populateFilterOptions();
     renderAll();
     e.target.value = '';
+
+    if (missingTypes.size){
+      alert(
+        `Atenção: ${missingTypes.size} tipo(s) de serviço não estavam no catálogo (ficaram com o nome completo em vez do nome curto):\n\n` +
+        [...missingTypes].join('\n') +
+        `\n\nMe avise esses nomes na conversa que eu adiciono ao catálogo.`
+      );
+    }
   });
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','PROJETO','TEMPO ATUAL (H)','PRAZO','LAT','LNG'];
-  const lines = [headers.join(',')];
-  records.forEach(r => {
-    const row = [r.protocolo, r.titulo, r.cidade, r.bairro, r.projeto, r.tempo,
-      r.prazoStatus === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO', r.lat ?? '', r.lng ?? ''];
-    lines.push(row.map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(','));
-  });
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'mapa-servicos-touros.csv';
-  a.click();
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
+  const rows = records.map(r => [
+    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.telefone, r.projeto, r.observacao,
+    r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
+  ]);
+  OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
 };
 
 document.getElementById('btn-clear').onclick = () => {
