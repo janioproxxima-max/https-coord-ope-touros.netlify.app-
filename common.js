@@ -57,6 +57,26 @@ const OPS = (() => {
     return TOUROS_UNIT_CITIES.includes(normalize(cidade));
   }
 
+  // Mapeamento fixo de cidade -> supervisor responsável (mais confiável do
+  // que usar o campo "Supervisor" solto da planilha, que pode vir inconsistente).
+  const SUPERVISOR_BY_CITY = {
+    'touros': 'JOEL TAVARES',
+    'sao miguel do gostoso': 'JOEL TAVARES',
+    'rio do fogo': 'JOEL TAVARES',
+    'caicara do norte': 'MARCELLO ROCHA',
+    'sao bento do norte': 'MARCELLO ROCHA',
+    'pedra grande': 'MARCELLO ROCHA',
+    'parazinho': 'MARCELLO ROCHA',
+    'joao camara': 'MARCELLO ROCHA',
+    'guamare': 'MARCELLO ROCHA',
+    'macau': 'MARCELLO ROCHA',
+    'alto do rodrigues': 'MARCELLO ROCHA',
+    'pendencias': 'MARCELLO ROCHA',
+  };
+  function supervisorForCity(cidade){
+    return SUPERVISOR_BY_CITY[normalize(cidade)] || null;
+  }
+
   const TOUROS_PROJECT_CODE = 'OP-INST-VT-TOUROS';
   // Mapeamento conhecido de sufixo do código de projeto -> nome da unidade.
   // Sufixos não listados aqui viram "Unidade <Sufixo>" automaticamente.
@@ -279,6 +299,107 @@ const OPS = (() => {
     'REDES': '🛰️', 'RETRABALHO': '🔁', 'RETENÇÃO CLIENTE CRITICO': '🛡️',
   };
 
+
+  const PRODUTIVIDADE_CATALOG = [
+    { desc: 'OPERAÇÕES - COM VIABILIDADE', norm: 'operacoes - com viabilidade', produtivo: true, pontos: 2.0 },
+    { desc: 'OPERAÇÕES - CABO ATENUADO', norm: 'operacoes - cabo atenuado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - CABO BAIXO OU NO CHÃO', norm: 'operacoes - cabo baixo ou no chao', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - CABO ROMPIDO', norm: 'operacoes - cabo rompido', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERACOES - CORRECAO DE SINAL DB ENTRE RESIDENCIA E CTO', norm: 'operacoes - correcao de sinal db entre residencia e cto', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - DIFICULDADES DE ACESSO', norm: 'operacoes - dificuldades de acesso', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - DNS', norm: 'operacoes - dns', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO DESATUALIZADO', norm: 'operacoes - equipamento desatualizado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO DESLIGADO', norm: 'operacoes - equipamento desligado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO JÁ COMPATÍVEL', norm: 'operacoes - equipamento ja compativel', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO RESETADO', norm: 'operacoes - equipamento resetado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO TRAVADO', norm: 'operacoes - equipamento travado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - EXTENSÃO DE REDE', norm: 'operacoes - extensao de rede', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - FIXAR EQUIPAMENTO', norm: 'operacoes - fixar equipamento', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - FONTE QUEIMADA', norm: 'operacoes - fonte queimada', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - INTERFERÊNCIA', norm: 'operacoes - interferencia', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - LATÊNCIA ALTA', norm: 'operacoes - latencia alta', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - MUDANÇA DE CÔMODO', norm: 'operacoes - mudanca de comodo', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - ONU DESPROVISIONADA', norm: 'operacoes - onu desprovisionada', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - ORGANIZAÇÃO DE CTO', norm: 'operacoes - organizacao de cto', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - PASSAGEM DE CABO', norm: 'operacoes - passagem de cabo', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - PROBLEMA COM PÁGINAS/APP ESPECÍFICOS', norm: 'operacoes - problema com paginas/app especificos', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - PROBLEMA NA REDE INTERNA', norm: 'operacoes - problema na rede interna', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - PROBLEMA NO CONECTOR', norm: 'operacoes - problema no conector', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - PROBLEMA NO EQUIPAMENTO', norm: 'operacoes - problema no equipamento', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - ROTEADOR MAL LOCALIZADO', norm: 'operacoes - roteador mal localizado', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - SERVIÇO EXTRA', norm: 'operacoes - servico extra', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - SINAL ALTO', norm: 'operacoes - sinal alto', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE EQUIPAMENTO', norm: 'operacoes - troca de equipamento', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE ONU BRIDGE', norm: 'operacoes - troca de onu bridge', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE ONU WIFI', norm: 'operacoes - troca de onu wifi', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE RÁDIO', norm: 'operacoes - troca de radio', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE ROTEADOR', norm: 'operacoes - troca de roteador', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - TROCA DE TORRE', norm: 'operacoes - troca de torre', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES- ALTERAR SENHA DO WI-FI', norm: 'operacoes- alterar senha do wi-fi', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - ANÁLISE TÉCNICA', norm: 'operacoes - analise tecnica', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - DVR', norm: 'operacoes - dvr', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - IPTV', norm: 'operacoes - iptv', produtivo: true, pontos: 1.33 },
+    { desc: 'OPERAÇÕES - REATIVAÇÃO DE CONTRATO', norm: 'operacoes - reativacao de contrato', produtivo: true, pontos: 1.33 },
+    { desc: 'ESTOQUE - EQUIPAMENTO RÁDIO', norm: 'estoque - equipamento radio', produtivo: true, pontos: 1.0 },
+    { desc: 'ESTOQUE - EQUIPAMENTO RECOLHIDO', norm: 'estoque - equipamento recolhido', produtivo: true, pontos: 1.0 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO RECOLHIDO', norm: 'operacoes - equipamento recolhido', produtivo: true, pontos: 1.0 },
+    { desc: 'OPERAÇÕES - NÃO COERENTE COM O RELATO', norm: 'operacoes - nao coerente com o relato', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - ORIGEM INFRA', norm: 'operacoes - origem infra', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - ORIGEM REDES', norm: 'operacoes - origem redes', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - PONTO EM MANUTENÇÃO', norm: 'operacoes - ponto em manutencao', produtivo: false, pontos: 0.0 },
+    { desc: 'ALOCAR PRODUTO E/OU PATRIMONIO', norm: 'alocar produto e/ou patrimonio', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE AUSENTE', norm: 'estoque - cliente ausente', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE JÁ DEVOLVEU', norm: 'estoque - cliente ja devolveu', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE MUDOU DE ENDEREÇO', norm: 'estoque - cliente mudou de endereco', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE NEGOU ENTREGA', norm: 'estoque - cliente negou entrega', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE QUER DEVOLVER EM LOJA', norm: 'estoque - cliente quer devolver em loja', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - CLIENTE REATIVOU', norm: 'estoque - cliente reativou', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - ENDEREÇO NÃO LOCALIZADO', norm: 'estoque - endereco nao localizado', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - EQUIPAMENTO NÃO LOCALIZADO', norm: 'estoque - equipamento nao localizado', produtivo: false, pontos: 0.0 },
+    { desc: 'ESTOQUE - EQUIPAMENTO NÃO RECOLHIDO', norm: 'estoque - equipamento nao recolhido', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - CLIENTE NÃO ACEITOU PAGAR EXCEDENTE', norm: 'inviabilidade - cliente nao aceitou pagar excedente', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - CTO COM POTÊNCIA ALTA', norm: 'inviabilidade - cto com potencia alta', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - CTO LOTADA', norm: 'inviabilidade - cto lotada', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - METRAGEM MÁXIMA ATINGIDA', norm: 'inviabilidade - metragem maxima atingida', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - REGIÃO SEM COBERTURA (SEM REDES)', norm: 'inviabilidade - regiao sem cobertura (sem redes)', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - SEM REDE DE POSTES', norm: 'inviabilidade - sem rede de postes', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - TUBULAÇÃO OBSTRUÍDA', norm: 'inviabilidade - tubulacao obstruida', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABILIDADE - VISADA OBSTRUÍDA', norm: 'inviabilidade - visada obstruida', produtivo: false, pontos: 0.0 },
+    { desc: 'INVIABLIDADE - INFRAESTRUTURA DANIFICADA', norm: 'inviablidade - infraestrutura danificada', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CLIENTE AUSENTE', norm: 'operacoes - cliente ausente', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CLIENTE DESISTIU', norm: 'operacoes - cliente desistiu', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CLIENTE EM MASSIVA ABERTA', norm: 'operacoes - cliente em massiva aberta', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CLIENTE EM MASSIVA FECHADA', norm: 'operacoes - cliente em massiva fechada', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CLIENTE NÃO INFORMOU', norm: 'operacoes - cliente nao informou', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - CONCORRÊNCIA ATIVOU', norm: 'operacoes - concorrencia ativou', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - ENDEREÇO INCOMPLETO', norm: 'operacoes - endereco incompleto', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - EQUIPAMENTO NÃO RECOLHIDO', norm: 'operacoes - equipamento nao recolhido', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - NÃO LOCALIZADO', norm: 'operacoes - nao localizado', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - ORIGEM FINANCEIRO', norm: 'operacoes - origem financeiro', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - PRAZO ALTO', norm: 'operacoes - prazo alto', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - REAGENDAMENTO A PEDIDO DO CLIENTE', norm: 'operacoes - reagendamento a pedido do cliente', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - REMARCAÇÃO DE TURNO SOLICITADO PELO CLIENTE', norm: 'operacoes - remarcacao de turno solicitado pelo cliente', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - SOLICITAÇÃO DUPLICADA', norm: 'operacoes - solicitacao duplicada', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - VISITA IMPRODUTIVA', norm: 'operacoes - visita improdutiva', produtivo: false, pontos: 0.0 },
+    { desc: 'OPERAÇÕES - VISITA TECNICA SEM AJUSTE', norm: 'operacoes - visita tecnica sem ajuste', produtivo: false, pontos: 0.0 },
+  ];
+
+  // Consulta o catálogo de produtividade pela Descrição do Encerramento.
+  // Aplica também a regra do plano 2R/3R/4R (ativação ou troca de endereço
+  // com esses planos vale 2,40 pontos, sobrescrevendo o valor da tabela).
+  function lookupProdutividade(descricaoEncerramento, tipoCurto, planoProduto){
+    const n = normalize(descricaoEncerramento);
+    const found = PRODUTIVIDADE_CATALOG.find(c => c.norm === n);
+    let pontos = found ? found.pontos : null;
+    const produtivo = found ? found.produtivo : null;
+    const planoNorm = normalize(planoProduto);
+    const ehAtivacaoOuMudanca = tipoCurto === 'ATIVAÇÃO' || tipoCurto === 'TROCA DE ENDEREÇO';
+    if (ehAtivacaoOuMudanca && /(^| )(2r|3r|4r)( |$)/.test(planoNorm) && produtivo){
+      pontos = 2.40;
+    }
+    return { encontrado: !!found, produtivo, pontos };
+  }
+
   // Busca o tipo de serviço no catálogo por nome completo (coluna "Tipo de Serviço").
   // Retorna { tipoCurto, slaHoras, catalogado, icon }.
   function lookupService(tituloCompleto){
@@ -427,6 +548,15 @@ const OPS = (() => {
     }
   }
 
+  // Colaborador está indisponível numa data (ausência pontual registrada,
+  // ou dentro do período de um atestado)?
+  function isIndisponivelNoDia(colaboradorId, date, ausencias, atestados){
+    const dateStr = date.toISOString().slice(0,10);
+    if (ausencias && ausencias.some(a => a.colaboradorId === colaboradorId && a.data === dateStr)) return true;
+    if (atestados && atestados.some(a => a.colaboradorId === colaboradorId && a.dataInicio <= dateStr && dateStr <= a.dataFim)) return true;
+    return false;
+  }
+
   function uid(){
     return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
@@ -443,6 +573,16 @@ const OPS = (() => {
   }
   function setRodizioConfig(cfg){
     localStorage.setItem(RODIZIO_KEY, JSON.stringify(cfg));
+    // sincroniza pra todo mundo ver a mesma calibração (não bloqueia a UI)
+    syncPush('RodizioConfigData', [cfg]).catch(() => {});
+  }
+  async function pullRodizioConfig(){
+    const shared = await syncPull('RodizioConfigData');
+    if (shared && shared[0]){
+      localStorage.setItem(RODIZIO_KEY, JSON.stringify(shared[0]));
+      return shared[0];
+    }
+    return getRodizioConfig();
   }
 
   // Sábado da semana (domingo-sábado) que contém a data informada.
@@ -543,10 +683,12 @@ const OPS = (() => {
     load, save, clearAll, uid,
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
+    PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, TOUROS_PROJECT_CODE, isTourosUnitCity, projectUnit, checkProjectError,
+    SUPERVISOR_BY_CITY, supervisorForCity,
     syncPull, syncPush, syncPushWithToast, showToast,
-    DIAS_SEMANA, getRodizioConfig, setRodizioConfig, saturdayOfWeek,
-    grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus,
+    DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
+    grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
   };
 })();
 

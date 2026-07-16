@@ -908,6 +908,11 @@ function mapHeader(h){
   if (n === 'complemento') return 'complemento';
   if (n.includes('telefone principal')) return 'telefone';
   if (n === 'supervisor') return 'supervisor';
+  if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
+  if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
+  if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
+  if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
+  if (n === 'responsavel') return 'responsavel';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
   if (n.includes('latitude') && n.includes('longitude')) return 'latlng';
@@ -1017,6 +1022,15 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         lat, lng,
         criadoEm: baseDt ? baseDt.toISOString() : null,
         tempoManual, prazoManual,
+        descricaoEncerramento: row.descricaoEncerramento || '',
+        dataFimAtendimento: (() => {
+          const d = OPS.parseBRDateTime(row.dataFimAtendimento);
+          return d ? d.toISOString() : null;
+        })(),
+        planoProduto: row.planoProduto || '',
+        responsavel: row.responsavel || '',
+        // "TECNICO AUXILIAR" vem tipo "12345 - Nome Sobrenome" — tira o código da frente
+        tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
       };
     }).filter(Boolean);
 

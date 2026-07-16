@@ -187,17 +187,72 @@
   </div>
 </div>
 
+<!-- Modal: ausência / atestado -->
+<div class="modal-backdrop" id="modal-ausencia" style="display:none">
+  <div class="modal" style="max-width:600px">
+    <h3 id="ausencia-title">Ausência e atestado</h3>
+    <p class="modal-sub" id="ausencia-sub"></p>
+
+    <div class="sec-hdr">Ausência pontual</div>
+    <p class="modal-sub" style="margin-top:-8px">Dia em que deveria trabalhar mas não atuou.</p>
+    <form id="form-ausencia" style="margin-bottom:10px">
+      <input type="hidden" id="aus-colab-id">
+      <div class="grid2">
+        <div class="field"><label>Data</label><input class="input" type="date" id="aus-data" required></div>
+        <div class="field"><label>Motivo</label>
+          <select id="aus-motivo">
+            <option value="BH">BH</option>
+            <option value="Falta">Falta</option>
+            <option value="Outro">Outro motivo</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Observação (opcional)</label><input class="input" id="aus-obs"></div>
+      <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary">＋ Registrar ausência</button></div>
+    </form>
+    <div id="ausencia-list" style="max-height:140px;overflow-y:auto;margin-bottom:16px"></div>
+
+    <div class="sec-hdr">Atestado (Médico / INSS)</div>
+    <p class="modal-sub" style="margin-top:-8px">Colaborador fica indisponível do início ao fim do período.</p>
+    <form id="form-atestado" style="margin-bottom:10px">
+      <input type="hidden" id="ates-colab-id">
+      <div class="grid2">
+        <div class="field"><label>Data de início</label><input class="input" type="date" id="ates-inicio" required></div>
+        <div class="field"><label>Data de fim</label><input class="input" type="date" id="ates-fim" required></div>
+      </div>
+      <div class="field"><label>Tipo</label>
+        <select id="ates-tipo">
+          <option>Atestado Médico</option>
+          <option>INSS</option>
+        </select>
+      </div>
+      <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary">＋ Registrar atestado</button></div>
+    </form>
+    <div id="atestado-list" style="max-height:160px;overflow-y:auto"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btn-ausencia-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script src="common.js"></script>
 <script>
 requireAuthThenInit('gestao-pessoas.html', 'Gestão de Pessoas');
 
 const STORAGE_KEY = 'ops_touros_pessoas_v1';
 const FEEDBACK_KEY = 'ops_touros_feedback_v1';
+const AUSENCIAS_KEY = 'ops_touros_ausencias_v1';
+const ATESTADOS_KEY = 'ops_touros_atestados_v1';
 const SYNC_COLLECTION = 'PessoasData';
 const SYNC_COLLECTION_FEEDBACK = 'FeedbackData';
+const SYNC_COLLECTION_AUSENCIAS = 'AusenciasData';
+const SYNC_COLLECTION_ATESTADOS = 'AtestadosData';
 
 let records = OPS.loadData(STORAGE_KEY) || [];
 let feedbacks = OPS.loadData(FEEDBACK_KEY) || [];
+let ausencias = OPS.loadData(AUSENCIAS_KEY) || [];
+let atestados = OPS.loadData(ATESTADOS_KEY) || [];
 let sortKey = null, sortDir = 1;
 
 const els = {
@@ -289,6 +344,7 @@ function renderTable(){
       <td><span class="badge ${r.status === 'ativo' ? 'ok' : 'crit'}"><span class="dot"></span>${r.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
       <td>
         <div class="row-actions">
+          <button class="icon-btn" data-ausencia="${r.id}" title="Ausência / Atestado">📋</button>
           <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
           <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
         </div>
@@ -320,13 +376,23 @@ async function persistFeedback(){
   OPS.saveData(FEEDBACK_KEY, feedbacks);
   await OPS.syncPushWithToast(SYNC_COLLECTION_FEEDBACK, feedbacks);
 }
+async function persistAusencias(){
+  OPS.saveData(AUSENCIAS_KEY, ausencias);
+  await OPS.syncPushWithToast(SYNC_COLLECTION_AUSENCIAS, ausencias);
+}
+async function persistAtestados(){
+  OPS.saveData(ATESTADOS_KEY, atestados);
+  await OPS.syncPushWithToast(SYNC_COLLECTION_ATESTADOS, atestados);
+}
 
 els.tbody.addEventListener('click', async (e) => {
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
   const fbId = e.target.dataset.feedback;
+  const ausId = e.target.dataset.ausencia;
   if (editId) openModal(records.find(r => r.id === editId));
   if (fbId) openFeedbackModal(records.find(r => r.id === fbId));
+  if (ausId) openAusenciaModal(records.find(r => r.id === ausId));
   if (delId){
     if (confirm('Excluir este colaborador?')){
       records = records.filter(r => r.id !== delId);
@@ -457,6 +523,83 @@ document.getElementById('form-feedback').addEventListener('submit', async e => {
   renderFeedbackList();
 });
 
+// ---------- modal ausência / atestado ----------
+const modalAusencia = document.getElementById('modal-ausencia');
+let ausenciaColabId = null;
+function openAusenciaModal(rec){
+  ausenciaColabId = rec.id;
+  document.getElementById('ausencia-title').textContent = `Ausência e atestado — ${rec.nome}`;
+  document.getElementById('ausencia-sub').textContent = rec.cargo || '';
+  document.getElementById('aus-colab-id').value = rec.id;
+  document.getElementById('ates-colab-id').value = rec.id;
+  document.getElementById('aus-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('aus-obs').value = '';
+  document.getElementById('ates-inicio').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ates-fim').value = '';
+  renderAusenciaList();
+  renderAtestadoList();
+  modalAusencia.style.display = 'flex';
+}
+function closeAusenciaModal(){ modalAusencia.style.display = 'none'; }
+document.getElementById('btn-ausencia-close').onclick = closeAusenciaModal;
+modalAusencia.addEventListener('click', e => { if (e.target === modalAusencia) closeAusenciaModal(); });
+
+function renderAusenciaList(){
+  const list = ausencias.filter(a => a.colaboradorId === ausenciaColabId).sort((a,b) => new Date(b.data) - new Date(a.data));
+  const el = document.getElementById('ausencia-list');
+  el.innerHTML = list.length ? list.map(a => `
+    <div class="status-row" style="display:block;padding:8px 0">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-weight:600;font-size:13px">${a.motivo}</span>
+        <span class="proto" style="font-size:12px">${new Date(a.data+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+      </div>
+      ${a.observacao ? `<div style="color:var(--ink-dim);font-size:12px;margin-top:2px">${a.observacao}</div>` : ''}
+    </div>
+  `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhuma ausência registrada.</p>';
+}
+function renderAtestadoList(){
+  const list = atestados.filter(a => a.colaboradorId === ausenciaColabId).sort((a,b) => new Date(b.dataInicio) - new Date(a.dataInicio));
+  const el = document.getElementById('atestado-list');
+  el.innerHTML = list.length ? list.map(a => `
+    <div class="status-row" style="display:block;padding:8px 0">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-weight:600;font-size:13px">${a.tipo}</span>
+        <span class="proto" style="font-size:12px">${new Date(a.dataInicio+'T00:00:00').toLocaleDateString('pt-BR')} — ${new Date(a.dataFim+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+      </div>
+    </div>
+  `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhum atestado registrado.</p>';
+}
+
+document.getElementById('form-ausencia').addEventListener('submit', async e => {
+  e.preventDefault();
+  ausencias.push({
+    id: OPS.uid(),
+    colaboradorId: ausenciaColabId,
+    data: document.getElementById('aus-data').value,
+    motivo: document.getElementById('aus-motivo').value,
+    observacao: document.getElementById('aus-obs').value.trim(),
+  });
+  await persistAusencias();
+  document.getElementById('aus-obs').value = '';
+  renderAusenciaList();
+});
+
+document.getElementById('form-atestado').addEventListener('submit', async e => {
+  e.preventDefault();
+  const inicio = document.getElementById('ates-inicio').value;
+  const fim = document.getElementById('ates-fim').value;
+  if (fim < inicio){ alert('A data de fim precisa ser igual ou depois da data de início.'); return; }
+  atestados.push({
+    id: OPS.uid(),
+    colaboradorId: ausenciaColabId,
+    dataInicio: inicio,
+    dataFim: fim,
+    tipo: document.getElementById('ates-tipo').value,
+  });
+  await persistAtestados();
+  renderAtestadoList();
+});
+
 document.getElementById('btn-export').onclick = () => {
   const headers = ['NOME','CARGO','CIDADE','CENTRO DE CUSTO','GESTOR','TELEFONE','EMAIL','VEÍCULO','INSPETOR','SETOR','ADMISSÃO','FOLGA FIXA','GRUPO FDS','STATUS'];
   const rows = records.map(r => [r.nome, r.cargo, r.cidade, r.centroCusto, r.gestor, r.telefone, r.email, r.veiculo, r.inspetor, r.setor, r.admissao, r.folgaFixaSemana, r.grupoFDS, r.status === 'ativo' ? 'ATIVO' : 'INATIVO']);
@@ -465,13 +608,35 @@ document.getElementById('btn-export').onclick = () => {
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedPessoas, sharedFeedback] = await Promise.all([
+  const [sharedPessoas, sharedFeedback, sharedAusencias, sharedAtestados] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COLLECTION_FEEDBACK),
+    OPS.syncPull(SYNC_COLLECTION_AUSENCIAS),
+    OPS.syncPull(SYNC_COLLECTION_ATESTADOS),
   ]);
   toast.remove();
-  if (sharedPessoas){ records = sharedPessoas; OPS.saveData(STORAGE_KEY, records); }
-  if (sharedFeedback){ feedbacks = sharedFeedback; OPS.saveData(FEEDBACK_KEY, feedbacks); }
+  if (sharedPessoas){ records = sharedPessoas; }
+  if (sharedFeedback){ feedbacks = sharedFeedback; }
+  if (sharedAusencias){ ausencias = sharedAusencias; }
+  if (sharedAtestados){ atestados = sharedAtestados; }
+
+  // corrige registros sem "id" (ex: alguém adicionado direto na planilha,
+  // sem passar pelo formulário do site) — sem isso, coisas como o histórico
+  // de feedback não sabem identificar de quem é o clique
+  let precisaResync = false;
+  records = records.map(r => {
+    if (r.id) return r;
+    precisaResync = true;
+    return { ...r, id: OPS.uid() };
+  });
+
+  OPS.saveData(STORAGE_KEY, records);
+  OPS.saveData(FEEDBACK_KEY, feedbacks);
+  OPS.saveData(AUSENCIAS_KEY, ausencias);
+  OPS.saveData(ATESTADOS_KEY, atestados);
+  if (precisaResync) await OPS.syncPush(SYNC_COLLECTION, records);
+  await OPS.pullRodizioConfig();
+
   populateFilterOptions();
   renderAll();
 }

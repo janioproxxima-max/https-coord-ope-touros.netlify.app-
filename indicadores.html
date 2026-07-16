@@ -49,6 +49,46 @@
       </div>
     </div>
   </div>
+
+  <div class="sec-hdr">SLA (%) e Produtividade — serviços encerrados</div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-tipo-sla">Tipo de serviço</label>
+      <select id="f-tipo-sla"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-supervisor-sla">Supervisor</label>
+      <select id="f-supervisor-sla"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-tecnico-sla">Técnico</label>
+      <select id="f-tecnico-sla"><option value="">Todos</option></select>
+    </div>
+  </div>
+
+  <div class="kpi-strip" id="sla-cards" style="grid-template-columns:repeat(4,1fr)"></div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>🧑‍💼 Problemas mais fechados por supervisor</h3></div>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services">
+          <thead><tr><th>Supervisor</th><th>Descrição do encerramento</th><th>Qtd.</th></tr></thead>
+          <tbody id="problemas-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>🎯 Pontuação por colaborador — mês atual</h3><span class="cnt-badge" title="Meta: 8 pontos por dia trabalhado (domingo conta pontos, não conta pra meta)">meta: 8 pts/dia útil</span></div>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Pontos no mês</th><th>Dias úteis</th><th>Meta</th><th>% da meta</th></tr></thead>
+          <tbody id="pontuacao-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="common.js"></script>
@@ -70,8 +110,23 @@ function isVisible(r){ return !isAlwaysHidden(r) && !isDefaultHiddenRecolhimento
 
 const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c','#5eead4','#f472b6','#818cf8','#facc15'];
 
+// sigla/grupo de SLA por tipo de serviço (mesmo agrupamento do Mapa de Serviços)
+const SIGLA_BY_TIPO = {
+  'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
+  'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT', 'AÇÕES PREVENTIVAS': 'VT',
+  'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
+};
+const SLA_GROUPS = {
+  VT: { label: 'Reparo', metaPct: 90, horas: 24 },
+  SA: { label: 'Serviços Adicional', metaPct: 95, horas: 48 },
+  AT: { label: 'Ativação', metaPct: 95, horas: 72 },
+  MD: { label: 'Mudança de Endereço', metaPct: 95, horas: 72 },
+};
+
 let mapaRecords = [];
 let pessoas = [];
+let ausencias = [];
+let atestados = [];
 let charts = {};
 
 function destroyCharts(){ Object.values(charts).forEach(c => c && c.destroy()); charts = {}; }
@@ -171,9 +226,12 @@ function renderCidadeTipo(){
 }
 
 function renderSupervisao(){
-  const list = unidadeRecords().filter(r => r.supervisor);
+  const list = unidadeRecords();
   const counts = {};
-  list.forEach(r => { counts[r.supervisor] = (counts[r.supervisor]||0) + 1; });
+  list.forEach(r => {
+    const sup = OPS.supervisorForCity(r.cidade) || 'Sem supervisor definido';
+    counts[sup] = (counts[sup]||0) + 1;
+  });
   const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]);
 
   charts.supervisao = new Chart(document.getElementById('chart-supervisao'), {
@@ -195,7 +253,8 @@ function equipesAtivasHoje(cidade){
   return pessoas.filter(p =>
     p.status === 'ativo' &&
     OPS.canonicalCity(p.cidade) === cidade &&
-    !OPS.isFolgaNoDia(p, hoje)
+    !OPS.isFolgaNoDia(p, hoje) &&
+    !OPS.isIndisponivelNoDia(p.id, hoje, ausencias, atestados)
   ).length;
 }
 
@@ -230,6 +289,122 @@ function renderBacklog(){
   }).join('');
 }
 
+// -------- SLA (%) / produtividade / pontuação (serviços encerrados) --------
+function closedProdutivoRecords(){
+  return unidadeRecords().filter(r => {
+    if (!r.dataFimAtendimento || !r.criadoEm) return false;
+    const prod = OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto);
+    return prod.produtivo === true;
+  });
+}
+
+function populateSlaFilterOptions(){
+  const list = closedProdutivoRecords();
+  const tipos = [...new Set(list.map(r => r.tipoCurto))].sort();
+  document.getElementById('f-tipo-sla').innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
+  const supervisores = [...new Set(Object.values(OPS.SUPERVISOR_BY_CITY))].sort();
+  document.getElementById('f-supervisor-sla').innerHTML = '<option value="">Todos</option>' + supervisores.map(s => `<option value="${s}">${s}</option>`).join('');
+  const tecnicos = [...new Set(pessoas.map(p => p.nome))].sort();
+  document.getElementById('f-tecnico-sla').innerHTML = '<option value="">Todos</option>' + tecnicos.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+function filteredClosedRecords(){
+  const tipo = document.getElementById('f-tipo-sla').value;
+  const supervisor = document.getElementById('f-supervisor-sla').value;
+  const tecnico = document.getElementById('f-tecnico-sla').value;
+  return closedProdutivoRecords().filter(r => {
+    if (tipo && r.tipoCurto !== tipo) return false;
+    if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
+    if (tecnico && r.responsavel !== tecnico && r.tecnicoAuxiliar !== tecnico) return false;
+    return true;
+  });
+}
+
+function renderSlaCards(){
+  const list = filteredClosedRecords();
+  document.getElementById('sla-cards').innerHTML = Object.entries(SLA_GROUPS).map(([key, cfg]) => {
+    const grupoList = list.filter(r => SIGLA_BY_TIPO[r.tipoCurto] === key);
+    const total = grupoList.length;
+    const dentro = grupoList.filter(r => {
+      const elapsed = (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000;
+      return elapsed <= cfg.horas;
+    }).length;
+    const pct = total ? (dentro / total * 100) : null;
+    const cor = pct == null ? '' : (pct >= cfg.metaPct ? 'ok' : 'crit');
+    return `<div class="kpi ${cor}">
+      <div class="kpi-label">SLA ${cfg.label}</div>
+      <div class="kpi-value">${pct == null ? '—' : pct.toFixed(1) + '%'}</div>
+      <div class="kpi-sub">meta ${cfg.metaPct}% em ${cfg.horas}h · ${total} encerrados</div>
+    </div>`;
+  }).join('');
+}
+
+function renderProblemas(){
+  const list = filteredClosedRecords();
+  const counts = {};
+  list.forEach(r => {
+    const sup = OPS.supervisorForCity(r.cidade) || 'Sem supervisor definido';
+    const desc = r.descricaoEncerramento || '(sem descrição)';
+    const key = sup + '|' + desc;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const entries = Object.entries(counts)
+    .map(([key, v]) => { const [sup, desc] = key.split('|'); return { sup, desc, v }; })
+    .sort((a,b) => b.v - a.v).slice(0, 30);
+  document.getElementById('problemas-tbody').innerHTML = entries.length
+    ? entries.map(e => `<tr><td>${e.sup}</td><td>${e.desc}</td><td class="proto">${e.v}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:var(--ink-dim);padding:16px">Sem dados encerrados ainda.</td></tr>';
+}
+
+function nomeMatch(a, b){ return a && b && OPS.normalize(a) === OPS.normalize(b); }
+
+function renderPontuacao(){
+  const hoje = new Date();
+  const anoMes = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0');
+  const tipo = document.getElementById('f-tipo-sla').value;
+  const supervisor = document.getElementById('f-supervisor-sla').value;
+  const tecnicoFiltro = document.getElementById('f-tecnico-sla').value;
+
+  const doMes = closedProdutivoRecords().filter(r => (r.dataFimAtendimento || '').slice(0,7) === anoMes)
+    .filter(r => (!tipo || r.tipoCurto === tipo) && (!supervisor || OPS.supervisorForCity(r.cidade) === supervisor));
+
+  const rows = pessoas.filter(p => !tecnicoFiltro || p.nome === tecnicoFiltro).map(p => {
+    const meus = doMes.filter(r => nomeMatch(r.responsavel, p.nome) || nomeMatch(r.tecnicoAuxiliar, p.nome));
+    const pontos = meus.reduce((s,r) => s + (OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto).pontos || 0), 0);
+    let diasUteis = 0;
+    for (let d = 1; d <= hoje.getDate(); d++){
+      const dia = new Date(hoje.getFullYear(), hoje.getMonth(), d);
+      if (dia.getDay() === 0) continue; // domingo conta ponto, não conta pra meta
+      if (OPS.isFolgaNoDia(p, dia)) continue;
+      diasUteis++;
+    }
+    const meta = diasUteis * 8;
+    const pct = meta ? (pontos / meta * 100) : 0;
+    return { nome: p.nome, pontos, diasUteis, meta, pct };
+  }).sort((a,b) => b.pontos - a.pontos);
+
+  document.getElementById('pontuacao-tbody').innerHTML = rows.length ? rows.map(r => {
+    const cor = r.pct >= 100 ? 'var(--ok)' : r.pct >= 70 ? 'var(--warn)' : 'var(--crit)';
+    return `<tr>
+      <td style="font-weight:600">${r.nome}</td>
+      <td class="proto">${r.pontos.toFixed(2)}</td>
+      <td class="proto">${r.diasUteis}</td>
+      <td class="proto">${r.meta}</td>
+      <td class="proto" style="color:${cor};font-weight:700">${r.pct.toFixed(0)}%</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--ink-dim);padding:16px">Nenhum colaborador cadastrado na Gestão de Pessoas.</td></tr>';
+}
+
+function renderSlaSection(){
+  renderSlaCards();
+  renderProblemas();
+  renderPontuacao();
+}
+
+['f-tipo-sla','f-supervisor-sla','f-tecnico-sla'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderSlaSection);
+});
+
 function renderAllCharts(){
   destroyCharts();
   renderStats();
@@ -238,17 +413,24 @@ function renderAllCharts(){
   renderCidadeTipo();
   renderSupervisao();
   renderBacklog();
+  populateSlaFilterOptions();
+  renderSlaSection();
 }
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados do Mapa de Serviços e Pessoas...');
-  const [sharedMapa, sharedPessoas] = await Promise.all([
+  const [sharedMapa, sharedPessoas, sharedAusencias, sharedAtestados] = await Promise.all([
     OPS.syncPull('MapaServicosData'),
     OPS.syncPull('PessoasData'),
+    OPS.syncPull('AusenciasData'),
+    OPS.syncPull('AtestadosData'),
   ]);
+  await OPS.pullRodizioConfig();
   toast.remove();
   mapaRecords = sharedMapa || OPS.load() || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
+  ausencias = sharedAusencias || OPS.loadData('ops_touros_ausencias_v1') || [];
+  atestados = sharedAtestados || OPS.loadData('ops_touros_atestados_v1') || [];
   renderAllCharts();
 }
 window.OPS_ON_REFRESH = initPage;
