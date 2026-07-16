@@ -292,6 +292,23 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
 .marker-emoji.ok{ background:var(--ok); }
 .marker-emoji.crit{ background:var(--crit); }
 
+.marker-label{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-width:38px; padding:3px 6px; border-radius:7px;
+  box-shadow:0 2px 6px rgba(0,0,0,.45); border:1px solid rgba(0,0,0,.3);
+  font-family:var(--f-display); line-height:1.15; text-align:center;
+}
+.marker-label .code{ font-size:10.5px; font-weight:800; letter-spacing:.02em; }
+.marker-label .hrs{ font-size:9.5px; font-weight:600; opacity:.9; }
+.marker-label.ok{ background:var(--ok); }
+.marker-label.ok .code, .marker-label.ok .hrs{ color:#04241a; }
+.marker-label.warn{ background:var(--warn); }
+.marker-label.warn .code, .marker-label.warn .hrs{ color:#3a2400; }
+.marker-label.crit{ background:var(--crit); }
+.marker-label.crit .code, .marker-label.crit .hrs{ color:#3a0006; }
+.marker-label.neutral{ background:var(--bg-raised); border-color:var(--line); }
+.marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim); }
+
 /* ---------------- modal ---------------- */
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(6,8,10,.6); backdrop-filter:blur(2px);
@@ -343,7 +360,33 @@ table.services tbody tr:hover{ background:var(--bg-panel-2); }
   .page{ padding:18px 14px 48px; }
 }
 
-/* ---------------- login gate ---------------- */
+/* ---------------- multi-select (filtro de cidades) ---------------- */
+.multi-select{ position:relative; }
+.multi-select .btn{ min-width:170px; justify-content:space-between; }
+.multi-select-panel{
+  position:absolute; top:calc(100% + 4px); left:0; z-index:80;
+  background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:8px; min-width:220px; max-height:260px; overflow-y:auto; box-shadow:var(--shadow);
+}
+.multi-select-panel .ms-actions{
+  display:flex; justify-content:space-between; gap:6px; padding:2px 4px 8px;
+  margin-bottom:6px; border-bottom:1px solid var(--line);
+}
+.multi-select-panel .ms-actions button{
+  background:none; border:none; color:var(--brand); font-size:12px; font-weight:600; cursor:pointer; padding:0;
+}
+.multi-select-panel label{
+  display:flex; align-items:center; gap:8px; padding:6px 6px; font-size:13px;
+  cursor:pointer; border-radius:5px; color:var(--ink);
+}
+.multi-select-panel label:hover{ background:var(--bg-panel-2); }
+.multi-select-panel input[type="checkbox"]{ accent-color: var(--brand); }
+
+/* ---------------- alerta de coordenada corrigida ---------------- */
+.coord-alert{
+  display:inline-flex; align-items:center; gap:3px; font-size:11px;
+  color:var(--warn); cursor:help; margin-left:4px;
+}
 body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 #login-wrap{
   position:fixed; inset:0; z-index:999; display:flex; align-items:center; justify-content:center;

@@ -26,8 +26,11 @@
       <input class="input" id="f-search" placeholder="Protocolo, bairro...">
     </div>
     <div class="field">
-      <label for="f-cidade">Cidade</label>
-      <select id="f-cidade"><option value="">Todas</option></select>
+      <label for="f-cidade-btn">Cidade</label>
+      <div class="multi-select" id="f-cidade-wrap">
+        <button type="button" class="btn ghost" id="f-cidade-btn">Todas as cidades ▾</button>
+        <div class="multi-select-panel" id="f-cidade-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="field">
       <label for="f-tipo">Tipo de serviço</label>
@@ -40,6 +43,13 @@
         <option value="dentro">Dentro do prazo</option>
         <option value="fora">Fora do prazo</option>
         <option value="sem_sla">Sem SLA definido</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-projeto">Projeto</label>
+      <select id="f-projeto">
+        <option value="">Todos</option>
+        <option value="erro">🚩 Só com erro de projeto</option>
       </select>
     </div>
     <div style="flex:1"></div>
@@ -86,6 +96,7 @@
         <span class="title">📍 Localização dos protocolos</span>
         <div class="legend">
           <span><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
+          <span><span class="sw" style="background:var(--warn)"></span>Perto de vencer</span>
           <span><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
           <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
         </div>
@@ -164,13 +175,16 @@ let leafletMap = null, markerLayer = null;
 
 const els = {
   search: document.getElementById('f-search'),
-  cidade: document.getElementById('f-cidade'),
+  cidadeBtn: document.getElementById('f-cidade-btn'),
+  cidadePanel: document.getElementById('f-cidade-panel'),
   tipo: document.getElementById('f-tipo'),
   prazo: document.getElementById('f-prazo'),
+  projeto: document.getElementById('f-projeto'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
 };
+let selectedCities = new Set(); // vazio = todas as cidades
 
 // -------- cálculo dinâmico (tempo real) --------
 function getElapsedHours(r){
@@ -196,26 +210,102 @@ function fmtElapsed(r){
   return e.toFixed(1) + 'h';
 }
 
+// -------- regras de exibição por tipo de serviço --------
+const RECOLHIMENTO_TROCA_ENDERECO = 'operacoes - recolhimento/troca de endereco';
+// Dentro do grupo "RECOLHIMENTO", só esse serviço específico aparece
+// (recolhimento de equipamento por causa de troca de endereço do cliente).
+// Os demais (estoque, comodato etc.) ficam de fora da lista inteira.
+function isHiddenRecolhimento(r){
+  return r.tipoCurto === 'RECOLHIMENTO' && OPS.normalize(r.tituloCompleto) !== RECOLHIMENTO_TROCA_ENDERECO;
+}
+// Tipos que não interessam nem na lista nem no mapa.
+const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
+function isFullyHidden(r){
+  return isHiddenRecolhimento(r) || FULLY_HIDDEN_TIPOS.includes(r.tipoCurto);
+}
+
+// Sigla exibida na figurinha do mapa.
+const MAP_LABEL_BY_TIPO = {
+  'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
+  'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT',
+  'AÇÕES PREVENTIVAS': 'VT', 'SERVIÇOS ADICIONAIS': 'VT',
+  'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
+};
+function getMapLabel(r){
+  if (OPS.normalize(r.tituloCompleto) === RECOLHIMENTO_TROCA_ENDERECO) return 'REC/MDE';
+  return MAP_LABEL_BY_TIPO[r.tipoCurto] || (r.tipoCurto || '??').slice(0,2).toUpperCase();
+}
+
 function populateFilterOptions(){
   const cidades = [...new Set(records.map(r => r.cidade).filter(Boolean))].sort();
-  els.cidade.innerHTML = '<option value="">Todas</option>' +
-    cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+  // remove seleções de cidades que não existem mais na base
+  selectedCities = new Set([...selectedCities].filter(c => cidades.includes(c)));
+
+  els.cidadePanel.innerHTML = `
+    <div class="ms-actions">
+      <button type="button" id="ms-city-all">Marcar todas</button>
+      <button type="button" id="ms-city-none">Limpar</button>
+    </div>
+    ${cidades.map(c => `
+      <label><input type="checkbox" value="${c}" ${selectedCities.has(c) ? 'checked' : ''}> ${c}</label>
+    `).join('')}
+  `;
+  updateCityButtonLabel(cidades.length);
+
+  els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedCities.add(cb.value); else selectedCities.delete(cb.value);
+      updateCityButtonLabel(cidades.length);
+      renderAll();
+    });
+  });
+  document.getElementById('ms-city-all').onclick = () => {
+    selectedCities = new Set(cidades);
+    els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+    updateCityButtonLabel(cidades.length);
+    renderAll();
+  };
+  document.getElementById('ms-city-none').onclick = () => {
+    selectedCities = new Set();
+    els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    updateCityButtonLabel(cidades.length);
+    renderAll();
+  };
 
   const tipos = [...new Set(records.map(r => r.tipoCurto).filter(Boolean))].sort();
   els.tipo.innerHTML = '<option value="">Todos</option>' +
     tipos.map(t => `<option value="${t}">${t}</option>`).join('');
 }
 
+function updateCityButtonLabel(total){
+  if (selectedCities.size === 0) els.cidadeBtn.textContent = 'Todas as cidades ▾';
+  else if (selectedCities.size === total) els.cidadeBtn.textContent = 'Todas as cidades ▾';
+  else if (selectedCities.size === 1) els.cidadeBtn.textContent = [...selectedCities][0] + ' ▾';
+  else els.cidadeBtn.textContent = selectedCities.size + ' cidades ▾';
+}
+
+els.cidadeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  els.cidadePanel.style.display = els.cidadePanel.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('f-cidade-wrap').contains(e.target)){
+    els.cidadePanel.style.display = 'none';
+  }
+});
+
 function getFiltered(){
   const q = OPS.normalize(els.search.value);
-  const cidade = els.cidade.value;
   const tipo = els.tipo.value;
   const prazo = els.prazo.value;
+  const projetoFiltro = els.projeto.value;
 
   return records.filter(r => {
-    if (cidade && r.cidade !== cidade) return false;
+    if (isFullyHidden(r)) return false;
+    if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
     if (tipo && r.tipoCurto !== tipo) return false;
     if (prazo && getStatus(r) !== prazo) return false;
+    if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
     if (q){
       const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||''));
       if (!hay.includes(q)) return false;
@@ -229,9 +319,10 @@ function computeStats(list){
   const dentro = list.filter(r => getStatus(r) === 'dentro').length;
   const fora = list.filter(r => getStatus(r) === 'fora').length;
   const semSla = list.filter(r => getStatus(r) === 'sem_sla').length;
+  const erroProjeto = list.filter(r => OPS.checkProjectError(r)).length;
   const comTempo = list.map(getElapsedHours).filter(e => e != null);
   const tempoMedio = comTempo.length ? comTempo.reduce((a,b) => a+b, 0) / comTempo.length : 0;
-  return { total, dentro, fora, semSla, tempoMedio };
+  return { total, dentro, fora, semSla, erroProjeto, tempoMedio };
 }
 
 function renderStats(){
@@ -242,6 +333,7 @@ function renderStats(){
     <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${s.dentro} <small>(${pctDentro}%)</small></div></div>
     <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${s.fora}</div></div>
     <div class="stat-card"><div class="label">Sem SLA definido</div><div class="value">${s.semSla}</div></div>
+    <div class="stat-card ${s.erroProjeto ? 'crit' : ''}"><div class="label">Erro de projeto</div><div class="value">${s.erroProjeto}</div></div>
     <div class="stat-card"><div class="label">Tempo médio</div><div class="value">${s.tempoMedio.toFixed(1)}<small>h</small></div></div>
   `;
 }
@@ -287,7 +379,10 @@ function renderTable(){
     const color = runwayColor(r);
     return `
       <tr data-id="${r.id}">
-        <td class="proto">${r.protocolo}</td>
+        <td class="proto">${r.protocolo}${(() => {
+          const err = OPS.checkProjectError(r);
+          return err ? `<span class="coord-alert" title="Cidade é da Unidade Touros, mas o projeto é ${err.encontrado}${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''} — esperado ${err.esperado}">🚩 projeto</span>` : '';
+        })()}</td>
         <td>
           <span class="svc-type">
             <span class="icon">${icon}</span>${r.tipoCurto || r.tituloCompleto || '—'}
@@ -295,7 +390,12 @@ function renderTable(){
           </span>
         </td>
         <td>${r.cidade || '—'}</td>
-        <td>${r.bairro || '—'}</td>
+        <td>${r.bairro || '—'}${(() => {
+          const c = OPS.resolveCoords(r);
+          return c.reason === 'out_of_area'
+            ? '<span class="coord-alert" title="Latitude/Longitude informada caía fora da área da cidade — corrigida para o centro dela">⚠︎ lat/lng</span>'
+            : '';
+        })()}</td>
         <td>
           <div class="runway">
             <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
@@ -331,25 +431,26 @@ function renderMap(){
 
   list.forEach(r => {
     const coords = OPS.resolveCoords(r);
-    const icon = getIcon(r);
+    const label = getMapLabel(r);
     const status = getStatus(r);
-    const statusClass = status === 'fora' ? 'crit' : 'ok';
+    const color = runwayColor(r); // 'ok' | 'warn' | 'crit' | 'neutral' — mesma lógica de perto-de-vencer da tabela
 
     const markerIcon = L.divIcon({
       className: '',
-      html: `<div class="marker-emoji ${statusClass}"><span>${icon}</span></div>`,
-      iconSize: [26,26],
-      iconAnchor: [13,22],
+      html: `<div class="marker-label ${color}"><span class="code">${label}</span><span class="hrs">${fmtElapsed(r)}</span></div>`,
+      iconSize: [42, 32],
+      iconAnchor: [21, 28],
     });
 
     const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon }).addTo(markerLayer);
     marker.bindPopup(`
       <div class="popup-svc">
         <span class="proto">${r.protocolo}</span>
-        <div class="title">${icon} ${r.tipoCurto || r.tituloCompleto || ''}</div>
+        <div class="title">${label} · ${r.tipoCurto || r.tituloCompleto || ''}</div>
         <div class="meta">${r.cidade || ''}${r.bairro ? ' · ' + r.bairro : ''}</div>
         <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''} · ${status === 'dentro' ? 'Dentro do prazo' : status === 'fora' ? 'Fora do prazo' : 'Sem SLA'}</div>
-        ${coords.approx ? '<div class="approx">◇ Local aproximado (centro da cidade)</div>' : ''}
+        ${coords.reason === 'out_of_area' ? '<div class="approx">⚠︎ Latitude/Longitude informada estava fora da área da cidade — corrigida</div>' : ''}
+        ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
       </div>
     `);
     bounds.push([coords.lat, coords.lng]);
@@ -370,7 +471,7 @@ function renderAll(){
 setInterval(renderAll, 60000);
 
 // ---------- filtros ----------
-[els.search, els.cidade, els.tipo, els.prazo].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -391,7 +492,11 @@ function openDetail(rec){
   document.getElementById('detail-title').textContent = `${icon} ${rec.protocolo}`;
   document.getElementById('detail-sub').textContent = rec.tituloCompleto || rec.tipoCurto || '';
   const abertura = rec.criadoEm ? new Date(rec.criadoEm).toLocaleString('pt-BR') : '—';
+  const err = OPS.checkProjectError(rec);
   document.getElementById('detail-body').innerHTML = `
+    ${err ? `<div class="status-row" style="background:var(--crit-wash);border-radius:6px;padding:8px 10px;margin-bottom:8px;border:none">
+      <span class="status-name" style="color:var(--crit)">🚩 Erro de projeto: esperado <strong>${err.esperado}</strong>, veio <strong>${err.encontrado}</strong>${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''}</span>
+    </div>` : ''}
     <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
     <div class="status-row"><span class="status-name">Latitude</span><span class="status-val">${rec.lat != null ? rec.lat : '—'}</span></div>
@@ -491,7 +596,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
     tipoCurto: svc.catalogado ? svc.tipoCurto : tituloCompleto,
     slaHoras: svc.catalogado ? svc.slaHoras : slaManual,
     catalogado: svc.catalogado,
-    cidade: document.getElementById('rec-cidade').value.trim(),
+    cidade: OPS.canonicalCity(document.getElementById('rec-cidade').value.trim()),
     bairro: document.getElementById('rec-bairro').value.trim(),
     telefone: document.getElementById('rec-telefone').value.trim(),
     observacao: document.getElementById('rec-observacao').value.trim(),
@@ -544,9 +649,14 @@ document.getElementById('file-import').addEventListener('change', (e) => {
   OPS.readSpreadsheetFile(file, (rows) => {
     if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
 
-    let headerRowIdx = 0;
-    for (let i = 0; i < Math.min(rows.length, 5); i++){
-      if (rows[i].some(c => mapHeader(c) === 'protocolo')){ headerRowIdx = i; break; }
+    // Encontra a linha de cabeçalho de verdade — a planilha real tem uma
+    // linha de título antes dos cabeçalhos. Em vez de assumir a primeira
+    // linha, pegamos a linha (entre as 10 primeiras) com mais colunas
+    // reconhecíveis, então não é preciso excluir nenhuma linha manualmente.
+    let headerRowIdx = 0, bestScore = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++){
+      const score = rows[i].filter(c => mapHeader(c)).length;
+      if (score > bestScore){ bestScore = score; headerRowIdx = i; }
     }
     const headers = rows[headerRowIdx].map(mapHeader);
     const missingTypes = new Set();
@@ -560,7 +670,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
       const svc = OPS.lookupService(tituloCompleto);
       if (tituloCompleto && !svc.catalogado) missingTypes.add(tituloCompleto);
 
-      const cidade = row.areaCidade || row.cidadeLiteral || '';
+      const cidade = OPS.canonicalCity(row.areaCidade || row.cidadeLiteral || '');
       const bairro = row.localidadeBairro || row.bairroLiteral || '';
 
       let lat, lng;

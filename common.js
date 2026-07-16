@@ -8,31 +8,92 @@ const OPS = (() => {
 
   const STORAGE_KEY = 'ops_touros_mapa_servicos_v1';
 
-  // Coordenadas centrais aproximadas dos municípios (fallback quando
-  // o registro não tem coordenada própria, ou quando a coordenada
-  // informada cai fora de um raio plausível para a cidade).
-  const CITY_CENTERS = {
-    'touros':                 { lat: -5.1989, lng: -35.4608 },
-    'natal':                  { lat: -5.7945, lng: -35.2110 },
-    'acari':                  { lat: -6.4136, lng: -36.6417 },
-    'canguaretama':           { lat: -6.3800, lng: -35.1289 },
-    'carnauba dos dantas':    { lat: -6.5464, lng: -36.6533 },
-    'ceara mirim':            { lat: -5.5505, lng: -35.3767 },
-    'ceara-mirim':            { lat: -5.5505, lng: -35.3767 },
-    'extremoz':               { lat: -5.6564, lng: -35.2953 },
-    'jardim do serido':       { lat: -6.5539, lng: -36.8619 },
-    'parelhas':               { lat: -6.6822, lng: -36.6608 },
-    'sao jose de mipibu':     { lat: -6.0703, lng: -35.2372 },
-    'sao miguel do gostoso':  { lat: -5.0567, lng: -35.6664 },
-    'joao camara':            { lat: -5.5433, lng: -35.8244 },
-    'maxaranguape':           { lat: -5.4708, lng: -35.3572 },
-    'rio do fogo':            { lat: -5.2761, lng: -35.3831 },
-    'pureza':                 { lat: -5.3611, lng: -35.3922 },
-    'taipu':                  { lat: -5.6547, lng: -35.6297 },
-    'poco branco':            { lat: -5.6667, lng: -35.6167 },
+  // Registro de cidades da região: nome canônico (pra corrigir grafia/maiúsculas
+  // inconsistentes vindas da planilha) + coordenada central de fallback.
+  const CITY_REGISTRY = {
+    'touros':                 { name: 'TOUROS',                lat: -5.1989, lng: -35.4608 },
+    'natal':                  { name: 'NATAL',                 lat: -5.7945, lng: -35.2110 },
+    'acari':                  { name: 'ACARI',                 lat: -6.4136, lng: -36.6417 },
+    'canguaretama':           { name: 'CANGUARETAMA',          lat: -6.3800, lng: -35.1289 },
+    'carnauba dos dantas':    { name: 'CARNAÚBA DOS DANTAS',   lat: -6.5464, lng: -36.6533 },
+    'ceara mirim':            { name: 'CEARÁ-MIRIM',           lat: -5.5505, lng: -35.3767 },
+    'ceara-mirim':            { name: 'CEARÁ-MIRIM',           lat: -5.5505, lng: -35.3767 },
+    'extremoz':               { name: 'EXTREMOZ',              lat: -5.6564, lng: -35.2953 },
+    'jardim do serido':       { name: 'JARDIM DO SERIDÓ',       lat: -6.5539, lng: -36.8619 },
+    'parelhas':               { name: 'PARELHAS',              lat: -6.6822, lng: -36.6608 },
+    'sao jose de mipibu':     { name: 'SÃO JOSÉ DE MIPIBU',     lat: -6.0703, lng: -35.2372 },
+    'sao miguel do gostoso':  { name: 'SÃO MIGUEL DO GOSTOSO',  lat: -5.0567, lng: -35.6664 },
+    'joao camara':            { name: 'JOÃO CÂMARA',           lat: -5.5433, lng: -35.8244 },
+    'maxaranguape':           { name: 'MAXARANGUAPE',          lat: -5.4708, lng: -35.3572 },
+    'rio do fogo':            { name: 'RIO DO FOGO',           lat: -5.2761, lng: -35.3831 },
+    'pureza':                 { name: 'PUREZA',                lat: -5.3611, lng: -35.3922 },
+    'taipu':                  { name: 'TAIPU',                 lat: -5.6547, lng: -35.6297 },
+    'poco branco':            { name: 'POÇO BRANCO',           lat: -5.6667, lng: -35.6167 },
+    'caicara do norte':       { name: 'CAIÇARA DO NORTE',       lat: -5.0919, lng: -35.9308 },
+    'sao bento do norte':     { name: 'SÃO BENTO DO NORTE',     lat: -5.2081, lng: -36.2039 },
+    'pedra grande':           { name: 'PEDRA GRANDE',          lat: -5.2267, lng: -35.9636 },
+    'parazinho':              { name: 'PARAZINHO',             lat: -5.3944, lng: -35.6975 },
+    'guamare':                { name: 'GUAMARÉ',               lat: -5.1256, lng: -36.3169 },
+    'macau':                  { name: 'MACAU',                 lat: -5.1189, lng: -36.6272 },
+    'alto do rodrigues':      { name: 'ALTO DO RODRIGUES',      lat: -5.4444, lng: -36.8036 },
+    'pendencias':             { name: 'PENDÊNCIAS',            lat: -5.2872, lng: -36.9439 },
+    'caico':                  { name: 'CAICÓ',                 lat: -6.4650, lng: -37.0958 },
+    'serra do mel':           { name: 'SERRA DO MEL',          lat: -5.1667, lng: -37.0500 },
+    'porto do mangue':        { name: 'PORTO DO MANGUE',       lat: -5.0866, lng: -36.8058 },
+    'ipanguacu':              { name: 'IPANGUAÇU',             lat: -5.4739, lng: -36.8503 },
+    'afonso bezerra':         { name: 'AFONSO BEZERRA',        lat: -5.5313, lng: -36.6797 },
   };
 
-  const DEFAULT_CENTER = CITY_CENTERS['touros'];
+  // Cidades que pertencem à jurisdição da Unidade Touros (usado pro alerta
+  // de "erro de projeto" — serviço nessas cidades deveria ser projeto
+  // OP-INST-VT-TOUROS; se vier com outro projeto, é sinal de erro).
+  const TOUROS_UNIT_CITIES = [
+    'touros', 'sao miguel do gostoso', 'joao camara', 'macau', 'rio do fogo',
+    'guamare', 'pendencias', 'sao bento do norte', 'parazinho', 'caicara do norte',
+    'pedra grande', 'alto do rodrigues', 'serra do mel', 'porto do mangue',
+    'ipanguacu', 'afonso bezerra',
+  ];
+  function isTourosUnitCity(cidade){
+    return TOUROS_UNIT_CITIES.includes(normalize(cidade));
+  }
+
+  const TOUROS_PROJECT_CODE = 'OP-INST-VT-TOUROS';
+  // Mapeamento conhecido de sufixo do código de projeto -> nome da unidade.
+  // Sufixos não listados aqui viram "Unidade <Sufixo>" automaticamente.
+  const KNOWN_PROJECT_UNITS = {
+    'NATAL': 'Unidade Natal',
+    'RN': 'Unidade Parelhas',
+    'CAICO': 'Unidade Caicó',
+    'TOUROS': 'Unidade Touros',
+  };
+  // Identifica a unidade de um código de projeto (ex: "OP-INST-VT-NATAL").
+  // Retorna { suffix, unitName } ou null se não seguir o padrão OP-INST-VT-*.
+  function projectUnit(projeto){
+    const m = (projeto || '').toString().trim().match(/^OP-INST-VT-(.+)$/i);
+    if (!m) return null;
+    const suffix = m[1].toUpperCase();
+    const unitName = KNOWN_PROJECT_UNITS[suffix] ||
+      ('Unidade ' + suffix.charAt(0) + suffix.slice(1).toLowerCase());
+    return { suffix, unitName };
+  }
+  // Verifica se o registro tem erro de projeto: cidade é da Unidade Touros
+  // mas o projeto não é OP-INST-VT-TOUROS.
+  function checkProjectError(record){
+    if (!isTourosUnitCity(record.cidade)) return null;
+    const projetoNorm = (record.projeto || '').toString().trim().toUpperCase();
+    if (projetoNorm === TOUROS_PROJECT_CODE) return null;
+    const unit = projectUnit(record.projeto);
+    return {
+      esperado: TOUROS_PROJECT_CODE,
+      encontrado: record.projeto || '(vazio)',
+      unidadeDetectada: unit ? unit.unitName : null,
+    };
+  }
+
+  // compatibilidade com código antigo que ainda referencia CITY_CENTERS
+  const CITY_CENTERS = CITY_REGISTRY;
+
+  const DEFAULT_CENTER = CITY_REGISTRY['touros'];
 
   // raio (km) além do qual consideramos a coordenada informada
   // "fora da cidade" e usamos o ponto central no lugar dela.
@@ -47,7 +108,17 @@ const OPS = (() => {
   }
 
   function cityCenter(cidade){
-    return CITY_CENTERS[normalize(cidade)] || null;
+    return CITY_REGISTRY[normalize(cidade)] || null;
+  }
+
+  // Corrige a grafia/maiúsculas do nome da cidade pro nome canônico
+  // conhecido (ex: "toUros", "Touros ", "TOUROS RN" → "TOUROS").
+  // Se a cidade não estiver no registro, devolve o texto original (limpo).
+  function canonicalCity(raw){
+    const n = normalize(raw).replace(/\s*\|\s*rn$/, '').trim();
+    const found = CITY_REGISTRY[n];
+    if (found) return found.name;
+    return (raw || '').toString().trim();
   }
 
   function haversineKm(a, b){
@@ -60,21 +131,23 @@ const OPS = (() => {
   }
 
   // Resolve a coordenada "efetiva" de um registro para exibição no mapa.
-  // Retorna { lat, lng, approx } — approx=true quando usamos o ponto
-  // central da cidade (coordenada ausente ou fora do raio esperado).
+  // Retorna { lat, lng, approx, reason } — approx=true quando usamos o ponto
+  // central da cidade. reason: 'missing' (sem coordenada própria) ou
+  // 'out_of_area' (coordenada informada cai fora da área da cidade).
   function resolveCoords(record){
     const center = cityCenter(record.cidade) || DEFAULT_CENTER;
     const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
       && !isNaN(record.lat) && !isNaN(record.lng);
 
     if (!hasOwn){
-      return { lat: center.lat, lng: center.lng, approx: true };
+      return { lat: center.lat, lng: center.lng, approx: true, reason: 'missing' };
     }
     const dist = haversineKm(center, { lat: record.lat, lng: record.lng });
     if (dist > MAX_CITY_RADIUS_KM){
-      return { lat: center.lat, lng: center.lng, approx: true };
+      return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
+
     }
-    return { lat: record.lat, lng: record.lng, approx: false };
+    return { lat: record.lat, lng: record.lng, approx: false, reason: null };
   }
 
   // Categorização de tipo de serviço a partir do título — usado para
@@ -285,21 +358,63 @@ const OPS = (() => {
   }
 
   return {
-    STORAGE_KEY, CITY_CENTERS, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
-    normalize, cityCenter, haversineKm, resolveCoords,
+    STORAGE_KEY, CITY_CENTERS, CITY_REGISTRY, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
+    normalize, cityCenter, canonicalCity, haversineKm, resolveCoords,
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid,
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
+    TOUROS_UNIT_CITIES, TOUROS_PROJECT_CODE, isTourosUnitCity, projectUnit, checkProjectError,
   };
 })();
 
 /* ---------------- login + shell (sidebar) compartilhados ----------------
-   Gate simples de usuário/senha (mesmo esquema já usado no painel de
-   Indicadores) protegendo o site inteiro. É uma trava informal, não uma
-   autenticação segura — usuário e senha ficam visíveis no código-fonte. */
+   A lista de quem pode acessar o site fica numa Planilha Google — pra dar ou
+   tirar acesso de alguém, basta adicionar/apagar uma linha na planilha
+   (colunas: USUARIO, SENHA, LIMITE DE ACESSO). Não precisa mexer no código.
+   LIMITE DE ACESSO = "TOTAL" (vê tudo) ou uma lista de módulos separados por
+   vírgula (ex: "mapa-servicos, indicadores") pra ver só partes específicas.
+   É uma trava informal, não uma autenticação segura de verdade — qualquer
+   pessoa com o link da planilha consegue ver usuário e senha. */
 
-const OPS_USERS = { coordenador: 'ops2024', admin: 'touros2025' };
+const OPS_USERS_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1YADg1BB_jRveKt0Tr_7bwh8Pyv9oHUdNrPNYnb8cDns/export?format=csv&gid=0';
+
+// Lista de emergência: usada apenas se a planilha não puder ser lida
+// (sem internet, link não configurado, ou a planilha ficou fora do ar).
+const OPS_USERS_FALLBACK = { coordenador: { senha: 'ops2024', acesso: 'TOTAL' } };
+
+// Módulos válidos pra usar na coluna LIMITE DE ACESSO (mesma chave do href, sem .html)
+const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'gestao-pessoas', 'frotas', 'desligamentos', 'indicadores'];
+
+function parseAcesso(raw){
+  const v = (raw || '').trim();
+  if (!v || OPS.normalize(v) === 'total') return 'TOTAL';
+  return v.split(/[,;]/).map(s => OPS.normalize(s).replace(/\s+/g,'-')).filter(Boolean);
+}
+
+async function fetchSheetUsers(){
+  if (!OPS_USERS_SHEET_CSV_URL) return null;
+  try{
+    const sep = OPS_USERS_SHEET_CSV_URL.includes('?') ? '&' : '?';
+    const res = await fetch(OPS_USERS_SHEET_CSV_URL + sep + 'cachebust=' + Date.now());
+    if (!res.ok) return null;
+    const text = await res.text();
+    const rows = OPS.parseCSV(text).filter(r => r.some(c => (c||'').trim() !== ''));
+    if (rows.length < 2) return null;
+    const map = {};
+    rows.slice(1).forEach(cols => {
+      const u = (cols[0] || '').trim();
+      const p = (cols[1] || '').trim();
+      const acesso = parseAcesso(cols[2]);
+      if (u && p) map[u] = { senha: p, acesso };
+    });
+    return map;
+  }catch(e){
+    console.error('Falha ao carregar lista de acessos da planilha', e);
+    return null;
+  }
+}
+
 const OPS_NAV_LINKS = [
   { href: 'index.html',           label: 'Início',            icon: '📊' },
   { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
@@ -337,13 +452,25 @@ function showLogin(onSuccess){
   function attempt(){
     const u = document.getElementById('lg-usr').value.trim();
     const p = document.getElementById('lg-pwd').value;
-    if (OPS_USERS[u] && OPS_USERS[u] === p){
-      sessionStorage.setItem('ops_user', u);
-      wrap.remove();
-      onSuccess();
-    } else {
-      document.getElementById('lg-err').style.display = 'block';
-    }
+    const btn = document.getElementById('lg-btn');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
+    fetchSheetUsers().then(sheetUsers => {
+      const users = sheetUsers || OPS_USERS_FALLBACK;
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      const user = users[u];
+      if (user && user.senha === p){
+        sessionStorage.setItem('ops_user', u);
+        sessionStorage.setItem('ops_access', JSON.stringify(user.acesso));
+        wrap.remove();
+        onSuccess();
+      } else {
+        document.getElementById('lg-err').style.display = 'block';
+      }
+    });
   }
   document.getElementById('lg-btn').addEventListener('click', attempt);
   wrap.querySelectorAll('input').forEach(inp =>
@@ -352,11 +479,33 @@ function showLogin(onSuccess){
   wrap.querySelector('#lg-usr').focus();
 }
 
+function getCurrentAccess(){
+  try{
+    const raw = sessionStorage.getItem('ops_access');
+    return raw ? JSON.parse(raw) : 'TOTAL';
+  }catch(e){ return 'TOTAL'; }
+}
+function hasAccess(moduleKey, access){
+  if (access === 'TOTAL') return true;
+  if (moduleKey === 'index') return true; // sempre pode voltar pro início
+  return Array.isArray(access) && access.includes(moduleKey);
+}
+
 function initShell(active, pageTitle){
   document.body.classList.add('has-shell', 'authed');
 
+  const access = getCurrentAccess();
+  const activeKey = active.replace('.html', '');
+  const allowed = hasAccess(activeKey, access);
+
   // move todo o conteúdo já presente no body (exceto <script>) para dentro do shell
   const contentNodes = Array.from(document.body.children).filter(el => el.tagName !== 'SCRIPT');
+  if (!allowed){
+    // esconde o conteúdo da página (usuário não tem esse módulo liberado)
+    contentNodes.forEach(n => n.remove());
+  }
+
+  const visibleLinks = OPS_NAV_LINKS.filter(l => hasAccess(l.href.replace('.html',''), access));
 
   const sidebar = document.createElement('aside');
   sidebar.className = 'sidebar';
@@ -367,7 +516,7 @@ function initShell(active, pageTitle){
       <p>Unidade Touros</p>
     </div>
     <div class="sb-section">Painéis</div>
-    ${OPS_NAV_LINKS.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
+    ${visibleLinks.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
     <div class="sb-footer">
       <div class="sb-update">Última atualização</div>
       <div class="sb-date" id="sb-date">--/--/----</div>
@@ -391,7 +540,20 @@ function initShell(active, pageTitle){
   shellMain.className = 'shell-main';
   const shellContent = document.createElement('div');
   shellContent.className = 'shell-content';
-  contentNodes.forEach(n => shellContent.appendChild(n));
+  if (allowed){
+    contentNodes.forEach(n => shellContent.appendChild(n));
+  } else {
+    shellContent.innerHTML = `
+      <div class="page">
+        <div class="panel placeholder">
+          <div class="glyph">🔒</div>
+          <h2>Sem permissão para este módulo</h2>
+          <p class="page-sub">Seu acesso não inclui "${pageTitle}". Fale com o coordenador se precisar dessa liberação.</p>
+          <a class="btn primary" href="index.html" style="margin-top:14px;display:inline-flex">← Voltar ao início</a>
+        </div>
+      </div>
+    `;
+  }
   shellMain.appendChild(topbar);
   shellMain.appendChild(shellContent);
 
@@ -411,6 +573,7 @@ function initShell(active, pageTitle){
 
   topbar.querySelector('#user-pill').addEventListener('click', () => {
     sessionStorage.removeItem('ops_user');
+    sessionStorage.removeItem('ops_access');
     location.reload();
   });
 }
