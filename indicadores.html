@@ -340,6 +340,7 @@ document.getElementById('sla-tabs').innerHTML = Object.keys(DS_LABELS).map(key =
   return `<div class="sla-tab" data-tab="${key}" onclick="setTab('${key}')">${DS_LABELS[key]}${count}</div>`;
 }).join('');
 
+window.OPS_ON_REFRESH = () => setTab(currentTab);
 setTab('visao');
 </script>
 </body>

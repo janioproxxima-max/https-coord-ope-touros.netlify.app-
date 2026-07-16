@@ -243,6 +243,7 @@ document.getElementById('btn-export').onclick = () => {
   OPS.downloadCSV('desligamentos-touros.csv', headers, rows);
 };
 
+window.OPS_ON_REFRESH = renderAll;
 renderAll();
 </script>
 </body>

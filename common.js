@@ -595,6 +595,7 @@ function initShell(active, pageTitle){
     <div class="sb-footer">
       <div class="sb-update">Última atualização</div>
       <div class="sb-date" id="sb-date">--/--/----</div>
+      <button class="btn-refresh" id="sb-refresh">↻ Atualizar</button>
     </div>
   `;
 
@@ -642,9 +643,18 @@ function initShell(active, pageTitle){
   }
   tick(); setInterval(tick, 1000);
 
-  const now = new Date();
-  sidebar.querySelector('#sb-date').textContent =
-    `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  function stampUltimaAtualizacao(){
+    const now = new Date();
+    sidebar.querySelector('#sb-date').textContent =
+      `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} · ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  }
+  stampUltimaAtualizacao();
+  window.OPS_STAMP_UPDATE = stampUltimaAtualizacao;
+
+  sidebar.querySelector('#sb-refresh').addEventListener('click', () => {
+    if (typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
+    stampUltimaAtualizacao();
+  });
 
   topbar.querySelector('#user-pill').addEventListener('click', () => {
     sessionStorage.removeItem('ops_user');

@@ -17,6 +17,7 @@
     <p class="eyebrow">Mapa de serviços</p>
     <h1 class="page-title">Protocolos por tempo de atendimento</h1>
     <p class="page-sub">Tempo decorrido calculado em tempo real a partir da abertura — cidade, bairro e status de prazo por tipo de serviço.</p>
+    <p class="page-sub" id="last-import-info" style="margin-top:4px;color:var(--ink-faint);font-size:12.5px"></p>
   </div>
 
   <div class="stat-row" id="stat-row"></div>
@@ -480,7 +481,7 @@ function initMap(){
 
 let markerRegistry = {}; // id do registro -> marcador Leaflet (pra destacar ao clicar na lista)
 
-function renderMap(){
+function renderMap(fitView = true){
   markerLayer.clearLayers();
   markerRegistry = {};
   const list = getFiltered();
@@ -540,7 +541,7 @@ function renderMap(){
     bounds.push([coords.lat, coords.lng]);
   });
 
-  if (bounds.length){
+  if (fitView && bounds.length){
     leafletMap.fitBounds(bounds, { padding: [30,30], maxZoom: 12 });
   }
 }
@@ -581,14 +582,42 @@ function highlightListRow(id){
   }, 60);
 }
 
-function renderAll(){
+function renderAll(fitView = true){
   renderStats();
   renderTable();
-  renderMap();
+  renderMap(fitView);
 }
 
-// atualiza os tempos decorridos sozinho, sem precisar recarregar a página
-setInterval(renderAll, 60000);
+const IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
+function saveImportMeta(){
+  const meta = {
+    data: new Date().toISOString(),
+    usuario: sessionStorage.getItem('ops_user') || 'desconhecido',
+  };
+  localStorage.setItem(IMPORT_META_KEY, JSON.stringify(meta));
+  renderImportMeta();
+}
+function renderImportMeta(){
+  const el = document.getElementById('last-import-info');
+  if (!el) return;
+  let meta = null;
+  try{ meta = JSON.parse(localStorage.getItem(IMPORT_META_KEY) || 'null'); }catch(e){}
+  if (!meta){ el.textContent = 'Nenhuma planilha importada ainda neste navegador.'; return; }
+  const dt = new Date(meta.data);
+  const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} · ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  el.textContent = `📥 Última importação: ${dataFmt} por ${meta.usuario}`;
+}
+renderImportMeta();
+
+// atualização automática a cada 5 minutos — só recalcula tempos/status,
+// sem mexer no zoom/posição que a pessoa deixou no mapa
+setInterval(() => {
+  renderAll(false);
+  if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
+}, 5 * 60 * 1000);
+
+// botão manual "↻ Atualizar" na barra lateral — mesma lógica, preserva a posição do mapa
+window.OPS_ON_REFRESH = () => renderAll(false);
 
 // ---------- filtros ----------
 [els.search, els.tipo, els.prazo, els.projeto, els.sigla].forEach(el => {
@@ -944,6 +973,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
     records = mode ? imported : [...records, ...imported];
     OPS.save(records);
+    saveImportMeta();
     populateFilterOptions();
     renderAll();
     e.target.value = '';
