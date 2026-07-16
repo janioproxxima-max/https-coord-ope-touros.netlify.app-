@@ -226,50 +226,50 @@ const OPS = (() => {
   // full = nome completo como aparece na coluna "Tipo de Serviço" da planilha de demanda
   // tipo = nome curto pra exibir  |  tempo = prazo de SLA em horas (0 = sem SLA definido)
   const SERVICE_CATALOG = [
-    { full: 'OPERAÇÕES - CABO BAIXO', norm: 'operacoes - cabo baixo', tipo: 'CABO BAIXO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - SEM ACESSO', norm: 'operacoes - sem acesso', tipo: 'SEM ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - RÁDIO SEM ACESSO', norm: 'operacoes - radio sem acesso', tipo: 'SEM ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - RÁDIO SEM ACESSO REVISITA', norm: 'operacoes - radio sem acesso revisita', tipo: 'SEM ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - SEM ACESSO REVISITA', norm: 'operacoes - sem acesso revisita', tipo: 'SEM ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - PROBLEMA RECORRENTE', norm: 'operacoes - problema recorrente', tipo: 'PROBLEMA RECORRENTE', tempo: 24.0 },
-    { full: 'OPERAÇÕES - DIFICULDADES DE ACESSO', norm: 'operacoes - dificuldades de acesso', tipo: 'DIFICULDADE DE ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - REVISITA DIFICULDADES DE ACESSO', norm: 'operacoes - revisita dificuldades de acesso', tipo: 'DIFICULDADE DE ACESSO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)', norm: 'operacoes - fibra ativacao (instalacao)', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'BOT - FIBRA ATIVAÇÃO', norm: 'bot - fibra ativacao', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - REVISITA - INSTALAÇÃO FIBRA', norm: 'operacoes - revisita - instalacao fibra', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - TROCA DE ENDEREÇO', norm: 'operacoes - troca de endereco', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - REVISITA - TROCA DE ENDEREÇO', norm: 'operacoes - revisita - troca de endereco', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS', norm: 'operacoes - acoes preventivas', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS RÁDIO', norm: 'operacoes - acoes preventivas radio', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS/CRÍTICO', norm: 'operacoes - acoes preventivas/critico', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - REVISITA AÇÕES PREVENTIVAS', norm: 'operacoes - revisita acoes preventivas', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - SERVIÇOS ADICIONAIS', norm: 'operacoes - servicos adicionais', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - REVISITA SERVIÇOS ADICIONAIS', norm: 'operacoes - revisita servicos adicionais', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0 },
-    { full: 'OPERAÇÕES - RECOLHIMENTO/TROCA DE ENDEREÇO', norm: 'operacoes - recolhimento/troca de endereco', tipo: 'RECOLHIMENTO', tempo: 48.0 },
-    { full: 'ESTOQUE - RECOLHIMENTO', norm: 'estoque - recolhimento', tipo: 'RECOLHIMENTO', tempo: 120.0 },
-    { full: 'ESTOQUE - RECOLHIMENTO DE EQUIPAMENTO COMODATO', norm: 'estoque - recolhimento de equipamento comodato', tipo: 'RECOLHIMENTO', tempo: 120.0 },
-    { full: 'ESTOQUE - RECOLHIMENTO DE EQUIPAMENTO COMODATO AGENDADO', norm: 'estoque - recolhimento de equipamento comodato agendado', tipo: 'RECOLHIMENTO', tempo: 120.0 },
-    { full: 'ESTOQUE - REVISITA DE RECOLHIMENTO EM COMODATO', norm: 'estoque - revisita de recolhimento em comodato', tipo: 'RECOLHIMENTO', tempo: 120.0 },
-    { full: 'OPERAÇÕES - RÁDIO ATIVAÇÃO (INSTALAÇÃO)', norm: 'operacoes - radio ativacao (instalacao)', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - RECOLHIMENTO RÁDIO EM COMODATO', norm: 'operacoes - recolhimento radio em comodato', tipo: 'RECOLHIMENTO', tempo: 120.0 },
-    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO CRÍTICA', norm: 'operacoes - revisita de ativacao critica', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - REVISITA - PROBLEMA RECORRENTE', norm: 'operacoes - revisita - problema recorrente', tipo: 'PROBLEMA RECORRENTE', tempo: 24.0 },
-    { full: 'OPERAÇÕES - MIGRAÇÃO DE TECNOLOGIA', norm: 'operacoes - migracao de tecnologia', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - TROCA DE ENDEREÇO/MIGRAÇÃO DE TECNOLOGIA', norm: 'operacoes - troca de endereco/migracao de tecnologia', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO PREVENTIVA', norm: 'operacoes - revisita de ativacao preventiva', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO AGENDADA', norm: 'operacoes - revisita de ativacao agendada', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'OPERAÇÕES - ATIVAÇÃO FIBRA (CORPORATIVO/GOVERNO)', norm: 'operacoes - ativacao fibra (corporativo/governo)', tipo: 'ATIVAÇÃO', tempo: 72.0 },
-    { full: 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO', norm: 'supervisao - analise de insatisfacao', tipo: 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO', tempo: 48.0 },
-    { full: 'OPERAÇÕES - RETRABALHO', norm: 'operacoes - retrabalho', tipo: 'RETRABALHO', tempo: 48.0 },
-    { full: 'OPERAÇÕES - MASSIVA RETORNO SEM ACESSO', norm: 'operacoes - massiva retorno sem acesso', tipo: 'SEM ACESSO', tempo: 24.0 },
-    { full: 'REDES/TI - CORRETIVA FIBRA', norm: 'redes/ti - corretiva fibra', tipo: 'REDES', tempo: 0.0 },
-    { full: 'SUPERVISÃO - ANALISE DE INVIABILIDADE POR SUPERVISÃO', norm: 'supervisao - analise de inviabilidade por supervisao', tipo: 'REDES', tempo: 0.0 },
-    { full: 'REDES/TI - MANUTENÇÃO CORRETIVA FIBRA', norm: 'redes/ti - manutencao corretiva fibra', tipo: 'REDES', tempo: 0.0 },
-    { full: 'REDES/TI - AMPLIAÇÃO', norm: 'redes/ti - ampliacao', tipo: 'REDES', tempo: 0.0 },
-    { full: 'REDES/TI - MANUTENÇÃO CORRETIVA RÁDIO', norm: 'redes/ti - manutencao corretiva radio', tipo: 'REDES', tempo: 0.0 },
-    { full: 'REDES/TI - RÁDIO MANUTENÇÃO', norm: 'redes/ti - radio manutencao', tipo: 'REDES', tempo: 0.0 },
-    { full: 'OPERAÇÕES - RETENÇÃO CLIENTE CRITICO', norm: 'operacoes - retencao cliente critico', tipo: 'RETENÇÃO CLIENTE CRITICO', tempo: 24.0 },
-    { full: 'OPERAÇÕES - UPGRADE PLANO/TROCA DE EQUIPAMENTO', norm: 'operacoes - upgrade plano/troca de equipamento', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0 },
+    { full: 'OPERAÇÕES - CABO BAIXO', norm: 'operacoes - cabo baixo', tipo: 'CABO BAIXO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - SEM ACESSO', norm: 'operacoes - sem acesso', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - RÁDIO SEM ACESSO', norm: 'operacoes - radio sem acesso', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - RÁDIO SEM ACESSO REVISITA', norm: 'operacoes - radio sem acesso revisita', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - SEM ACESSO REVISITA', norm: 'operacoes - sem acesso revisita', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - PROBLEMA RECORRENTE', norm: 'operacoes - problema recorrente', tipo: 'PROBLEMA RECORRENTE', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - DIFICULDADES DE ACESSO', norm: 'operacoes - dificuldades de acesso', tipo: 'DIFICULDADE DE ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - REVISITA DIFICULDADES DE ACESSO', norm: 'operacoes - revisita dificuldades de acesso', tipo: 'DIFICULDADE DE ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - FIBRA ATIVAÇÃO (INSTALAÇÃO)', norm: 'operacoes - fibra ativacao (instalacao)', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'BOT - FIBRA ATIVAÇÃO', norm: 'bot - fibra ativacao', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - REVISITA - INSTALAÇÃO FIBRA', norm: 'operacoes - revisita - instalacao fibra', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - TROCA DE ENDEREÇO', norm: 'operacoes - troca de endereco', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - REVISITA - TROCA DE ENDEREÇO', norm: 'operacoes - revisita - troca de endereco', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS', norm: 'operacoes - acoes preventivas', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS RÁDIO', norm: 'operacoes - acoes preventivas radio', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - AÇÕES PREVENTIVAS/CRÍTICO', norm: 'operacoes - acoes preventivas/critico', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - REVISITA AÇÕES PREVENTIVAS', norm: 'operacoes - revisita acoes preventivas', tipo: 'AÇÕES PREVENTIVAS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - SERVIÇOS ADICIONAIS', norm: 'operacoes - servicos adicionais', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - REVISITA SERVIÇOS ADICIONAIS', norm: 'operacoes - revisita servicos adicionais', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - RECOLHIMENTO/TROCA DE ENDEREÇO', norm: 'operacoes - recolhimento/troca de endereco', tipo: 'RECOLHIMENTO', tempo: 48.0, pontos: 1.0 },
+    { full: 'ESTOQUE - RECOLHIMENTO', norm: 'estoque - recolhimento', tipo: 'RECOLHIMENTO', tempo: 120.0, pontos: 1.0 },
+    { full: 'ESTOQUE - RECOLHIMENTO DE EQUIPAMENTO COMODATO', norm: 'estoque - recolhimento de equipamento comodato', tipo: 'RECOLHIMENTO', tempo: 120.0, pontos: 1.0 },
+    { full: 'ESTOQUE - RECOLHIMENTO DE EQUIPAMENTO COMODATO AGENDADO', norm: 'estoque - recolhimento de equipamento comodato agendado', tipo: 'RECOLHIMENTO', tempo: 120.0, pontos: 1.0 },
+    { full: 'ESTOQUE - REVISITA DE RECOLHIMENTO EM COMODATO', norm: 'estoque - revisita de recolhimento em comodato', tipo: 'RECOLHIMENTO', tempo: 120.0, pontos: 1.0 },
+    { full: 'OPERAÇÕES - RÁDIO ATIVAÇÃO (INSTALAÇÃO)', norm: 'operacoes - radio ativacao (instalacao)', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - RECOLHIMENTO RÁDIO EM COMODATO', norm: 'operacoes - recolhimento radio em comodato', tipo: 'RECOLHIMENTO', tempo: 120.0, pontos: 1.0 },
+    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO CRÍTICA', norm: 'operacoes - revisita de ativacao critica', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - REVISITA - PROBLEMA RECORRENTE', norm: 'operacoes - revisita - problema recorrente', tipo: 'PROBLEMA RECORRENTE', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - MIGRAÇÃO DE TECNOLOGIA', norm: 'operacoes - migracao de tecnologia', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - TROCA DE ENDEREÇO/MIGRAÇÃO DE TECNOLOGIA', norm: 'operacoes - troca de endereco/migracao de tecnologia', tipo: 'TROCA DE ENDEREÇO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO PREVENTIVA', norm: 'operacoes - revisita de ativacao preventiva', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - REVISITA DE ATIVAÇÃO AGENDADA', norm: 'operacoes - revisita de ativacao agendada', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'OPERAÇÕES - ATIVAÇÃO FIBRA (CORPORATIVO/GOVERNO)', norm: 'operacoes - ativacao fibra (corporativo/governo)', tipo: 'ATIVAÇÃO', tempo: 72.0, pontos: 2.0 },
+    { full: 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO', norm: 'supervisao - analise de insatisfacao', tipo: 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO', tempo: 48.0, pontos: 0.0 },
+    { full: 'OPERAÇÕES - RETRABALHO', norm: 'operacoes - retrabalho', tipo: 'RETRABALHO', tempo: 48.0, pontos: 0.0 },
+    { full: 'OPERAÇÕES - MASSIVA RETORNO SEM ACESSO', norm: 'operacoes - massiva retorno sem acesso', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
+    { full: 'REDES/TI - CORRETIVA FIBRA', norm: 'redes/ti - corretiva fibra', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'SUPERVISÃO - ANALISE DE INVIABILIDADE POR SUPERVISÃO', norm: 'supervisao - analise de inviabilidade por supervisao', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'REDES/TI - MANUTENÇÃO CORRETIVA FIBRA', norm: 'redes/ti - manutencao corretiva fibra', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'REDES/TI - AMPLIAÇÃO', norm: 'redes/ti - ampliacao', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'REDES/TI - MANUTENÇÃO CORRETIVA RÁDIO', norm: 'redes/ti - manutencao corretiva radio', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'REDES/TI - RÁDIO MANUTENÇÃO', norm: 'redes/ti - radio manutencao', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    { full: 'OPERAÇÕES - RETENÇÃO CLIENTE CRITICO', norm: 'operacoes - retencao cliente critico', tipo: 'RETENÇÃO CLIENTE CRITICO', tempo: 24.0, pontos: 1.33 },
+    { full: 'OPERAÇÕES - UPGRADE PLANO/TROCA DE EQUIPAMENTO', norm: 'operacoes - upgrade plano/troca de equipamento', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0, pontos: 1.33 },
   ];
 
   const ICON_BY_TIPO = {
@@ -285,9 +285,9 @@ const OPS = (() => {
     const n = normalize(tituloCompleto);
     const found = SERVICE_CATALOG.find(c => c.norm === n);
     if (found){
-      return { tipoCurto: found.tipo, slaHoras: found.tempo, catalogado: true, icon: ICON_BY_TIPO[found.tipo] || '⚙️' };
+      return { tipoCurto: found.tipo, slaHoras: found.tempo, pontos: found.pontos, catalogado: true, icon: ICON_BY_TIPO[found.tipo] || '⚙️' };
     }
-    return { tipoCurto: tituloCompleto, slaHoras: null, catalogado: false, icon: '⚙️' };
+    return { tipoCurto: tituloCompleto, slaHoras: null, pontos: null, catalogado: false, icon: '⚙️' };
   }
 
   // Converte "DD/MM/AAAA HH:mm" (formato do sistema de OS) em Date.
@@ -431,6 +431,61 @@ const OPS = (() => {
     return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
+  // -------- escala / rodízio de fim de semana --------
+  // Cada colaborador tem um dia de folga fixo na semana + um "grupo" (A ou B)
+  // pro rodízio de fim de semana. Um único ponto de calibração (qual grupo
+  // folga em qual sábado) define o rodízio pra sempre, alternando sozinho.
+  const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const RODIZIO_KEY = 'ops_touros_rodizio_fds_v1';
+
+  function getRodizioConfig(){
+    try{ return JSON.parse(localStorage.getItem(RODIZIO_KEY) || 'null'); }catch(e){ return null; }
+  }
+  function setRodizioConfig(cfg){
+    localStorage.setItem(RODIZIO_KEY, JSON.stringify(cfg));
+  }
+
+  // Sábado da semana (domingo-sábado) que contém a data informada.
+  function saturdayOfWeek(date){
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    const day = d.getDay();
+    d.setDate(d.getDate() + (6 - day));
+    return d;
+  }
+
+  // Qual grupo (A/B) folga no sábado informado, segundo a calibração salva.
+  function grupoFolgaNoSabado(sabado){
+    const cfg = getRodizioConfig();
+    if (!cfg || !cfg.dataReferencia) return null;
+    const ref = saturdayOfWeek(new Date(cfg.dataReferencia + 'T00:00:00'));
+    const weeksDiff = Math.round((sabado - ref) / (7 * 86400000));
+    const par = ((weeksDiff % 2) + 2) % 2 === 0;
+    return par ? cfg.grupoFolgaNaReferencia : (cfg.grupoFolgaNaReferencia === 'A' ? 'B' : 'A');
+  }
+
+  // Esse colaborador folga no dia informado (folga fixa semanal ou rodízio de FDS)?
+  function isFolgaNoDia(colaborador, date){
+    const dow = date.getDay();
+    if (colaborador.folgaFixaSemana && DIAS_SEMANA[dow] === colaborador.folgaFixaSemana) return true;
+    if (dow === 0 || dow === 6){
+      if (!colaborador.grupoFDS) return false;
+      const grupoFolga = grupoFolgaNoSabado(saturdayOfWeek(date));
+      if (grupoFolga && grupoFolga === colaborador.grupoFDS) return true;
+    }
+    return false;
+  }
+
+  // Status (folga/trabalha/indefinido) do colaborador no próximo fim de semana.
+  function proximoFimDeSemanaStatus(colaborador, fromDate){
+    const hoje = new Date(fromDate || new Date()); hoje.setHours(0,0,0,0);
+    let sab = saturdayOfWeek(hoje);
+    if (sab < hoje) sab = new Date(sab.getTime() + 7 * 86400000);
+    const grupoFolga = grupoFolgaNoSabado(sab);
+    if (!colaborador.grupoFDS || !grupoFolga) return { status: 'indefinido', sabado: sab };
+    return { status: grupoFolga === colaborador.grupoFDS ? 'folga' : 'trabalha', sabado: sab };
+  }
+
   // -------- sincronização compartilhada (Planilha Google via Apps Script) --------
   // Mesma URL usada pelo Mapa de Serviços; "collection" escolhe a aba/tipo de
   // dado (ex: 'PessoasData', 'FrotasData', 'LavagensData').
@@ -490,6 +545,8 @@ const OPS = (() => {
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     TOUROS_UNIT_CITIES, TOUROS_PROJECT_CODE, isTourosUnitCity, projectUnit, checkProjectError,
     syncPull, syncPush, syncPushWithToast, showToast,
+    DIAS_SEMANA, getRodizioConfig, setRodizioConfig, saturdayOfWeek,
+    grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus,
   };
 })();
 

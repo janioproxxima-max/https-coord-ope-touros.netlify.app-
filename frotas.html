@@ -12,7 +12,7 @@
   <div class="page-head">
     <p class="eyebrow">Frotas</p>
     <h1 class="page-title">Veículos da unidade</h1>
-    <p class="page-sub">Responsáveis, base, documentação e controle de lavagem.</p>
+    <p class="page-sub">Responsáveis, base, documentação, lavagem e manutenção.</p>
   </div>
 
   <div class="stat-row" id="stat-row"></div>
@@ -52,6 +52,7 @@
             <th data-sort="vencDoc">Venc. documento</th>
             <th>Última lavagem</th>
             <th>Próxima lavagem</th>
+            <th>Manutenção</th>
             <th data-sort="status">Status</th>
             <th></th>
           </tr>
@@ -99,12 +100,14 @@
   </div>
 </div>
 
-<!-- Modal: registrar lavagem -->
-<div class="modal-backdrop" id="modal-lavagem" style="display:none">
-  <div class="modal">
-    <h3 id="lavagem-title">Registrar lavagem</h3>
-    <p class="modal-sub" id="lavagem-sub"></p>
-    <form id="form-lavagem">
+<!-- Modal: histórico do veículo (lavagem + manutenção), abre ao clicar na placa -->
+<div class="modal-backdrop" id="modal-historico" style="display:none">
+  <div class="modal" style="max-width:640px">
+    <h3 id="hist-title">Histórico do veículo</h3>
+    <p class="modal-sub" id="hist-sub"></p>
+
+    <div class="sec-hdr">🚿 Lavagens</div>
+    <form id="form-lavagem" style="margin-bottom:10px">
       <input type="hidden" id="lav-placa">
       <div class="grid2">
         <div class="field"><label>Data da lavagem</label><input class="input" type="date" id="lav-data" required></div>
@@ -115,10 +118,41 @@
           </select>
         </div>
       </div>
-      <div id="lavagem-aviso" style="display:none;background:var(--warn-wash);color:var(--warn);border-radius:6px;padding:8px 10px;font-size:12.5px;margin-bottom:12px"></div>
+      <div id="lavagem-aviso" style="display:none;background:var(--warn-wash);color:var(--warn);border-radius:6px;padding:8px 10px;font-size:12.5px;margin-bottom:10px"></div>
+      <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary">＋ Registrar lavagem</button></div>
+    </form>
+    <div id="lavagem-list" style="max-height:160px;overflow-y:auto;margin-bottom:16px"></div>
+
+    <div class="sec-hdr">🔧 Manutenções</div>
+    <form id="form-manutencao" style="margin-bottom:10px">
+      <input type="hidden" id="man-placa">
+      <div class="grid2">
+        <div class="field"><label>Data de abertura</label><input class="input" type="date" id="man-data" required></div>
+        <div class="field"><label>Prazo previsto</label><input class="input" type="date" id="man-prazo"></div>
+      </div>
+      <div class="field"><label>Motivo</label><input class="input" id="man-motivo" required placeholder="Ex: troca de pneu, revisão elétrica..."></div>
+      <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary">＋ Abrir manutenção</button></div>
+    </form>
+    <div id="manutencao-list" style="max-height:220px;overflow-y:auto"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btn-hist-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: concluir manutenção -->
+<div class="modal-backdrop" id="modal-concluir" style="display:none">
+  <div class="modal">
+    <h3>Concluir manutenção</h3>
+    <p class="modal-sub" id="concluir-sub"></p>
+    <form id="form-concluir">
+      <input type="hidden" id="con-id">
+      <div class="field"><label>Data de conclusão</label><input class="input" type="date" id="con-data" required></div>
+      <div class="field"><label>Observação — o carro saiu em condições?</label><input class="input" id="con-obs" placeholder="Ex: sim, sem pendências / não, falta revisar X"></div>
       <div class="modal-actions">
-        <button type="button" class="btn ghost" id="btn-lavagem-cancel">Cancelar</button>
-        <button type="submit" class="btn primary">Registrar</button>
+        <button type="button" class="btn ghost" id="btn-concluir-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Concluir</button>
       </div>
     </form>
   </div>
@@ -130,11 +164,14 @@ requireAuthThenInit('frotas.html', 'Frotas');
 
 const STORAGE_KEY = 'ops_touros_frotas_v1';
 const LAVAGENS_KEY = 'ops_touros_lavagens_v1';
+const MANUTENCOES_KEY = 'ops_touros_manutencoes_v1';
 const SYNC_COLLECTION = 'FrotasData';
 const SYNC_COLLECTION_LAVAGENS = 'LavagensData';
+const SYNC_COLLECTION_MANUTENCOES = 'ManutencoesData';
 
 let records = OPS.loadData(STORAGE_KEY) || [];
 let lavagens = OPS.loadData(LAVAGENS_KEY) || [];
+let manutencoes = OPS.loadData(MANUTENCOES_KEY) || [];
 let sortKey = null, sortDir = 1;
 
 const els = {
@@ -175,7 +212,7 @@ function docStatus(venc){
   return 'ok';
 }
 
-// -------- lavagens: última e próxima (1x por mês) --------
+// -------- lavagens --------
 function lastWash(placa){
   const list = lavagens.filter(l => l.placa === placa).sort((a,b) => new Date(b.data) - new Date(a.data));
   return list[0] || null;
@@ -188,7 +225,12 @@ function nextWashInfo(placa){
   proxima.setMonth(proxima.getMonth() + 1);
   const diffDays = Math.ceil((proxima - new Date()) / 86400000);
   if (diffDays <= 0) return { texto: 'Disponível agora', disponivel: true, ultima: last };
-  return { texto: `Em ${diffDays} dia${diffDays > 1 ? 's' : ''} (${proxima.toLocaleDateString('pt-BR')})`, disponivel: false, ultima: last };
+  return { texto: `Em ${diffDays}d (${proxima.toLocaleDateString('pt-BR')})`, disponivel: false, ultima: last };
+}
+
+// -------- manutenções --------
+function manutencaoAberta(placa){
+  return manutencoes.find(m => m.placa === placa && m.status === 'aberta') || null;
 }
 
 function renderStats(){
@@ -197,12 +239,13 @@ function renderStats(){
   const manut = list.filter(r => r.status === 'manutencao').length;
   const vencendo = list.filter(r => docStatus(r.vencDoc) === 'crit' || docStatus(r.vencDoc) === 'warn').length;
   const disponiveisLavagem = list.filter(r => nextWashInfo(r.placa).disponivel).length;
+  const manutencoesAbertas = list.filter(r => manutencaoAberta(r.placa)).length;
   els.statRow.innerHTML = `
     <div class="stat-card brand"><div class="label">Veículos</div><div class="value">${list.length}</div></div>
     <div class="stat-card ok"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
-    <div class="stat-card"><div class="label">Em manutenção</div><div class="value">${manut}</div></div>
     <div class="stat-card crit"><div class="label">Doc. vencendo/vencida</div><div class="value">${vencendo}</div></div>
     <div class="stat-card ok"><div class="label">Disponíveis p/ lavagem</div><div class="value">${disponiveisLavagem}</div></div>
+    <div class="stat-card ${manutencoesAbertas ? 'crit' : ''}"><div class="label">Manutenções abertas</div><div class="value">${manutencoesAbertas}</div></div>
   `;
 }
 
@@ -224,21 +267,20 @@ function renderTable(){
     const ds = docStatus(r.vencDoc);
     const docColor = ds === 'crit' ? 'var(--crit)' : ds === 'warn' ? 'var(--warn)' : 'var(--ink-dim)';
     const wash = nextWashInfo(r.placa);
+    const abertaManutencao = manutencaoAberta(r.placa);
     return `
     <tr data-id="${r.id}">
-      <td class="proto">${r.placa}</td>
+      <td class="proto" style="cursor:pointer" data-hist="${r.placa}" title="Ver histórico do veículo">${r.placa}</td>
       <td style="font-weight:600">${r.veiculo}</td>
       <td>${r.responsavel || '—'}</td>
       <td>${r.base}</td>
       <td class="proto" style="color:${docColor}">${r.vencDoc ? new Date(r.vencDoc+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
       <td class="proto" style="font-size:12px">${wash.ultima ? new Date(wash.ultima.data+'T00:00:00').toLocaleDateString('pt-BR') + ' · ' + wash.ultima.pagamento : '—'}</td>
-      <td>
-        <span class="badge ${wash.disponivel ? 'ok' : 'neutral'}"><span class="dot"></span>${wash.texto}</span>
-      </td>
+      <td><span class="badge ${wash.disponivel ? 'ok' : 'neutral'}"><span class="dot"></span>${wash.texto}</span></td>
+      <td>${abertaManutencao ? '<span class="badge crit"><span class="dot"></span>Aberta</span>' : '<span class="badge ok"><span class="dot"></span>Em dia</span>'}</td>
       <td><span class="badge ${r.status === 'ativo' ? 'ok' : r.status === 'inativo' ? 'crit' : ''}" style="${r.status==='manutencao' ? 'background:var(--warn-wash);color:var(--warn)' : ''}"><span class="dot"></span>${statusLabel[r.status]}</span></td>
       <td>
         <div class="row-actions">
-          <button class="icon-btn" data-wash="${r.placa}" title="Registrar lavagem">🚿</button>
           <button class="icon-btn" data-edit="${r.id}" title="Editar">✎</button>
           <button class="icon-btn" data-del="${r.id}" title="Excluir">✕</button>
         </div>
@@ -271,13 +313,17 @@ async function persistLavagens(){
   OPS.saveData(LAVAGENS_KEY, lavagens);
   await OPS.syncPushWithToast(SYNC_COLLECTION_LAVAGENS, lavagens);
 }
+async function persistManutencoes(){
+  OPS.saveData(MANUTENCOES_KEY, manutencoes);
+  await OPS.syncPushWithToast(SYNC_COLLECTION_MANUTENCOES, manutencoes);
+}
 
 els.tbody.addEventListener('click', async (e) => {
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
-  const washPlaca = e.target.dataset.wash;
+  const histPlaca = e.target.dataset.hist;
   if (editId) openModal(records.find(r => r.id === editId));
-  if (washPlaca) openLavagemModal(washPlaca);
+  if (histPlaca) openHistorico(histPlaca);
   if (delId){
     if (confirm('Excluir este veículo?')){
       records = records.filter(r => r.id !== delId);
@@ -326,56 +372,146 @@ document.getElementById('form-record').addEventListener('submit', async e => {
   closeModal();
 });
 
-// ---------- modal lavagem ----------
-const modalLavagem = document.getElementById('modal-lavagem');
-function openLavagemModal(placa){
+// ---------- histórico do veículo (lavagem + manutenção) ----------
+const modalHist = document.getElementById('modal-historico');
+let histPlacaAtual = null;
+
+function openHistorico(placa){
+  histPlacaAtual = placa;
+  const rec = records.find(r => r.placa === placa);
+  document.getElementById('hist-title').textContent = `Histórico — ${placa}`;
+  document.getElementById('hist-sub').textContent = rec ? rec.veiculo : '';
   document.getElementById('lav-placa').value = placa;
-  document.getElementById('lavagem-sub').textContent = `Placa ${placa}`;
+  document.getElementById('man-placa').value = placa;
   document.getElementById('lav-data').value = new Date().toISOString().slice(0,10);
   document.getElementById('lav-pagamento').value = 'Nota Prazo';
+  document.getElementById('man-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('man-prazo').value = '';
+  document.getElementById('man-motivo').value = '';
+
   const wash = nextWashInfo(placa);
   const avisoEl = document.getElementById('lavagem-aviso');
   if (!wash.disponivel){
     avisoEl.style.display = 'block';
-    avisoEl.textContent = `⚠️ Já foi feita uma lavagem em ${new Date(wash.ultima.data+'T00:00:00').toLocaleDateString('pt-BR')}. A próxima está prevista pra ${wash.texto.split('(')[1]?.replace(')','') || 'daqui a pouco'} (regra: 1 lavagem por mês). Você ainda pode registrar mesmo assim.`;
+    avisoEl.textContent = `⚠️ Última lavagem em ${new Date(wash.ultima.data+'T00:00:00').toLocaleDateString('pt-BR')} — regra é 1 por mês, mas ainda dá pra registrar se for necessário.`;
   } else {
     avisoEl.style.display = 'none';
   }
-  modalLavagem.style.display = 'flex';
+
+  renderLavagemList();
+  renderManutencaoList();
+  modalHist.style.display = 'flex';
 }
-function closeLavagemModal(){ modalLavagem.style.display = 'none'; }
-document.getElementById('btn-lavagem-cancel').onclick = closeLavagemModal;
-modalLavagem.addEventListener('click', e => { if (e.target === modalLavagem) closeLavagemModal(); });
+function closeHistorico(){ modalHist.style.display = 'none'; }
+document.getElementById('btn-hist-close').onclick = closeHistorico;
+modalHist.addEventListener('click', e => { if (e.target === modalHist) closeHistorico(); });
+
+function renderLavagemList(){
+  const list = lavagens.filter(l => l.placa === histPlacaAtual).sort((a,b) => new Date(b.data) - new Date(a.data));
+  const el = document.getElementById('lavagem-list');
+  el.innerHTML = list.length ? list.map(l => `
+    <div class="status-row"><span class="status-name">${new Date(l.data+'T00:00:00').toLocaleDateString('pt-BR')}</span><span class="status-val" style="font-size:12.5px">${l.pagamento}</span></div>
+  `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhuma lavagem registrada.</p>';
+}
+
+function renderManutencaoList(){
+  const list = manutencoes.filter(m => m.placa === histPlacaAtual).sort((a,b) => new Date(b.dataAbertura) - new Date(a.dataAbertura));
+  const el = document.getElementById('manutencao-list');
+  el.innerHTML = list.length ? list.map(m => `
+    <div class="status-row" style="display:block;padding:10px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600;font-size:13px">${m.motivo}</span>
+        <span class="badge ${m.status === 'aberta' ? 'crit' : 'ok'}"><span class="dot"></span>${m.status === 'aberta' ? 'Aberta' : 'Concluída'}</span>
+      </div>
+      <div style="color:var(--ink-dim);font-size:12px;margin-top:4px">
+        Aberta em ${new Date(m.dataAbertura+'T00:00:00').toLocaleDateString('pt-BR')}${m.prazo ? ' · prazo ' + new Date(m.prazo+'T00:00:00').toLocaleDateString('pt-BR') : ''}
+        ${m.status === 'concluida' ? `<br>Concluída em ${new Date(m.dataConclusao+'T00:00:00').toLocaleDateString('pt-BR')}${m.observacaoConclusao ? ' — ' + m.observacaoConclusao : ''}` : ''}
+      </div>
+      ${m.status === 'aberta' ? `<button type="button" class="btn ghost" style="margin-top:6px;font-size:12px;padding:5px 10px" data-concluir="${m.id}">✓ Concluir</button>` : ''}
+    </div>
+  `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhuma manutenção registrada.</p>';
+
+  el.querySelectorAll('[data-concluir]').forEach(btn => {
+    btn.addEventListener('click', () => openConcluirModal(btn.dataset.concluir));
+  });
+}
 
 document.getElementById('form-lavagem').addEventListener('submit', async e => {
   e.preventDefault();
-  const placa = document.getElementById('lav-placa').value;
-  const data = document.getElementById('lav-data').value;
-  const pagamento = document.getElementById('lav-pagamento').value;
-  lavagens.push({ id: OPS.uid(), placa, data, pagamento });
+  lavagens.push({
+    id: OPS.uid(),
+    placa: document.getElementById('lav-placa').value,
+    data: document.getElementById('lav-data').value,
+    pagamento: document.getElementById('lav-pagamento').value,
+  });
   await persistLavagens();
+  renderLavagemList();
   renderAll();
-  closeLavagemModal();
+});
+
+document.getElementById('form-manutencao').addEventListener('submit', async e => {
+  e.preventDefault();
+  manutencoes.push({
+    id: OPS.uid(),
+    placa: document.getElementById('man-placa').value,
+    dataAbertura: document.getElementById('man-data').value,
+    prazo: document.getElementById('man-prazo').value,
+    motivo: document.getElementById('man-motivo').value.trim(),
+    status: 'aberta',
+    dataConclusao: null,
+    observacaoConclusao: '',
+  });
+  await persistManutencoes();
+  document.getElementById('man-motivo').value = '';
+  renderManutencaoList();
+  renderAll();
+});
+
+// ---------- concluir manutenção ----------
+const modalConcluir = document.getElementById('modal-concluir');
+function openConcluirModal(manutencaoId){
+  document.getElementById('con-id').value = manutencaoId;
+  const m = manutencoes.find(x => x.id === manutencaoId);
+  document.getElementById('concluir-sub').textContent = m ? m.motivo : '';
+  document.getElementById('con-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('con-obs').value = '';
+  modalConcluir.style.display = 'flex';
+}
+document.getElementById('btn-concluir-cancel').onclick = () => modalConcluir.style.display = 'none';
+modalConcluir.addEventListener('click', e => { if (e.target === modalConcluir) modalConcluir.style.display = 'none'; });
+
+document.getElementById('form-concluir').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('con-id').value;
+  manutencoes = manutencoes.map(m => m.id === id ? {
+    ...m,
+    status: 'concluida',
+    dataConclusao: document.getElementById('con-data').value,
+    observacaoConclusao: document.getElementById('con-obs').value.trim(),
+  } : m);
+  await persistManutencoes();
+  modalConcluir.style.display = 'none';
+  renderManutencaoList();
+  renderAll();
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PLACA','VEÍCULO','RESPONSÁVEL','BASE','VENCIMENTO DOC','STATUS','ÚLTIMA LAVAGEM','PAGAMENTO ÚLTIMA LAVAGEM'];
-  const rows = records.map(r => {
-    const wash = nextWashInfo(r.placa);
-    return [r.placa, r.veiculo, r.responsavel, r.base, r.vencDoc, r.status, wash.ultima ? wash.ultima.data : '', wash.ultima ? wash.ultima.pagamento : ''];
-  });
+  const headers = ['PLACA','VEÍCULO','RESPONSÁVEL','BASE','VENCIMENTO DOC','STATUS'];
+  const rows = records.map(r => [r.placa, r.veiculo, r.responsavel, r.base, r.vencDoc, r.status]);
   OPS.downloadCSV('frotas-touros.csv', headers, rows);
 };
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedFrotas, sharedLavagens] = await Promise.all([
+  const [sharedFrotas, sharedLavagens, sharedManutencoes] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COLLECTION_LAVAGENS),
+    OPS.syncPull(SYNC_COLLECTION_MANUTENCOES),
   ]);
   toast.remove();
   if (sharedFrotas){ records = sharedFrotas; OPS.saveData(STORAGE_KEY, records); }
   if (sharedLavagens){ lavagens = sharedLavagens; OPS.saveData(LAVAGENS_KEY, lavagens); }
+  if (sharedManutencoes){ manutencoes = sharedManutencoes; OPS.saveData(MANUTENCOES_KEY, manutencoes); }
   populateFilterOptions();
   renderAll();
 }

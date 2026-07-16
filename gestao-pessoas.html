@@ -12,7 +12,7 @@
   <div class="page-head">
     <p class="eyebrow">Gestão de pessoas</p>
     <h1 class="page-title">Colaboradores da unidade</h1>
-    <p class="page-sub">Organograma, cargo, centro de custo e liderança direta.</p>
+    <p class="page-sub">Organograma, cargo, centro de custo, escala e histórico de feedback.</p>
   </div>
 
   <div class="stat-row" id="stat-row"></div>
@@ -27,6 +27,10 @@
       <select id="f-cc"><option value="">Todos</option></select>
     </div>
     <div class="field">
+      <label for="f-gestor">Gestor</label>
+      <select id="f-gestor"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
       <label for="f-status">Status</label>
       <select id="f-status">
         <option value="">Todos</option>
@@ -35,6 +39,7 @@
       </select>
     </div>
     <div style="flex:1"></div>
+    <button class="btn ghost" id="btn-rodizio">📅 Calibrar rodízio de FDS</button>
     <button class="btn primary" id="btn-add">＋ Adicionar colaborador</button>
     <button class="btn" id="btn-export">⇩ Exportar CSV</button>
   </div>
@@ -48,9 +53,11 @@
             <th data-sort="cargo">Cargo</th>
             <th data-sort="cidade">Cidade</th>
             <th data-sort="centroCusto">Centro de custo</th>
+            <th data-sort="gestor">Gestor</th>
             <th>Contato</th>
             <th data-sort="veiculo">Veículo</th>
-            <th data-sort="inspetor">Inspetor</th>
+            <th>Escala</th>
+            <th>Próximo FDS</th>
             <th data-sort="status">Status</th>
             <th></th>
           </tr>
@@ -71,7 +78,7 @@
 <div class="modal-backdrop" id="modal" style="display:none">
   <div class="modal">
     <h3 id="modal-title">Adicionar colaborador</h3>
-    <p class="modal-sub">Dados do organograma, contato e centro de custo do colaborador.</p>
+    <p class="modal-sub">Dados do organograma, contato, escala e centro de custo do colaborador.</p>
     <form id="form-record">
       <input type="hidden" id="rec-id">
       <div class="field"><label>Nome completo</label><input class="input" id="rec-nome" required></div>
@@ -95,6 +102,23 @@
         <div class="field"><label>Gestor / Liderança direta</label><input class="input" id="rec-gestor"></div>
         <div class="field"><label>Data de admissão</label><input class="input" type="date" id="rec-admissao"></div>
       </div>
+      <div class="sec-hdr">Escala</div>
+      <div class="grid2">
+        <div class="field"><label>Folga fixa semanal</label>
+          <select id="rec-folga-fixa">
+            <option value="">—</option>
+            <option>Domingo</option><option>Segunda</option><option>Terça</option>
+            <option>Quarta</option><option>Quinta</option><option>Sexta</option><option>Sábado</option>
+          </select>
+        </div>
+        <div class="field"><label>Grupo do rodízio de fim de semana</label>
+          <select id="rec-grupo-fds">
+            <option value="">—</option>
+            <option value="A">Grupo A</option>
+            <option value="B">Grupo B</option>
+          </select>
+        </div>
+      </div>
       <div class="field"><label>Status</label>
         <select id="rec-status">
           <option value="ativo">Ativo</option>
@@ -109,18 +133,77 @@
   </div>
 </div>
 
+<!-- Modal: calibrar rodízio de FDS -->
+<div class="modal-backdrop" id="modal-rodizio" style="display:none">
+  <div class="modal">
+    <h3>Calibrar rodízio de fim de semana</h3>
+    <p class="modal-sub">Escolha um sábado e diga qual grupo folga nele — o sistema alterna sozinho toda semana a partir daí, pra sempre.</p>
+    <form id="form-rodizio">
+      <div class="field"><label>Sábado de referência</label><input class="input" type="date" id="rod-data" required></div>
+      <div class="field"><label>Nesse sábado, quem folga?</label>
+        <select id="rod-grupo">
+          <option value="A">Grupo A</option>
+          <option value="B">Grupo B</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="btn-rodizio-cancel">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar calibração</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: histórico de feedback (abre ao clicar no nome) -->
+<div class="modal-backdrop" id="modal-feedback" style="display:none">
+  <div class="modal">
+    <h3 id="feedback-title">Histórico de feedback</h3>
+    <p class="modal-sub" id="feedback-sub"></p>
+
+    <form id="form-feedback" style="border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px">
+      <input type="hidden" id="fb-colab-id">
+      <div class="grid2">
+        <div class="field"><label>Data</label><input class="input" type="date" id="fb-data" required></div>
+        <div class="field"><label>Tipo</label>
+          <select id="fb-tipo">
+            <option>Feedback Situação Pontual</option>
+            <option>Feedback Mensal de Desempenho/Instrução/Bem-Estar</option>
+            <option>Medida Administrativa: Procedimento Interno de Operações</option>
+            <option>Medida Administrativa: SESMT Segurança do Trabalho</option>
+            <option>Medida Administrativa: Procedimento Interno Administrativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Observação</label><input class="input" id="fb-obs" placeholder="Detalhes do feedback/medida"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn primary">＋ Registrar</button>
+      </div>
+    </form>
+
+    <div id="feedback-list" style="max-height:280px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btn-feedback-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script src="common.js"></script>
 <script>
 requireAuthThenInit('gestao-pessoas.html', 'Gestão de Pessoas');
 
 const STORAGE_KEY = 'ops_touros_pessoas_v1';
+const FEEDBACK_KEY = 'ops_touros_feedback_v1';
 const SYNC_COLLECTION = 'PessoasData';
+const SYNC_COLLECTION_FEEDBACK = 'FeedbackData';
+
 let records = OPS.loadData(STORAGE_KEY) || [];
+let feedbacks = OPS.loadData(FEEDBACK_KEY) || [];
 let sortKey = null, sortDir = 1;
 
 const els = {
   search: document.getElementById('f-search'),
   cc: document.getElementById('f-cc'),
+  gestor: document.getElementById('f-gestor'),
   status: document.getElementById('f-status'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
@@ -130,14 +213,18 @@ const els = {
 function populateFilterOptions(){
   const ccs = [...new Set(records.map(r => r.centroCusto).filter(Boolean))].sort();
   els.cc.innerHTML = '<option value="">Todos</option>' + ccs.map(c => `<option value="${c}">${c}</option>`).join('');
+  const gestores = [...new Set(records.map(r => r.gestor).filter(Boolean))].sort();
+  els.gestor.innerHTML = '<option value="">Todos</option>' + gestores.map(g => `<option value="${g}">${g}</option>`).join('');
 }
 
 function getFiltered(){
   const q = OPS.normalize(els.search.value);
   const cc = els.cc.value;
+  const gestor = els.gestor.value;
   const status = els.status.value;
   return records.filter(r => {
     if (cc && r.centroCusto !== cc) return false;
+    if (gestor && r.gestor !== gestor) return false;
     if (status && r.status !== status) return false;
     if (q){
       const hay = OPS.normalize(r.nome + ' ' + r.cargo + ' ' + (r.cidade||''));
@@ -151,12 +238,28 @@ function renderStats(){
   const list = getFiltered();
   const ativos = list.filter(r => r.status === 'ativo').length;
   const ccCount = new Set(list.map(r => r.centroCusto).filter(Boolean)).size;
+  const folgamFDS = list.filter(r => OPS.proximoFimDeSemanaStatus(r).status === 'folga').length;
   els.statRow.innerHTML = `
     <div class="stat-card brand"><div class="label">Colaboradores</div><div class="value">${list.length}</div></div>
     <div class="stat-card ok"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
     <div class="stat-card crit"><div class="label">Inativos</div><div class="value">${list.length - ativos}</div></div>
     <div class="stat-card"><div class="label">Centros de custo</div><div class="value">${ccCount}</div></div>
+    <div class="stat-card"><div class="label">Folgam próx. FDS</div><div class="value">${folgamFDS}</div></div>
   `;
+}
+
+function escalaTexto(r){
+  const partes = [];
+  if (r.folgaFixaSemana) partes.push('Folga ' + r.folgaFixaSemana);
+  if (r.grupoFDS) partes.push('Grupo ' + r.grupoFDS);
+  return partes.length ? partes.join(' · ') : '—';
+}
+
+function proximoFdsBadge(r){
+  const info = OPS.proximoFimDeSemanaStatus(r);
+  if (info.status === 'indefinido') return '<span class="badge neutral"><span class="dot"></span>Não calibrado</span>';
+  if (info.status === 'folga') return '<span class="badge crit"><span class="dot"></span>Folga</span>';
+  return '<span class="badge ok"><span class="dot"></span>Trabalha</span>';
 }
 
 function renderTable(){
@@ -174,13 +277,15 @@ function renderTable(){
 
   els.tbody.innerHTML = list.map(r => `
     <tr data-id="${r.id}">
-      <td style="font-weight:600">${r.nome}</td>
+      <td style="font-weight:600;cursor:pointer" class="nome-colab" data-feedback="${r.id}" title="Ver histórico de feedback">${r.nome}</td>
       <td>${r.cargo}</td>
       <td>${r.cidade || '—'}</td>
       <td class="proto">${r.centroCusto}</td>
+      <td>${r.gestor || '—'}</td>
       <td style="font-size:12px;color:var(--ink-dim)">${r.telefone || '—'}${r.email ? '<br>' + r.email : ''}</td>
       <td>${r.veiculo || '—'}</td>
-      <td>${r.inspetor || '—'}</td>
+      <td style="font-size:12px">${escalaTexto(r)}</td>
+      <td>${proximoFdsBadge(r)}</td>
       <td><span class="badge ${r.status === 'ativo' ? 'ok' : 'crit'}"><span class="dot"></span>${r.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
       <td>
         <div class="row-actions">
@@ -194,7 +299,7 @@ function renderTable(){
 
 function renderAll(){ renderStats(); renderTable(); }
 
-[els.search, els.cc, els.status].forEach(el => {
+[els.search, els.cc, els.gestor, els.status].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -211,11 +316,17 @@ async function persist(){
   OPS.saveData(STORAGE_KEY, records);
   await OPS.syncPushWithToast(SYNC_COLLECTION, records);
 }
+async function persistFeedback(){
+  OPS.saveData(FEEDBACK_KEY, feedbacks);
+  await OPS.syncPushWithToast(SYNC_COLLECTION_FEEDBACK, feedbacks);
+}
 
 els.tbody.addEventListener('click', async (e) => {
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
+  const fbId = e.target.dataset.feedback;
   if (editId) openModal(records.find(r => r.id === editId));
+  if (fbId) openFeedbackModal(records.find(r => r.id === fbId));
   if (delId){
     if (confirm('Excluir este colaborador?')){
       records = records.filter(r => r.id !== delId);
@@ -226,6 +337,7 @@ els.tbody.addEventListener('click', async (e) => {
   }
 });
 
+// ---------- modal colaborador ----------
 const modal = document.getElementById('modal');
 function openModal(rec){
   document.getElementById('modal-title').textContent = rec ? 'Editar colaborador' : 'Adicionar colaborador';
@@ -241,6 +353,8 @@ function openModal(rec){
   document.getElementById('rec-inspetor').value = rec ? (rec.inspetor||'') : '';
   document.getElementById('rec-gestor').value = rec ? rec.gestor : '';
   document.getElementById('rec-admissao').value = rec ? rec.admissao : '';
+  document.getElementById('rec-folga-fixa').value = rec ? (rec.folgaFixaSemana||'') : '';
+  document.getElementById('rec-grupo-fds').value = rec ? (rec.grupoFDS||'') : '';
   document.getElementById('rec-status').value = rec ? rec.status : 'ativo';
   modal.style.display = 'flex';
 }
@@ -265,6 +379,8 @@ document.getElementById('form-record').addEventListener('submit', async e => {
     inspetor: document.getElementById('rec-inspetor').value.trim(),
     gestor: document.getElementById('rec-gestor').value.trim(),
     admissao: document.getElementById('rec-admissao').value,
+    folgaFixaSemana: document.getElementById('rec-folga-fixa').value,
+    grupoFDS: document.getElementById('rec-grupo-fds').value,
     status: document.getElementById('rec-status').value,
   };
   if (id) records = records.map(r => r.id === id ? { ...r, ...data } : r);
@@ -275,17 +391,87 @@ document.getElementById('form-record').addEventListener('submit', async e => {
   closeModal();
 });
 
+// ---------- modal calibrar rodízio ----------
+const modalRodizio = document.getElementById('modal-rodizio');
+document.getElementById('btn-rodizio').onclick = () => {
+  const cfg = OPS.getRodizioConfig();
+  const proxSabado = OPS.saturdayOfWeek(new Date());
+  document.getElementById('rod-data').value = cfg ? cfg.dataReferencia : proxSabado.toISOString().slice(0,10);
+  document.getElementById('rod-grupo').value = cfg ? cfg.grupoFolgaNaReferencia : 'A';
+  modalRodizio.style.display = 'flex';
+};
+document.getElementById('btn-rodizio-cancel').onclick = () => modalRodizio.style.display = 'none';
+modalRodizio.addEventListener('click', e => { if (e.target === modalRodizio) modalRodizio.style.display = 'none'; });
+document.getElementById('form-rodizio').addEventListener('submit', e => {
+  e.preventDefault();
+  OPS.setRodizioConfig({
+    dataReferencia: document.getElementById('rod-data').value,
+    grupoFolgaNaReferencia: document.getElementById('rod-grupo').value,
+  });
+  modalRodizio.style.display = 'none';
+  renderAll();
+});
+
+// ---------- modal histórico de feedback ----------
+const modalFeedback = document.getElementById('modal-feedback');
+let feedbackColabId = null;
+function openFeedbackModal(rec){
+  feedbackColabId = rec.id;
+  document.getElementById('feedback-title').textContent = `Histórico de feedback — ${rec.nome}`;
+  document.getElementById('feedback-sub').textContent = rec.cargo || '';
+  document.getElementById('fb-data').value = new Date().toISOString().slice(0,10);
+  renderFeedbackList();
+  modalFeedback.style.display = 'flex';
+}
+function renderFeedbackList(){
+  const list = feedbacks.filter(f => f.colaboradorId === feedbackColabId).sort((a,b) => new Date(b.data) - new Date(a.data));
+  const listEl = document.getElementById('feedback-list');
+  if (!list.length){
+    listEl.innerHTML = '<p style="color:var(--ink-dim);font-size:13px">Nenhum registro ainda.</p>';
+    return;
+  }
+  listEl.innerHTML = list.map(f => `
+    <div class="status-row" style="display:block;padding:10px 0">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-weight:600;font-size:13px">${f.tipo}</span>
+        <span class="proto" style="font-size:12px">${new Date(f.data+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+      </div>
+      ${f.observacao ? `<div style="color:var(--ink-dim);font-size:12.5px;margin-top:4px">${f.observacao}</div>` : ''}
+    </div>
+  `).join('');
+}
+document.getElementById('btn-feedback-close').onclick = () => modalFeedback.style.display = 'none';
+modalFeedback.addEventListener('click', e => { if (e.target === modalFeedback) modalFeedback.style.display = 'none'; });
+
+document.getElementById('form-feedback').addEventListener('submit', async e => {
+  e.preventDefault();
+  feedbacks.push({
+    id: OPS.uid(),
+    colaboradorId: feedbackColabId,
+    data: document.getElementById('fb-data').value,
+    tipo: document.getElementById('fb-tipo').value,
+    observacao: document.getElementById('fb-obs').value.trim(),
+  });
+  await persistFeedback();
+  document.getElementById('fb-obs').value = '';
+  renderFeedbackList();
+});
+
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['NOME','CARGO','CIDADE','CENTRO DE CUSTO','TELEFONE','EMAIL','VEÍCULO','INSPETOR','SETOR','GESTOR','ADMISSÃO','STATUS'];
-  const rows = records.map(r => [r.nome, r.cargo, r.cidade, r.centroCusto, r.telefone, r.email, r.veiculo, r.inspetor, r.setor, r.gestor, r.admissao, r.status === 'ativo' ? 'ATIVO' : 'INATIVO']);
+  const headers = ['NOME','CARGO','CIDADE','CENTRO DE CUSTO','GESTOR','TELEFONE','EMAIL','VEÍCULO','INSPETOR','SETOR','ADMISSÃO','FOLGA FIXA','GRUPO FDS','STATUS'];
+  const rows = records.map(r => [r.nome, r.cargo, r.cidade, r.centroCusto, r.gestor, r.telefone, r.email, r.veiculo, r.inspetor, r.setor, r.admissao, r.folgaFixaSemana, r.grupoFDS, r.status === 'ativo' ? 'ATIVO' : 'INATIVO']);
   OPS.downloadCSV('gestao-pessoas-touros.csv', headers, rows);
 };
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const shared = await OPS.syncPull(SYNC_COLLECTION);
+  const [sharedPessoas, sharedFeedback] = await Promise.all([
+    OPS.syncPull(SYNC_COLLECTION),
+    OPS.syncPull(SYNC_COLLECTION_FEEDBACK),
+  ]);
   toast.remove();
-  if (shared){ records = shared; OPS.saveData(STORAGE_KEY, records); }
+  if (sharedPessoas){ records = sharedPessoas; OPS.saveData(STORAGE_KEY, records); }
+  if (sharedFeedback){ feedbacks = sharedFeedback; OPS.saveData(FEEDBACK_KEY, feedbacks); }
   populateFilterOptions();
   renderAll();
 }

@@ -907,6 +907,7 @@ function mapHeader(h){
   if (n === 'numero') return 'numero';
   if (n === 'complemento') return 'complemento';
   if (n.includes('telefone principal')) return 'telefone';
+  if (n === 'supervisor') return 'supervisor';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
   if (n.includes('latitude') && n.includes('longitude')) return 'latlng';
@@ -1007,6 +1008,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         catalogado: svc.catalogado,
         cidade, bairro,
         telefone: row.telefone || '',
+        supervisor: row.supervisor || '',
         endereco: row.endereco || '',
         numero: row.numero || '',
         complemento: row.complemento || '',
