@@ -318,6 +318,12 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 }
 .marker-pulse .marker-label{ animation: marker-pulse 0.8s ease-out 2; z-index:1000; }
 
+@keyframes row-highlight-fade{
+  0%   { background: var(--brand-wash); }
+  100% { background: transparent; }
+}
+table.services tbody tr.row-highlight{ animation: row-highlight-fade 2s ease-out; }
+
 /* ---------------- modal ---------------- */
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(6,8,10,.6); backdrop-filter:blur(2px);

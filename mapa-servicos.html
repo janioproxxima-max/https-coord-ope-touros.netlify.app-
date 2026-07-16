@@ -139,6 +139,10 @@
         <div class="field"><label>Observação</label><input class="input" id="rec-observacao"></div>
       </div>
       <div class="grid2">
+        <div class="field"><label>Endereço (rua)</label><input class="input" id="rec-endereco"></div>
+        <div class="field"><label>Número</label><input class="input" id="rec-numero"></div>
+      </div>
+      <div class="grid2">
         <div class="field"><label>Latitude (opcional)</label><input class="input" id="rec-lat" placeholder="-5.1989"></div>
         <div class="field"><label>Longitude (opcional)</label><input class="input" id="rec-lng" placeholder="-35.4608"></div>
       </div>
@@ -244,7 +248,7 @@ function isDefaultHiddenRecolhimento(r){
 const MAP_LABEL_BY_TIPO = {
   'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
   'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT',
-  'AÇÕES PREVENTIVAS': 'VT', 'SERVIÇOS ADICIONAIS': 'VT',
+  'AÇÕES PREVENTIVAS': 'VT', 'SERVIÇOS ADICIONAIS': 'SA',
   'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
 };
 function getMapLabel(r){
@@ -526,6 +530,10 @@ function renderMap(){
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
       </div>
     `);
+    marker.on('click', () => {
+      highlightListRow(r.id);
+      openDetail(r);
+    });
     markerRegistry[r.id] = marker;
     bounds.push([coords.lat, coords.lng]);
   });
@@ -552,6 +560,22 @@ function focusOnMap(id){
       el.classList.add('marker-pulse');
       setTimeout(() => el.classList.remove('marker-pulse'), 1600);
     }
+  }, 60);
+}
+
+// Destaca e rola até a linha do protocolo na lista (chamado ao clicar num
+// marcador do mapa) — garante que a lista esteja visível primeiro.
+function highlightListRow(id){
+  const activeViewBtn = document.querySelector('#view-toggle button.active');
+  if (activeViewBtn && activeViewBtn.dataset.view === 'map'){
+    document.querySelector('#view-toggle button[data-view="split"]').click();
+  }
+  setTimeout(() => {
+    const row = els.tbody.querySelector(`tr[data-id="${id}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('row-highlight');
+    setTimeout(() => row.classList.remove('row-highlight'), 2000);
   }, 60);
 }
 
@@ -587,10 +611,16 @@ function openDetail(rec){
   document.getElementById('detail-sub').textContent = rec.tituloCompleto || rec.tipoCurto || '';
   const abertura = rec.criadoEm ? new Date(rec.criadoEm).toLocaleString('pt-BR') : '—';
   const err = OPS.checkProjectError(rec);
+  const enderecoPartes = [rec.endereco, rec.numero].filter(Boolean).join(', ');
+  const enderecoCompleto = [enderecoPartes, rec.bairro, rec.cidade].filter(Boolean).join(' — ');
   document.getElementById('detail-body').innerHTML = `
     ${err ? `<div class="status-row" style="background:var(--crit-wash);border-radius:6px;padding:8px 10px;margin-bottom:8px;border:none">
       <span class="status-name" style="color:var(--crit)">🚩 Erro de projeto: esperado <strong>${err.esperado}</strong>, veio <strong>${err.encontrado}</strong>${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''}</span>
     </div>` : ''}
+    <div class="status-row" style="display:block">
+      <span class="status-name" style="margin-bottom:6px">Endereço</span>
+      <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${enderecoCompleto || '—'}</div>
+    </div>
     <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
     <div class="status-row"><span class="status-name">Latitude</span><span class="status-val">${rec.lat != null ? rec.lat : '—'}</span></div>
@@ -602,10 +632,41 @@ function openDetail(rec){
       <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${rec.observacao || '—'}</div>
     </div>
   `;
+  // reseta qualquer posição arrastada de uma abertura anterior
+  const modalBox = detailModal.querySelector('.modal');
+  modalBox.style.position = '';
+  modalBox.style.left = '';
+  modalBox.style.top = '';
+  modalBox.style.margin = '';
   detailModal.style.display = 'flex';
 }
 document.getElementById('btn-detail-close').onclick = () => detailModal.style.display = 'none';
 detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.style.display = 'none'; });
+
+// ---------- arrastar o painel de detalhes (pra não ficar tampando o mapa) ----------
+(function makeDetailModalDraggable(){
+  const modalBox = detailModal.querySelector('.modal');
+  const handle = detailModal.querySelector('#detail-title');
+  handle.style.cursor = 'move';
+  handle.title = 'Arraste pra mover';
+  let dragging = false, startX, startY, startRect;
+
+  handle.addEventListener('mousedown', (e) => {
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startRect = modalBox.getBoundingClientRect();
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    modalBox.style.position = 'fixed';
+    modalBox.style.margin = '0';
+    modalBox.style.left = Math.max(0, startRect.left + dx) + 'px';
+    modalBox.style.top = Math.max(0, startRect.top + dy) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
 
 // ---------- ações da linha ----------
 els.tbody.addEventListener('click', (e) => {
@@ -665,6 +726,8 @@ function openModal(rec){
   document.getElementById('rec-bairro').value = rec ? rec.bairro : '';
   document.getElementById('rec-telefone').value = rec ? (rec.telefone||'') : '';
   document.getElementById('rec-observacao').value = rec ? (rec.observacao||'') : '';
+  document.getElementById('rec-endereco').value = rec ? (rec.endereco||'') : '';
+  document.getElementById('rec-numero').value = rec ? (rec.numero||'') : '';
   slaManualInput.value = (rec && !rec.catalogado && rec.slaHoras) ? rec.slaHoras : '';
   document.getElementById('rec-abertura').value = toLocalInputValue(rec && rec.criadoEm ? new Date(rec.criadoEm) : new Date());
   document.getElementById('rec-lat').value = rec && rec.lat != null ? rec.lat : '';
@@ -699,6 +762,8 @@ document.getElementById('form-record').addEventListener('submit', e => {
     bairro: document.getElementById('rec-bairro').value.trim(),
     telefone: document.getElementById('rec-telefone').value.trim(),
     observacao: document.getElementById('rec-observacao').value.trim(),
+    endereco: document.getElementById('rec-endereco').value.trim(),
+    numero: document.getElementById('rec-numero').value.trim(),
     criadoEm: aberturaVal ? new Date(aberturaVal).toISOString() : null,
     tempoManual: null,
     prazoManual: null,
@@ -729,6 +794,8 @@ function mapHeader(h){
   if (n === 'localidade') return 'localidadeBairro';
   if (n === 'cidade') return 'cidadeLiteral';
   if (n === 'bairro') return 'bairroLiteral';
+  if (n === 'endereco') return 'endereco';
+  if (n === 'numero') return 'numero';
   if (n.includes('telefone principal')) return 'telefone';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
@@ -753,13 +820,20 @@ document.getElementById('file-import').addEventListener('change', (e) => {
 
     // Encontra a linha de cabeçalho de verdade — a planilha real tem uma
     // linha de título antes dos cabeçalhos. Em vez de assumir a primeira
-    // linha, pegamos a linha (entre as 10 primeiras) com mais colunas
-    // reconhecíveis, então não é preciso excluir nenhuma linha manualmente.
-    let headerRowIdx = 0, bestScore = -1;
+    // linha, pegamos a linha (entre as 10 primeiras) que tenha, ao mesmo
+    // tempo, uma coluna de protocolo E uma de tipo de serviço — assim não
+    // confunde com a linha de título. Se nada bater, cai na 2ª linha (index 1)
+    // como garantia, já que é sempre aí que fica o cabeçalho de verdade.
+    let headerRowIdx = -1, bestScore = -1;
     for (let i = 0; i < Math.min(rows.length, 10); i++){
-      const score = rows[i].filter(c => mapHeader(c)).length;
+      const mapped = rows[i].map(mapHeader);
+      const temProtocolo = mapped.includes('protocolo');
+      const temTitulo = mapped.includes('tituloCompleto');
+      if (!temProtocolo || !temTitulo) continue;
+      const score = mapped.filter(Boolean).length;
       if (score > bestScore){ bestScore = score; headerRowIdx = i; }
     }
+    if (headerRowIdx === -1) headerRowIdx = rows.length > 1 ? 1 : 0;
     const headers = rows[headerRowIdx].map(mapHeader);
     const missingTypes = new Set();
 
@@ -812,6 +886,8 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         catalogado: svc.catalogado,
         cidade, bairro,
         telefone: row.telefone || '',
+        endereco: row.endereco || '',
+        numero: row.numero || '',
         projeto: row.projeto || '',
         observacao: row.observacao || '',
         lat, lng,
@@ -858,9 +934,9 @@ document.getElementById('file-import').addEventListener('change', (e) => {
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
   const rows = records.map(r => [
-    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.telefone, r.projeto, r.observacao,
+    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.telefone, r.projeto, r.observacao,
     r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
   ]);
   OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
