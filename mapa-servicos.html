@@ -602,6 +602,7 @@ function saveImportMeta(){
   };
   localStorage.setItem(IMPORT_META_KEY, JSON.stringify(meta));
   renderImportMeta();
+  if (typeof window.OPS_STAMP_IMPORT === 'function') window.OPS_STAMP_IMPORT();
 }
 function renderImportMeta(){
   const el = document.getElementById('last-import-info');

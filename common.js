@@ -595,6 +595,8 @@ function initShell(active, pageTitle){
     <div class="sb-footer">
       <div class="sb-update">Última atualização</div>
       <div class="sb-date" id="sb-date">--/--/----</div>
+      <div class="sb-update" id="sb-import-label" style="margin-top:8px;display:none">Última importação</div>
+      <div class="sb-date" id="sb-import-info" style="font-size:11px;display:none"></div>
       <button class="btn-refresh" id="sb-refresh">↻ Atualizar</button>
     </div>
   `;
@@ -651,9 +653,27 @@ function initShell(active, pageTitle){
   stampUltimaAtualizacao();
   window.OPS_STAMP_UPDATE = stampUltimaAtualizacao;
 
+  // "Última importação" (Mapa de Serviços) — lê o mesmo registro que a
+  // página do Mapa de Serviços salva ao importar uma planilha.
+  function stampUltimaImportacao(){
+    const labelEl = sidebar.querySelector('#sb-import-label');
+    const infoEl = sidebar.querySelector('#sb-import-info');
+    let meta = null;
+    try{ meta = JSON.parse(localStorage.getItem('ops_touros_mapa_servicos_import_meta_v1') || 'null'); }catch(e){}
+    if (!meta){ labelEl.style.display = 'none'; infoEl.style.display = 'none'; return; }
+    const dt = new Date(meta.data);
+    const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} · ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    labelEl.style.display = 'block';
+    infoEl.style.display = 'block';
+    infoEl.textContent = `${dataFmt} · ${meta.usuario}`;
+  }
+  stampUltimaImportacao();
+  window.OPS_STAMP_IMPORT = stampUltimaImportacao;
+
   sidebar.querySelector('#sb-refresh').addEventListener('click', () => {
     if (typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
     stampUltimaAtualizacao();
+    stampUltimaImportacao();
   });
 
   topbar.querySelector('#user-pill').addEventListener('click', () => {
