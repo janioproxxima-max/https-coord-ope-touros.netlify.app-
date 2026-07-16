@@ -382,9 +382,34 @@ const OPS = (() => {
     const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls');
     const reader = new FileReader();
     if (isExcel){
-      reader.onload = () => {
+      reader.onload = async () => {
         try{
-          const data = new Uint8Array(reader.result);
+          let data = new Uint8Array(reader.result);
+
+          // Alguns exportadores de planilha geram células de texto ("inlineStr")
+          // com uma declaração de xmlns repetida dentro da tag <is>, o que faz
+          // a biblioteca de leitura (SheetJS) devolver tudo como texto vazio,
+          // silenciosamente. Corrige isso descompactando o .xlsx (é um zip),
+          // removendo o xmlns duplicado do XML da planilha, e reempacotando
+          // antes de entregar pro leitor normal.
+          if (typeof JSZip !== 'undefined'){
+            try{
+              const zip = await JSZip.loadAsync(data);
+              const worksheetNames = Object.keys(zip.files).filter(n => /^xl\/worksheets\/.*\.xml$/.test(n));
+              let changed = false;
+              for (const wsName of worksheetNames){
+                const xml = await zip.files[wsName].async('string');
+                const fixed = xml.replace(/(<is\b[^>]*)\s+xmlns="[^"]*"/g, '$1');
+                if (fixed !== xml){ zip.file(wsName, fixed); changed = true; }
+              }
+              if (changed){
+                data = await zip.generateAsync({ type: 'uint8array' });
+              }
+            }catch(zipErr){
+              console.warn('Não consegui pré-processar o Excel (seguindo com leitura normal):', zipErr);
+            }
+          }
+
           const wb = XLSX.read(data, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
