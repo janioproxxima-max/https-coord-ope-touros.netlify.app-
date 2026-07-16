@@ -142,6 +142,7 @@
         <div class="field"><label>Endereço (rua)</label><input class="input" id="rec-endereco"></div>
         <div class="field"><label>Número</label><input class="input" id="rec-numero"></div>
       </div>
+      <div class="field"><label>Complemento</label><input class="input" id="rec-complemento"></div>
       <div class="grid2">
         <div class="field"><label>Latitude (opcional)</label><input class="input" id="rec-lat" placeholder="-5.1989"></div>
         <div class="field"><label>Longitude (opcional)</label><input class="input" id="rec-lng" placeholder="-35.4608"></div>
@@ -612,7 +613,7 @@ function openDetail(rec){
   const abertura = rec.criadoEm ? new Date(rec.criadoEm).toLocaleString('pt-BR') : '—';
   const err = OPS.checkProjectError(rec);
   const enderecoPartes = [rec.endereco, rec.numero].filter(Boolean).join(', ');
-  const enderecoCompleto = [enderecoPartes, rec.bairro, rec.cidade].filter(Boolean).join(' — ');
+  const enderecoCompleto = [enderecoPartes, rec.complemento, rec.bairro, rec.cidade].filter(Boolean).join(' — ');
   document.getElementById('detail-body').innerHTML = `
     ${err ? `<div class="status-row" style="background:var(--crit-wash);border-radius:6px;padding:8px 10px;margin-bottom:8px;border:none">
       <span class="status-name" style="color:var(--crit)">🚩 Erro de projeto: esperado <strong>${err.esperado}</strong>, veio <strong>${err.encontrado}</strong>${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''}</span>
@@ -728,6 +729,7 @@ function openModal(rec){
   document.getElementById('rec-observacao').value = rec ? (rec.observacao||'') : '';
   document.getElementById('rec-endereco').value = rec ? (rec.endereco||'') : '';
   document.getElementById('rec-numero').value = rec ? (rec.numero||'') : '';
+  document.getElementById('rec-complemento').value = rec ? (rec.complemento||'') : '';
   slaManualInput.value = (rec && !rec.catalogado && rec.slaHoras) ? rec.slaHoras : '';
   document.getElementById('rec-abertura').value = toLocalInputValue(rec && rec.criadoEm ? new Date(rec.criadoEm) : new Date());
   document.getElementById('rec-lat').value = rec && rec.lat != null ? rec.lat : '';
@@ -764,6 +766,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
     observacao: document.getElementById('rec-observacao').value.trim(),
     endereco: document.getElementById('rec-endereco').value.trim(),
     numero: document.getElementById('rec-numero').value.trim(),
+    complemento: document.getElementById('rec-complemento').value.trim(),
     criadoEm: aberturaVal ? new Date(aberturaVal).toISOString() : null,
     tempoManual: null,
     prazoManual: null,
@@ -796,6 +799,7 @@ function mapHeader(h){
   if (n === 'bairro') return 'bairroLiteral';
   if (n === 'endereco') return 'endereco';
   if (n === 'numero') return 'numero';
+  if (n === 'complemento') return 'complemento';
   if (n.includes('telefone principal')) return 'telefone';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
@@ -824,16 +828,27 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     // tempo, uma coluna de protocolo E uma de tipo de serviço — assim não
     // confunde com a linha de título. Se nada bater, cai na 2ª linha (index 1)
     // como garantia, já que é sempre aí que fica o cabeçalho de verdade.
-    let headerRowIdx = -1, bestScore = -1;
-    for (let i = 0; i < Math.min(rows.length, 10); i++){
-      const mapped = rows[i].map(mapHeader);
-      const temProtocolo = mapped.includes('protocolo');
-      const temTitulo = mapped.includes('tituloCompleto');
-      if (!temProtocolo || !temTitulo) continue;
-      const score = mapped.filter(Boolean).length;
-      if (score > bestScore){ bestScore = score; headerRowIdx = i; }
+    // Prioriza a 2ª linha (índice 1) como cabeçalho — é onde normalmente
+    // fica, com a 1ª linha sendo só um título mesclado (ex: "Painel de
+    // Serviços"). Só exige achar a coluna de protocolo pra aceitar a linha
+    // (exigir mais de uma coluna deixava a detecção frágil demais).
+    function scoreRow(row){
+      const mapped = (row || []).map(mapHeader);
+      return { score: mapped.filter(Boolean).length, temProtocolo: mapped.includes('protocolo') };
     }
-    if (headerRowIdx === -1) headerRowIdx = rows.length > 1 ? 1 : 0;
+    let headerRowIdx;
+    const row1Score = scoreRow(rows[1]);
+    const row0Score = scoreRow(rows[0]);
+    if (row1Score.temProtocolo) headerRowIdx = 1;
+    else if (row0Score.temProtocolo) headerRowIdx = 0;
+    else {
+      headerRowIdx = 1;
+      let bestScore = -1;
+      for (let i = 0; i < Math.min(rows.length, 10); i++){
+        const s = scoreRow(rows[i]);
+        if (s.temProtocolo && s.score > bestScore){ bestScore = s.score; headerRowIdx = i; }
+      }
+    }
     const headers = rows[headerRowIdx].map(mapHeader);
     const missingTypes = new Set();
 
@@ -888,6 +903,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         telefone: row.telefone || '',
         endereco: row.endereco || '',
         numero: row.numero || '',
+        complemento: row.complemento || '',
         projeto: row.projeto || '',
         observacao: row.observacao || '',
         lat, lng,
@@ -896,7 +912,15 @@ document.getElementById('file-import').addEventListener('change', (e) => {
       };
     }).filter(Boolean);
 
-    if (!imported.length){ alert('Não encontrei colunas reconhecíveis nessa planilha. Confira se ela tem as colunas "Nº. Ordem Serviço", "Tipo de Serviço", "Área", "Localidade" etc.'); return; }
+    if (!imported.length){
+      const colunasAchadas = headers.filter(Boolean);
+      alert(
+        `Não encontrei registros válidos nessa planilha.\n\n` +
+        `Usei a linha ${headerRowIdx + 1} como cabeçalho e reconheci ${colunasAchadas.length} coluna(s): ${colunasAchadas.join(', ') || '(nenhuma)'}.\n\n` +
+        `Confira se a linha ${headerRowIdx + 1} da planilha é mesmo a que tem "Nº. Ordem Serviço", "Tipo de Serviço", "Área", "Localidade" etc. Se não for, me avise qual linha é.`
+      );
+      return;
+    }
 
     // Localiza automaticamente (via OpenStreetMap) cidades que apareceram na
     // planilha mas não estão no nosso cadastro fixo — assim elas aparecem no
@@ -934,9 +958,9 @@ document.getElementById('file-import').addEventListener('change', (e) => {
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
   const rows = records.map(r => [
-    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.telefone, r.projeto, r.observacao,
+    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.projeto, r.observacao,
     r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
   ]);
   OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
