@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Indicadores · OPS Touros</title>
+<title>Indicadores · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -141,13 +141,13 @@ const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c
 const SIGLA_BY_TIPO = {
   'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
   'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT', 'AÇÕES PREVENTIVAS': 'VT',
-  'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
+  'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MDE',
 };
 const SLA_GROUPS = {
   VT: { label: 'Reparo (24h)', metaPct: 90, horas: 24 },
   SA: { label: 'Serviços Adicional (48h)', metaPct: 95, horas: 48 },
   AT: { label: 'Ativação (72h)', metaPct: 95, horas: 72 },
-  MD: { label: 'Mudança de Endereço (72h)', metaPct: 95, horas: 72 },
+  MDE: { label: 'Mudança de Endereço (72h)', metaPct: 95, horas: 72 },
 };
 
 let mapaRecords = [];

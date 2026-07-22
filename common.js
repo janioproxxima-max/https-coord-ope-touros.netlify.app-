@@ -561,6 +561,40 @@ const OPS = (() => {
     return 'r' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
+  // -------- datas "à prova de Google Sheets" --------
+  // O Google Sheets às vezes converte um texto tipo "2026-07-16" pra um
+  // formato de data por conta própria quando os dados vão e voltam da
+  // sincronização. Essas funções aceitam qualquer formato razoável (data
+  // simples "AAAA-MM-DD", data/hora ISO completa, ou já um objeto Date) e
+  // sempre devolvem algo exibível, em vez de "Invalid Date".
+  function toDateSafe(v){
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+    const s = String(v).trim();
+    if (!s) return null;
+    let d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) d = new Date(s + 'T00:00:00');
+    else d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function formatDateBR(v){
+    const d = toDateSafe(v);
+    return d ? d.toLocaleDateString('pt-BR') : '—';
+  }
+  function formatDateTimeBR(v){
+    const d = toDateSafe(v);
+    if (!d) return '—';
+    return d.toLocaleDateString('pt-BR') + ' · ' + d.toLocaleTimeString('pt-BR').slice(0,5);
+  }
+  // Devolve "AAAA-MM-DD" (pra usar em <input type="date">), a partir de
+  // qualquer formato de data recebido.
+  function toDateInputValue(v){
+    const d = toDateSafe(v);
+    if (!d) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
   // -------- escala / rodízio de fim de semana --------
   // Cada colaborador tem um dia de folga fixo na semana + um "grupo" (A ou B)
   // pro rodízio de fim de semana. Um único ponto de calibração (qual grupo
@@ -689,6 +723,7 @@ const OPS = (() => {
     syncPull, syncPush, syncPushWithToast, showToast,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
     grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
+    toDateSafe, formatDateBR, formatDateTimeBR, toDateInputValue,
   };
 })();
 
@@ -762,7 +797,7 @@ function showLogin(onSuccess){
   wrap.innerHTML = `
     <div class="login-box">
       <div class="lbox-brand">
-        <div class="icon">OPS</div>
+        <div class="icon">OPE</div>
         <div><h2>Coordenação de Operações</h2><p>Unidade Touros</p></div>
       </div>
       <div class="lfield"><label>Usuário</label><input type="text" id="lg-usr" placeholder="coordenador" autocomplete="username"></div>
@@ -835,7 +870,7 @@ function initShell(active, pageTitle){
   sidebar.className = 'sidebar';
   sidebar.innerHTML = `
     <div class="sb-brand">
-      <div class="tag">OPS · Coord.</div>
+      <div class="tag">OPE · Coord.</div>
       <h1>Coord. Regional</h1>
       <p>Unidade Touros</p>
     </div>
@@ -853,14 +888,12 @@ function initShell(active, pageTitle){
   const topbar = document.createElement('div');
   topbar.className = 'topbar';
   topbar.innerHTML = `
-    <div class="crumb">
-      <span class="unit">OPS · Coordenação</span>
-      <span class="sep">·</span>
-      <span class="page">${pageTitle}</span>
+    <div class="crumb-left"><span class="unit">OPE · Coordenação</span></div>
+    <div class="crumb-center"><span class="page">${pageTitle}</span></div>
+    <div class="crumb-right">
+      <div class="clock" id="ops-clock"></div>
+      <span class="user-pill" id="user-pill" title="Sair">${(sessionStorage.getItem('ops_user') || 'usuário')} ×</span>
     </div>
-    <div class="spacer"></div>
-    <div class="clock" id="ops-clock"></div>
-    <span class="user-pill" id="user-pill" title="Sair">${(sessionStorage.getItem('ops_user') || 'usuário')} ×</span>
   `;
 
   const shellMain = document.createElement('div');
@@ -904,17 +937,21 @@ function initShell(active, pageTitle){
 
   // "Última importação" (Mapa de Serviços) — lê o mesmo registro que a
   // página do Mapa de Serviços salva ao importar uma planilha.
-  function stampUltimaImportacao(){
+  async function stampUltimaImportacao(){
     const labelEl = sidebar.querySelector('#sb-import-label');
     const infoEl = sidebar.querySelector('#sb-import-info');
     let meta = null;
-    try{ meta = JSON.parse(localStorage.getItem('ops_touros_mapa_servicos_import_meta_v1') || 'null'); }catch(e){}
+    const shared = await OPS.syncPull('MapaServicosImportMetaData');
+    if (shared && shared[0]){
+      meta = shared[0];
+      localStorage.setItem('ops_touros_mapa_servicos_import_meta_v1', JSON.stringify(meta));
+    } else {
+      try{ meta = JSON.parse(localStorage.getItem('ops_touros_mapa_servicos_import_meta_v1') || 'null'); }catch(e){}
+    }
     if (!meta){ labelEl.style.display = 'none'; infoEl.style.display = 'none'; return; }
-    const dt = new Date(meta.data);
-    const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} · ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
     labelEl.style.display = 'block';
     infoEl.style.display = 'block';
-    infoEl.textContent = `${dataFmt} · ${meta.usuario}`;
+    infoEl.textContent = `${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario}`;
   }
   stampUltimaImportacao();
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;

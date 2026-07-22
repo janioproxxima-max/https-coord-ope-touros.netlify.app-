@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa de Serviços · OPS Touros</title>
+<title>Mapa de Serviços · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -81,7 +81,7 @@
               <th data-sort="tipoCurto">Serviço</th>
               <th data-sort="cidade">Cidade</th>
               <th data-sort="bairro">Bairro</th>
-              <th>Tempo</th>
+              <th data-sort="__tempo">Tempo</th>
               <th data-sort="__status">Prazo</th>
               <th></th>
             </tr>
@@ -106,6 +106,7 @@
           <span><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
           <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
         </div>
+        <button type="button" class="icon-btn" id="btn-map-fullscreen" title="Tela cheia">⛶</button>
       </div>
       <div id="map"></div>
     </div>
@@ -244,7 +245,7 @@ async function syncPushWithToast(recs){
   return ok;
 }
 
-let sortKey = null, sortDir = 1;
+let sortKey = '__tempo', sortDir = -1; // padrão: pior (mais tempo) pro melhor primeiro
 let leafletMap = null, markerLayer = null;
 
 const els = {
@@ -315,7 +316,7 @@ const MAP_LABEL_BY_TIPO = {
   'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
   'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT',
   'AÇÕES PREVENTIVAS': 'VT', 'SERVIÇOS ADICIONAIS': 'SA',
-  'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MD',
+  'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MDE',
 };
 function getMapLabel(r){
   if (OPS.normalize(r.tituloCompleto) === RECOLHIMENTO_TROCA_ENDERECO) return 'REC/MDE';
@@ -478,6 +479,12 @@ function renderTable(){
     list = [...list].sort((a,b) => {
       let av, bv;
       if (sortKey === '__status'){ av = getStatus(a); bv = getStatus(b); }
+      else if (sortKey === '__tempo'){
+        const ea = getElapsedHours(a), eb = getElapsedHours(b);
+        av = ea == null ? -1 : ea;
+        bv = eb == null ? -1 : eb;
+        return (av - bv) * sortDir;
+      }
       else { av = a[sortKey]; bv = b[sortKey]; }
       av = OPS.normalize(av); bv = OPS.normalize(bv);
       if (av < bv) return -1 * sortDir;
@@ -658,12 +665,22 @@ function renderAll(fitView = true){
 }
 
 const IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
-function saveImportMeta(){
+const IMPORT_META_SYNC = 'MapaServicosImportMetaData';
+async function saveImportMeta(){
   const meta = {
     data: new Date().toISOString(),
     usuario: sessionStorage.getItem('ops_user') || 'desconhecido',
   };
   localStorage.setItem(IMPORT_META_KEY, JSON.stringify(meta));
+  renderImportMeta();
+  if (typeof window.OPS_STAMP_IMPORT === 'function') window.OPS_STAMP_IMPORT();
+  await OPS.syncPush(IMPORT_META_SYNC, [meta]);
+}
+async function pullImportMeta(){
+  const shared = await OPS.syncPull(IMPORT_META_SYNC);
+  if (shared && shared[0]){
+    localStorage.setItem(IMPORT_META_KEY, JSON.stringify(shared[0]));
+  }
   renderImportMeta();
   if (typeof window.OPS_STAMP_IMPORT === 'function') window.OPS_STAMP_IMPORT();
 }
@@ -672,10 +689,8 @@ function renderImportMeta(){
   if (!el) return;
   let meta = null;
   try{ meta = JSON.parse(localStorage.getItem(IMPORT_META_KEY) || 'null'); }catch(e){}
-  if (!meta){ el.textContent = 'Nenhuma planilha importada ainda neste navegador.'; return; }
-  const dt = new Date(meta.data);
-  const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} · ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-  el.textContent = `📥 Última importação: ${dataFmt} por ${meta.usuario}`;
+  if (!meta){ el.textContent = 'Nenhuma planilha importada ainda.'; return; }
+  el.textContent = `📥 Última importação: ${OPS.formatDateTimeBR(meta.data)} por ${meta.usuario}`;
 }
 renderImportMeta();
 
@@ -685,6 +700,7 @@ renderImportMeta();
 async function pullAndRefresh(){
   const shared = await syncPull();
   if (shared){ records = shared; OPS.save(records); populateFilterOptions(); }
+  await pullImportMeta();
   renderAll(false);
   if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
 }
@@ -1065,7 +1081,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
     const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
     records = mode ? imported : [...records, ...imported];
     OPS.save(records);
-    saveImportMeta();
+    await saveImportMeta();
     await syncPushWithToast(records);
     populateFilterOptions();
     renderAll();
@@ -1111,7 +1127,29 @@ document.getElementById('view-toggle').addEventListener('click', (e) => {
   document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
   document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
   splitView.classList.toggle('view-list', view === 'list');
+  splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+});
+
+// ---------- tela cheia do mapa ----------
+document.getElementById('btn-map-fullscreen').addEventListener('click', () => {
+  const mapPanel = document.getElementById('map-panel');
+  const indo = !mapPanel.classList.contains('map-fullscreen');
+  mapPanel.classList.toggle('map-fullscreen', indo);
+  document.getElementById('btn-map-fullscreen').textContent = indo ? '✕' : '⛶';
+  document.getElementById('btn-map-fullscreen').title = indo ? 'Sair da tela cheia' : 'Tela cheia';
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape'){
+    const mapPanel = document.getElementById('map-panel');
+    if (mapPanel.classList.contains('map-fullscreen')){
+      mapPanel.classList.remove('map-fullscreen');
+      document.getElementById('btn-map-fullscreen').textContent = '⛶';
+      document.getElementById('btn-map-fullscreen').title = 'Tela cheia';
+      setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
+    }
+  }
 });
 
 // ---------- init ----------
@@ -1119,11 +1157,23 @@ async function initPage(){
   initMap();
   const toast = showToast('☁️ Buscando dados compartilhados...');
   const shared = await syncPull();
+  await pullImportMeta();
   toast.remove();
   if (shared){
     records = shared;
-    OPS.save(records);
-  } else if (records.length){
+  } else if (!records.length){
+    // nada compartilhado e nada local — segue com o que já tinha (vazio)
+  }
+  // corrige registros sem "id" (ex: edição direta na planilha)
+  let precisaResync = false;
+  records = records.map(r => {
+    if (r.id) return r;
+    precisaResync = true;
+    return { ...r, id: OPS.uid() };
+  });
+  OPS.save(records);
+  if (precisaResync) await syncPush(records);
+  if (!shared && records.length){
     const warn = showToast('⚠️ Não consegui buscar os dados compartilhados agora — mostrando a última cópia salva neste navegador.');
     setTimeout(() => warn.remove(), 4000);
   }

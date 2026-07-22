@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Desligamentos · OPS Touros</title>
+<title>Desligamentos · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -134,7 +134,7 @@ function renderStats(){
   const now = new Date();
   const last12mo = list.filter(r => {
     if (!r.data) return false;
-    const d = new Date(r.data + 'T00:00:00');
+    const d = OPS.toDateSafe(r.data); if (!d) return false;
     return (now - d) / 86400000 <= 365;
   }).length;
   const involuntarios = list.filter(r => r.tipo === 'involuntario').length;
@@ -162,7 +162,7 @@ function renderTable(){
     <tr data-id="${r.id}">
       <td style="font-weight:600">${r.nome}</td>
       <td>${r.cargo || '—'}</td>
-      <td class="proto">${r.data ? new Date(r.data+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td class="proto">${r.data ? OPS.formatDateBR(r.data) : '—'}</td>
       <td><span class="badge ${r.tipo === 'involuntario' ? 'crit' : 'ok'}"><span class="dot"></span>${TIPO_LABELS[r.tipo] || r.tipo}</span></td>
       <td style="color:var(--ink-dim);font-size:.9em">${r.motivo || '—'}</td>
       <td>
