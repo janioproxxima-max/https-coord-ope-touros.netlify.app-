@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Frotas · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -56,6 +57,7 @@
     <button class="btn" id="btn-export">⇩ Exportar CSV</button>
   </div>
 
+  <div class="two-col">
   <div class="panel" id="table-panel">
     <div class="table-wrap">
       <table class="services">
@@ -82,6 +84,20 @@
       <p>Adicione o primeiro veículo da frota.</p>
       <button class="btn primary" id="btn-add-empty">＋ Adicionar veículo</button>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>📊 Frota</h3>
+      <select id="f-grafico-frota" style="margin-left:auto;min-width:150px">
+        <option value="status">Status dos veículos</option>
+        <option value="manutencao">Manutenções por mês</option>
+        <option value="lavagem">Lavagens por mês</option>
+        <option value="documento">Documentos vencendo (60 dias)</option>
+      </select>
+    </div>
+    <div style="position:relative;height:280px;padding:16px"><canvas id="chart-frota"></canvas></div>
+  </div>
   </div>
 </div>
 
@@ -326,7 +342,75 @@ function renderTable(){
   }).join('');
 }
 
-function renderAll(){ renderStats(); renderTable(); }
+let chartFrota = null;
+function renderFrotaChart(){
+  const modo = document.getElementById('f-grafico-frota').value;
+  const list = getFiltered();
+  let labels = [], data = [], colors = [];
+
+  if (modo === 'status'){
+    const statusLabel = { ativo:'Ativo', manutencao:'Em manutenção', inativo:'Inativo' };
+    const cores = { ativo:'#00e5a0', manutencao:'#ffd166', inativo:'#ff4d6d' };
+    ['ativo','manutencao','inativo'].forEach(s => {
+      labels.push(statusLabel[s]);
+      data.push(list.filter(r => r.status === s).length);
+      colors.push(cores[s]);
+    });
+  } else if (modo === 'manutencao'){
+    const placas = new Set(list.map(r => r.placa));
+    const counts = {};
+    manutencoes.filter(m => placas.has(m.placa)).forEach(m => {
+      const d = OPS.toDateSafe(m.dataAbertura);
+      const chave = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sem data';
+      counts[chave] = (counts[chave] || 0) + 1;
+    });
+    const entries = Object.entries(counts).sort((a,b) => a[0].localeCompare(b[0]));
+    labels = entries.map(([k]) => k);
+    data = entries.map(([,v]) => v);
+    colors = '#ff9a3c';
+  } else if (modo === 'lavagem'){
+    const placas = new Set(list.map(r => r.placa));
+    const counts = {};
+    lavagens.filter(l => placas.has(l.placa)).forEach(l => {
+      const d = OPS.toDateSafe(l.data);
+      const chave = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sem data';
+      counts[chave] = (counts[chave] || 0) + 1;
+    });
+    const entries = Object.entries(counts).sort((a,b) => a[0].localeCompare(b[0]));
+    labels = entries.map(([k]) => k);
+    data = entries.map(([,v]) => v);
+    colors = '#00d4ff';
+  } else if (modo === 'documento'){
+    const hoje = new Date();
+    const em60dias = list.filter(r => {
+      const d = OPS.toDateSafe(r.vencDoc);
+      if (!d) return false;
+      const diasRestantes = Math.ceil((d - hoje) / 86400000);
+      return diasRestantes <= 60;
+    }).sort((a,b) => OPS.toDateSafe(a.vencDoc) - OPS.toDateSafe(b.vencDoc));
+    labels = em60dias.map(r => r.placa);
+    data = em60dias.map(r => Math.ceil((OPS.toDateSafe(r.vencDoc) - hoje) / 86400000));
+    colors = data.map(d => d < 0 ? '#ff4d6d' : d <= 30 ? '#ffd166' : '#00e5a0');
+  }
+
+  if (chartFrota) chartFrota.destroy();
+  chartFrota = new Chart(document.getElementById('chart-frota'), {
+    type: modo === 'status' ? 'doughnut' : 'bar',
+    data: { labels, datasets: [{ label: 'Frota', data, backgroundColor: colors }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: modo === 'documento' ? 'y' : 'x',
+      scales: modo === 'status' ? {} : {
+        x: { ticks: { color: '#8a97ab', maxRotation: 60, minRotation: 30 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
+      },
+      plugins: { legend: { display: modo === 'status', labels: { color: '#e2eaf5' } } },
+    },
+  });
+}
+document.getElementById('f-grafico-frota').addEventListener('change', renderFrotaChart);
+
+function renderAll(){ renderStats(); renderTable(); renderFrotaChart(); }
 
 [els.search, els.base, els.status, els.lavagem, els.manutencao].forEach(el => {
   el.addEventListener('input', renderAll);
@@ -607,6 +691,7 @@ async function initPage(){
 
   populateFilterOptions();
   renderAll();
+  return !!(sharedFrotas || sharedLavagens || sharedManutencoes);
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();

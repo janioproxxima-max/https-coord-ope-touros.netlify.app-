@@ -619,6 +619,7 @@ async function initPage(){
   fechamento = sharedFechamento || OPS.loadData(FECHAMENTO_KEY) || [];
   if (sharedFechamento) OPS.saveData(FECHAMENTO_KEY, fechamento);
   renderAllCharts();
+  return !!(sharedMapa || sharedPessoas || sharedAusencias || sharedAtestados || sharedFechamento);
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestão de Pessoas · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -71,6 +72,18 @@
       <p>Adicione o primeiro colaborador da unidade.</p>
       <button class="btn primary" id="btn-add-empty">＋ Adicionar colaborador</button>
     </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <div class="card-head">
+      <h3>📉 Ausências por período</h3>
+      <select id="f-ausencia-agrupamento" style="margin-left:auto;min-width:140px">
+        <option value="mes">Por mês</option>
+        <option value="motivo">Por motivo</option>
+        <option value="colaborador">Por colaborador</option>
+      </select>
+    </div>
+    <div style="position:relative;height:280px;padding:16px"><canvas id="chart-ausencias"></canvas></div>
   </div>
 </div>
 
@@ -339,7 +352,7 @@ function renderTable(){
   `).join('');
 }
 
-function renderAll(){ renderStats(); renderTable(); }
+function renderAll(){ renderStats(); renderTable(); renderAusenciasChart(); }
 
 [els.search, els.cc, els.gestor, els.status].forEach(el => {
   el.addEventListener('input', renderAll);
@@ -580,6 +593,44 @@ document.getElementById('btn-export').onclick = () => {
   OPS.downloadCSV('gestao-pessoas-touros.csv', headers, rows);
 };
 
+let chartAusencias = null;
+function renderAusenciasChart(){
+  const modo = document.getElementById('f-ausencia-agrupamento').value;
+  const counts = {};
+  ausencias.forEach(a => {
+    let chave;
+    if (modo === 'mes'){
+      const d = OPS.toDateSafe(a.data);
+      chave = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sem data';
+    } else if (modo === 'motivo'){
+      chave = a.motivo || 'Outro';
+    } else {
+      const colab = records.find(r => r.id === a.colaboradorId);
+      chave = colab ? colab.nome : 'Desconhecido';
+    }
+    counts[chave] = (counts[chave] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a,b) => modo === 'mes' ? a[0].localeCompare(b[0]) : b[1]-a[1]);
+
+  if (chartAusencias) chartAusencias.destroy();
+  chartAusencias = new Chart(document.getElementById('chart-ausencias'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(([k]) => k),
+      datasets: [{ label: 'Ausências', data: entries.map(([,v]) => v), backgroundColor: '#ff4d6d' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#8a97ab', maxRotation: 60, minRotation: 30 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+document.getElementById('f-ausencia-agrupamento').addEventListener('change', renderAusenciasChart);
+
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
   const [sharedPessoas, sharedFeedback, sharedAusencias, sharedAtestados] = await Promise.all([
@@ -619,6 +670,7 @@ async function initPage(){
 
   populateFilterOptions();
   renderAll();
+  return !!(sharedPessoas || sharedFeedback || sharedAusencias || sharedAtestados);
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();

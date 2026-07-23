@@ -22,7 +22,7 @@
 
   <div class="stat-row" id="stat-row"></div>
 
-  <div class="panel toolbar">
+  <div class="panel toolbar" id="mapa-toolbar">
     <div class="field">
       <label for="f-search">Buscar</label>
       <input class="input" id="f-search" placeholder="Protocolo, bairro...">
@@ -43,6 +43,7 @@
       <select id="f-prazo">
         <option value="">Todos</option>
         <option value="dentro">Dentro do prazo</option>
+        <option value="perto">Perto de vencer</option>
         <option value="fora">Fora do prazo</option>
         <option value="sem_sla">Sem SLA definido</option>
       </select>
@@ -58,6 +59,16 @@
       <label for="f-sigla">Sigla</label>
       <select id="f-sigla"><option value="">Todas</option></select>
     </div>
+    <div class="field">
+      <label for="f-status-atend">Status atendimento</label>
+      <select id="f-status-atend">
+        <option value="">Todos</option>
+        <option value="iniciado">Iniciado</option>
+        <option value="deslocamento">Deslocamento</option>
+        <option value="pausado">Pausado</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
     <div style="flex:1"></div>
     <div class="view-toggle" id="view-toggle">
       <button data-view="split" class="active">Lista + Mapa</button>
@@ -70,6 +81,7 @@
     <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
     <input type="file" id="file-import" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
+  <div id="mapa-toolbar-anchor"></div>
 
   <div class="split" id="split-view">
     <div class="panel" id="table-panel">
@@ -101,15 +113,17 @@
     <div class="panel map-panel" id="map-panel">
       <div class="map-head">
         <span class="title">📍 Localização dos protocolos</span>
-        <div class="legend">
-          <span><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
-          <span><span class="sw" style="background:var(--warn)"></span>Perto de vencer</span>
-          <span><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
+        <div class="legend" id="map-legend">
+          <span data-prazo="dentro" style="cursor:pointer"><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
+          <span data-prazo="perto" style="cursor:pointer"><span class="sw" style="background:var(--warn)"></span>Perto de vencer</span>
+          <span data-prazo="fora" style="cursor:pointer"><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
           <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
         </div>
+        <button type="button" class="icon-btn" id="btn-map-filters" title="Filtros" style="display:none">🔍</button>
         <button type="button" class="icon-btn" id="btn-map-fullscreen" title="Tela cheia">⛶</button>
       </div>
       <div id="map"></div>
+      <div id="map-filters-drawer" class="map-filters-drawer" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -259,6 +273,7 @@ const els = {
   prazo: document.getElementById('f-prazo'),
   projeto: document.getElementById('f-projeto'),
   sigla: document.getElementById('f-sigla'),
+  statusAtend: document.getElementById('f-status-atend'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
@@ -301,6 +316,16 @@ function isHiddenRecolhimento(r){
 // Tipos que não interessam nem na lista nem no mapa, sempre (não tem opção
 // de filtrar pra ver — nem entram no menu de tipos).
 const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
+// Classifica o texto livre da coluna "Status" em categorias simples de filtro.
+function classifyStatusAtendimento(raw){
+  const n = OPS.normalize(raw);
+  if (!n) return '';
+  if (n.includes('pausa') || n.includes('interromper')) return 'pausado';
+  if (n.includes('deslocamento')) return 'deslocamento';
+  if (n.includes('iniciado')) return 'iniciado';
+  return 'outro';
+}
+
 function isAlwaysHidden(r){
   if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
   // tipos não catalogados de atendimento financeiro/CRE — nunca precisam aparecer
@@ -334,7 +359,7 @@ function populateFilterOptions(){
   els.cidadePanel.innerHTML = `
     <input class="input" id="ms-city-search" placeholder="Buscar cidade..." style="width:100%;margin-bottom:8px">
     <div class="ms-actions">
-      <button type="button" id="ms-city-touros">📍 Unidade Touros</button>
+      ${Object.keys(OPS.UNIT_CITIES).map(u => `<button type="button" data-unidade="${u}" class="ms-unidade-btn">📍 Unidade ${u.charAt(0) + u.slice(1).toLowerCase()}</button>`).join('')}
       <button type="button" id="ms-city-all">Marcar todas</button>
       <button type="button" id="ms-city-none">Limpar</button>
     </div>
@@ -362,14 +387,17 @@ function populateFilterOptions(){
       renderAll();
     });
   });
-  document.getElementById('ms-city-touros').onclick = () => {
-    selectedCities = new Set(cidades.filter(c => OPS.isTourosUnitCity(c)));
-    els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      cb.checked = selectedCities.has(cb.value);
-    });
-    updateCityButtonLabel(cidades.length);
-    renderAll();
-  };
+  els.cidadePanel.querySelectorAll('.ms-unidade-btn').forEach(btn => {
+    btn.onclick = () => {
+      const unidade = btn.dataset.unidade;
+      selectedCities = new Set(cidades.filter(c => OPS.isUnitCity(c, unidade)));
+      els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = selectedCities.has(cb.value);
+      });
+      updateCityButtonLabel(cidades.length);
+      renderAll();
+    };
+  });
   document.getElementById('ms-city-all').onclick = () => {
     selectedCities = new Set(cidades);
     els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
@@ -397,10 +425,18 @@ function populateFilterOptions(){
 function updateCityButtonLabel(total){
   if (selectedCities.size === 0) els.cidadeBtn.textContent = 'Todas as cidades ▾';
   else if (selectedCities.size === total) els.cidadeBtn.textContent = 'Todas as cidades ▾';
-  else if ([...selectedCities].every(c => OPS.isTourosUnitCity(c)) && selectedCities.size >= 3)
-    els.cidadeBtn.textContent = '📍 Unidade Touros ▾';
-  else if (selectedCities.size === 1) els.cidadeBtn.textContent = [...selectedCities][0] + ' ▾';
-  else els.cidadeBtn.textContent = selectedCities.size + ' cidades ▾';
+  else {
+    const unidadeCorrespondente = Object.keys(OPS.UNIT_CITIES).find(u =>
+      [...selectedCities].every(c => OPS.isUnitCity(c, u)) && selectedCities.size >= 3
+    );
+    if (unidadeCorrespondente){
+      els.cidadeBtn.textContent = `📍 Unidade ${unidadeCorrespondente.charAt(0) + unidadeCorrespondente.slice(1).toLowerCase()} ▾`;
+    } else if (selectedCities.size === 1){
+      els.cidadeBtn.textContent = [...selectedCities][0] + ' ▾';
+    } else {
+      els.cidadeBtn.textContent = selectedCities.size + ' cidades ▾';
+    }
+  }
 }
 
 els.cidadeBtn.addEventListener('click', (e) => {
@@ -419,6 +455,7 @@ function getFiltered(){
   const prazo = els.prazo.value;
   const projetoFiltro = els.projeto.value;
   const sigla = els.sigla.value;
+  const statusAtend = els.statusAtend.value;
 
   return records.filter(r => {
     if (isAlwaysHidden(r)) return false;
@@ -426,7 +463,9 @@ function getFiltered(){
     if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
     if (tipo && r.tipoCurto !== tipo) return false;
     if (sigla && getMapLabel(r) !== sigla) return false;
-    if (prazo && getStatus(r) !== prazo) return false;
+    if (prazo === 'perto'){ if (runwayColor(r) !== 'warn') return false; }
+    else if (prazo && getStatus(r) !== prazo) return false;
+    if (statusAtend && classifyStatusAtendimento(r.statusAtendimento) !== statusAtend) return false;
     if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
     if (q){
       const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||''));
@@ -708,6 +747,7 @@ async function pullAndRefresh(){
   await pullImportMeta();
   renderAll(false);
   if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
+  return !!shared;
 }
 setInterval(pullAndRefresh, 5 * 60 * 1000);
 
@@ -715,7 +755,7 @@ setInterval(pullAndRefresh, 5 * 60 * 1000);
 window.OPS_ON_REFRESH = pullAndRefresh;
 
 // ---------- filtros ----------
-[els.search, els.tipo, els.prazo, els.projeto, els.sigla].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -942,6 +982,7 @@ function mapHeader(h){
   if (n === 'complemento') return 'complemento';
   if (n.includes('telefone principal')) return 'telefone';
   if (n === 'supervisor') return 'supervisor';
+  if (n === 'status') return 'statusAtendimento';
   if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
   if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
   if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
@@ -1049,6 +1090,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         cidade, bairro,
         telefone: row.telefone || '',
         supervisor: row.supervisor || '',
+        statusAtendimento: row.statusAtendimento || '',
         endereco: row.endereco || '',
         numero: row.numero || '',
         complemento: row.complemento || '',
@@ -1152,24 +1194,54 @@ document.getElementById('view-toggle').addEventListener('click', (e) => {
 });
 
 // ---------- tela cheia do mapa ----------
-document.getElementById('btn-map-fullscreen').addEventListener('click', () => {
+function setFullscreen(indo){
   const mapPanel = document.getElementById('map-panel');
-  const indo = !mapPanel.classList.contains('map-fullscreen');
   mapPanel.classList.toggle('map-fullscreen', indo);
   document.getElementById('btn-map-fullscreen').textContent = indo ? '✕' : '⛶';
   document.getElementById('btn-map-fullscreen').title = indo ? 'Sair da tela cheia' : 'Tela cheia';
+  document.getElementById('btn-map-filters').style.display = indo ? 'inline-flex' : 'none';
+  if (!indo) closeFiltersDrawer();
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
+}
+document.getElementById('btn-map-fullscreen').addEventListener('click', () => {
+  const mapPanel = document.getElementById('map-panel');
+  setFullscreen(!mapPanel.classList.contains('map-fullscreen'));
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){
     const mapPanel = document.getElementById('map-panel');
-    if (mapPanel.classList.contains('map-fullscreen')){
-      mapPanel.classList.remove('map-fullscreen');
-      document.getElementById('btn-map-fullscreen').textContent = '⛶';
-      document.getElementById('btn-map-fullscreen').title = 'Tela cheia';
-      setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
-    }
+    if (mapPanel.classList.contains('map-fullscreen')) setFullscreen(false);
   }
+});
+
+// ---------- painel de filtros dentro do mapa (tela cheia) ----------
+const toolbarOriginal = document.getElementById('mapa-toolbar');
+const toolbarAnchor = document.getElementById('mapa-toolbar-anchor');
+const filtersDrawer = document.getElementById('map-filters-drawer');
+function openFiltersDrawer(){
+  filtersDrawer.appendChild(toolbarOriginal);
+  filtersDrawer.style.display = 'block';
+  document.getElementById('btn-map-filters').textContent = '✕';
+}
+function closeFiltersDrawer(){
+  if (toolbarOriginal.parentElement === filtersDrawer){
+    toolbarAnchor.parentElement.insertBefore(toolbarOriginal, toolbarAnchor);
+  }
+  filtersDrawer.style.display = 'none';
+  document.getElementById('btn-map-filters').textContent = '🔍';
+}
+document.getElementById('btn-map-filters').addEventListener('click', () => {
+  if (filtersDrawer.style.display === 'none') openFiltersDrawer();
+  else closeFiltersDrawer();
+});
+
+// legenda do mapa funciona como atalho de filtro de prazo
+document.getElementById('map-legend').querySelectorAll('span[data-prazo]').forEach(span => {
+  span.addEventListener('click', () => {
+    const valor = span.dataset.prazo;
+    els.prazo.value = (els.prazo.value === valor) ? '' : valor;
+    renderAll();
+  });
 });
 
 // ---------- init ----------

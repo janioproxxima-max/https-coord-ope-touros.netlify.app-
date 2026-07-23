@@ -219,6 +219,19 @@ select:focus, .input:focus, button:focus-visible{
 .split #map-panel.map-fullscreen{
   position:fixed; inset:0; z-index:150; height:100vh; border-radius:0;
 }
+.map-filters-drawer{
+  position:absolute; top:60px; right:16px; z-index:60; width:280px;
+  max-height:calc(100% - 90px); overflow-y:auto;
+  background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
+  padding:14px; box-shadow:var(--shadow);
+}
+.map-filters-drawer .toolbar{
+  display:flex; flex-direction:column; align-items:stretch; gap:10px;
+  padding:0; background:transparent; border:none;
+}
+.map-filters-drawer .field{ width:100%; }
+.map-filters-drawer select, .map-filters-drawer .input{ width:100%; }
+.map-filters-drawer .multi-select .btn{ width:100%; }
 
 /* ---------------- table ---------------- */
 .table-wrap{ overflow:auto; max-height:640px; }

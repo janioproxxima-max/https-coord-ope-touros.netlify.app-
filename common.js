@@ -42,6 +42,18 @@ const OPS = (() => {
     'porto do mangue':        { name: 'PORTO DO MANGUE',       lat: -5.0866, lng: -36.8058 },
     'ipanguacu':              { name: 'IPANGUAÇU',             lat: -5.4739, lng: -36.8503 },
     'afonso bezerra':         { name: 'AFONSO BEZERRA',        lat: -5.5313, lng: -36.6797 },
+    'senador georgino avelino': { name: 'SENADOR GEORGINO AVELINO', lat: -6.2306, lng: -35.1875 },
+    'nisia floresta':         { name: 'NÍSIA FLORESTA',        lat: -6.0919, lng: -35.2075 },
+    'ares':                   { name: 'ARÊS',                  lat: -6.1892, lng: -35.1667 },
+    'goianinha':              { name: 'GOIANINHA',             lat: -6.2597, lng: -35.1836 },
+    'tibau do sul':           { name: 'TIBAU DO SUL',          lat: -6.1897, lng: -35.0864 },
+    'vila flor':              { name: 'VILA FLOR',             lat: -6.3170, lng: -35.0670 },
+    'nova cruz':              { name: 'NOVA CRUZ',             lat: -6.4761, lng: -35.4386 },
+    'logradouro':             { name: 'LOGRADOURO',            lat: -6.3500, lng: -35.1500 },
+    'sao goncalo do amarante':{ name: 'SÃO GONÇALO DO AMARANTE', lat: -5.7842, lng: -35.3328 },
+    'macaiba':                { name: 'MACAÍBA',               lat: -5.8578, lng: -35.3553 },
+    'parnamirim':             { name: 'PARNAMIRIM',            lat: -5.9156, lng: -35.2628 },
+    'ielmo marinho':          { name: 'IELMO MARINHO',         lat: -5.7719, lng: -35.6033 },
   };
 
   // Cidades que pertencem à jurisdição da Unidade Touros (usado pro alerta
@@ -53,8 +65,29 @@ const OPS = (() => {
     'pedra grande', 'alto do rodrigues', 'serra do mel', 'porto do mangue',
     'ipanguacu', 'afonso bezerra',
   ];
+  const NATAL_UNIT_CITIES = [
+    'senador georgino avelino', 'sao jose de mipibu', 'nisia floresta', 'ares',
+    'goianinha', 'canguaretama', 'tibau do sul', 'vila flor', 'nova cruz',
+    'logradouro', 'sao goncalo do amarante', 'macaiba', 'taipu', 'poco branco',
+    'parnamirim', 'natal', 'extremoz', 'ceara mirim', 'maxaranguape', 'pureza',
+    'ielmo marinho',
+  ];
+  // Registro de unidades — facilita adicionar mais unidades no futuro.
+  const UNIT_CITIES = { TOUROS: TOUROS_UNIT_CITIES, NATAL: NATAL_UNIT_CITIES };
   function isTourosUnitCity(cidade){
     return TOUROS_UNIT_CITIES.includes(normalize(cidade));
+  }
+  // Devolve o nome da unidade (ex: 'TOUROS', 'NATAL') a que a cidade pertence,
+  // ou null se não estiver em nenhuma unidade cadastrada.
+  function unitForCity(cidade){
+    const n = normalize(cidade);
+    for (const [unidade, cidades] of Object.entries(UNIT_CITIES)){
+      if (cidades.includes(n)) return unidade;
+    }
+    return null;
+  }
+  function isUnitCity(cidade, unidade){
+    return unitForCity(cidade) === unidade;
   }
 
   // Mapeamento fixo de cidade -> supervisor responsável (mais confiável do
@@ -718,7 +751,8 @@ const OPS = (() => {
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
-    TOUROS_UNIT_CITIES, TOUROS_PROJECT_CODE, isTourosUnitCity, projectUnit, checkProjectError,
+    TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE,
+    isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
     SUPERVISOR_BY_CITY, supervisorForCity,
     syncPull, syncPush, syncPushWithToast, showToast,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
@@ -956,10 +990,31 @@ function initShell(active, pageTitle){
   stampUltimaImportacao();
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
 
-  sidebar.querySelector('#sb-refresh').addEventListener('click', () => {
-    if (typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
-    stampUltimaAtualizacao();
-    stampUltimaImportacao();
+  sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
+    const btn = sidebar.querySelector('#sb-refresh');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '↻ Atualizando...';
+    let ok = true;
+    if (typeof window.OPS_ON_REFRESH === 'function'){
+      try{
+        const resultado = await window.OPS_ON_REFRESH();
+        // se a página não devolver nada (undefined), considera sucesso —
+        // só marca falha quando o retorno for explicitamente false
+        ok = resultado !== false;
+      }catch(e){
+        console.error('Falha ao atualizar', e);
+        ok = false;
+      }
+    }
+    await stampUltimaAtualizacao();
+    await stampUltimaImportacao();
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    if (!ok){
+      const aviso = OPS.showToast('⚠️ Não consegui buscar os dados mais recentes da nuvem agora — verifique sua internet e tente de novo. A tela continua com os últimos dados salvos neste navegador.');
+      setTimeout(() => aviso.remove(), 6000);
+    }
   });
 
   topbar.querySelector('#user-pill').addEventListener('click', () => {
