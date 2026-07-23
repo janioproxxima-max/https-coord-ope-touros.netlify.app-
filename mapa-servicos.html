@@ -23,6 +23,7 @@
   <div class="stat-row" id="stat-row"></div>
 
   <div class="panel toolbar" id="mapa-toolbar">
+    <div id="mapa-toolbar-filters" style="display:contents">
     <div class="field">
       <label for="f-search">Buscar</label>
       <input class="input" id="f-search" placeholder="Protocolo, bairro...">
@@ -37,6 +38,10 @@
     <div class="field">
       <label for="f-tipo">Tipo de serviço</label>
       <select id="f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-responsavel">Responsável</label>
+      <select id="f-responsavel"><option value="">Todos</option></select>
     </div>
     <div class="field">
       <label for="f-prazo">Status</label>
@@ -68,6 +73,7 @@
         <option value="pausado">Pausado</option>
         <option value="outro">Outro</option>
       </select>
+    </div>
     </div>
     <div style="flex:1"></div>
     <div class="view-toggle" id="view-toggle">
@@ -128,11 +134,18 @@
       <div id="map"></div>
       <div id="map-filters-drawer" class="map-filters-drawer" style="display:none">
         <div class="qf-block">
+          <div class="qf-label" style="display:flex;justify-content:space-between">
+            <span>Status dos chamados</span>
+            <span>Total: <b id="qf-status-total">0</b></span>
+          </div>
+          <div id="qf-status-list"></div>
+        </div>
+        <div class="qf-block">
           <div class="qf-label">Sigla</div>
           <div class="qf-tiles" id="qf-sigla-tiles"></div>
         </div>
         <div class="qf-block">
-          <div class="qf-label">Qualidade do dado</div>
+          <div class="qf-label">Ajuste</div>
           <div class="qf-tiles">
             <button type="button" class="qf-tile" data-qualidade="">Todos</button>
             <button type="button" class="qf-tile" data-qualidade="problema">⚠️ Sem lat/long ou erro de projeto</button>
@@ -290,6 +303,7 @@ const els = {
   projeto: document.getElementById('f-projeto'),
   sigla: document.getElementById('f-sigla'),
   statusAtend: document.getElementById('f-status-atend'),
+  responsavel: document.getElementById('f-responsavel'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
@@ -340,6 +354,30 @@ function classifyStatusAtendimento(raw){
   if (n.includes('deslocamento')) return 'deslocamento';
   if (n.includes('iniciado')) return 'iniciado';
   return 'outro';
+}
+
+// Classifica o chamado numa única categoria (por prioridade), pro painel
+// "Status dos chamados" — mesmo modelo do app de referência do usuário.
+const STATUS_CHAMADO_DEFS = [
+  { key: 'iniciado', label: 'Atendimento iniciado', cor: 'var(--ok)' },
+  { key: 'deslocamento', label: 'Atendimento em deslocamento', cor: 'var(--brand)' },
+  { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
+  { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--accent2)' },
+  { key: 'atrasado_sem_agendamento', label: 'Atrasado sem agendamento', cor: 'var(--warn)' },
+  { key: 'agendado_aguardando', label: 'Agendado aguardando', cor: '#5eead4' },
+  { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)' },
+];
+function classifyStatusChamado(r){
+  const cat = classifyStatusAtendimento(r.statusAtendimento);
+  if (cat === 'iniciado') return 'iniciado';
+  if (cat === 'deslocamento') return 'deslocamento';
+  if (!r.responsavel) return 'pendente';
+  const suffixMatch = (r.protocolo || '').match(/\/(\d+)\s*$/);
+  const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+  if (suffix >= 2) return 'futuro';
+  if (!r.dataAgendamento) return 'atrasado_sem_agendamento';
+  if (getStatus(r) === 'dentro') return 'agendado_aguardando';
+  return 'atendimento_atrasado';
 }
 
 function isAlwaysHidden(r){
@@ -431,6 +469,10 @@ function populateFilterOptions(){
   els.tipo.innerHTML = '<option value="">Todos</option>' +
     tipos.map(t => `<option value="${t}">${t}</option>`).join('');
 
+  const responsaveis = [...new Set(records.filter(r => !isAlwaysHidden(r)).map(r => r.responsavel).filter(Boolean))].sort();
+  els.responsavel.innerHTML = '<option value="">Todos</option>' +
+    responsaveis.map(n => `<option value="${n}">${n}</option>`).join('');
+
   const siglas = [...new Set(
     records.filter(r => !isAlwaysHidden(r) && (!isDefaultHiddenRecolhimento(r))).map(r => getMapLabel(r))
   )].sort();
@@ -472,16 +514,19 @@ function getFiltered(){
   const projetoFiltro = els.projeto.value;
   const sigla = els.sigla.value;
   const statusAtend = els.statusAtend.value;
+  const responsavelFiltro = els.responsavel ? els.responsavel.value : '';
 
   return records.filter(r => {
     if (isAlwaysHidden(r)) return false;
     if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
     if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
     if (tipo && r.tipoCurto !== tipo) return false;
+    if (responsavelFiltro && r.responsavel !== responsavelFiltro) return false;
     if (sigla && getMapLabel(r) !== sigla) return false;
     if (prazo === 'perto'){ if (runwayColor(r) !== 'warn') return false; }
     else if (prazo && getStatus(r) !== prazo) return false;
     if (statusAtend && classifyStatusAtendimento(r.statusAtendimento) !== statusAtend) return false;
+    if (statusChamadoFiltro && classifyStatusChamado(r) !== statusChamadoFiltro) return false;
     if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
     if (somenteProblema && !(OPS.resolveCoords(r).approx || OPS.checkProjectError(r))) return false;
     if (q){
@@ -734,6 +779,7 @@ function renderAll(fitView = true){
   renderTable();
   renderMap(fitView);
   if (typeof renderSiglaTiles === 'function') renderSiglaTiles();
+  if (typeof renderStatusChamadosList === 'function') renderStatusChamadosList();
 }
 
 const IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
@@ -783,7 +829,7 @@ setInterval(pullAndRefresh, 5 * 60 * 1000);
 window.OPS_ON_REFRESH = pullAndRefresh;
 
 // ---------- filtros ----------
-[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend, els.responsavel].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -1012,6 +1058,7 @@ function mapHeader(h){
   if (n.includes('telefone principal')) return 'telefone';
   if (n === 'supervisor') return 'supervisor';
   if (n === 'status') return 'statusAtendimento';
+  if (n.includes('data') && n.includes('agendamento')) return 'dataAgendamento';
   if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
   if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
   if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
@@ -1120,6 +1167,10 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         telefone: row.telefone || '',
         supervisor: row.supervisor || '',
         statusAtendimento: row.statusAtendimento || '',
+        dataAgendamento: (() => {
+          const d = OPS.parseBRDateTime(row.dataAgendamento);
+          return d ? d.toISOString() : null;
+        })(),
         endereco: row.endereco || '',
         numero: row.numero || '',
         complemento: row.complemento || '',
@@ -1244,7 +1295,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------- painel de filtros dentro do mapa (tela cheia) ----------
-const toolbarOriginal = document.getElementById('mapa-toolbar');
+const toolbarOriginal = document.getElementById('mapa-toolbar-filters');
+const toolbarHomeParent = document.getElementById('mapa-toolbar');
 const toolbarAnchor = document.getElementById('mapa-toolbar-anchor');
 const filtersDrawer = document.getElementById('map-filters-drawer');
 const toolbarSlot = document.getElementById('map-filters-toolbar-slot');
@@ -1255,7 +1307,7 @@ function openFiltersDrawer(){
 }
 function closeFiltersDrawer(){
   if (toolbarOriginal.parentElement === toolbarSlot){
-    toolbarAnchor.parentElement.insertBefore(toolbarOriginal, toolbarAnchor);
+    toolbarHomeParent.insertBefore(toolbarOriginal, toolbarHomeParent.firstChild);
   }
   filtersDrawer.style.display = 'none';
   document.getElementById('btn-map-filters').textContent = '🔍';
@@ -1267,6 +1319,29 @@ document.getElementById('btn-map-filters').addEventListener('click', () => {
 
 // ---------- filtros rápidos em botão (sigla + qualidade do dado) ----------
 let somenteProblema = false;
+let statusChamadoFiltro = '';
+
+function renderStatusChamadosList(){
+  const base = records.filter(r => !isAlwaysHidden(r) && !(isDefaultHiddenRecolhimento(r)));
+  const counts = {};
+  STATUS_CHAMADO_DEFS.forEach(d => counts[d.key] = 0);
+  base.forEach(r => { const k = classifyStatusChamado(r); if (counts[k] !== undefined) counts[k]++; });
+  document.getElementById('qf-status-total').textContent = base.length;
+  document.getElementById('qf-status-list').innerHTML = STATUS_CHAMADO_DEFS.map(d => `
+    <div class="qf-status-row ${statusChamadoFiltro === d.key ? 'active' : ''}" data-status-chamado="${d.key}">
+      <span class="qf-status-name"><span class="qf-status-dot" style="background:${d.cor}"></span>${d.label}</span>
+      <span class="qf-status-count">${counts[d.key]}</span>
+    </div>
+  `).join('');
+  document.querySelectorAll('[data-status-chamado]').forEach(row => {
+    row.addEventListener('click', () => {
+      const key = row.dataset.statusChamado;
+      statusChamadoFiltro = (statusChamadoFiltro === key) ? '' : key;
+      renderAll();
+    });
+  });
+}
+
 function renderSiglaTiles(){
   const siglas = ['', 'VT', 'AT', 'MDE', 'SA', 'REC/MDE'];
   const rotulos = { '': 'Todas', 'VT':'VT', 'AT':'AT', 'MDE':'MDE', 'SA':'SA', 'REC/MDE':'REC/MDE' };
