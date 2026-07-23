@@ -366,6 +366,7 @@ function classifyStatusAtendimento(raw){
 const STATUS_CHAMADO_DEFS = [
   { key: 'iniciado', label: 'Atendimento iniciado', cor: 'var(--ok)' },
   { key: 'deslocamento', label: 'Atendimento em deslocamento', cor: 'var(--brand)' },
+  { key: 'pausado', label: 'Atendimento pausado', cor: 'var(--warn)' },
   { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
   { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--ink-faint)' },
   { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
@@ -386,6 +387,7 @@ function classifyStatusChamado(r){
   const cat = classifyStatusAtendimento(r.statusAtendimento);
   if (cat === 'iniciado') return 'iniciado';
   if (cat === 'deslocamento') return 'deslocamento';
+  if (cat === 'pausado') return 'pausado';
   if (!r.responsavel) return 'pendente';
   const dtAgendamento = OPS.toDateSafe(r.dataAgendamento);
   if (dtAgendamento){
@@ -771,11 +773,30 @@ function renderMap(fitView = true){
   resolved.forEach(({ r, coords }) => {
     const label = getMapLabel(r);
     const status = getStatus(r);
-    const color = runwayColor(r); // 'ok' | 'warn' | 'crit' | 'neutral'
+    const statusChamado = classifyStatusChamado(r);
+    // cor do pino: verde/azul/cinza só pra Iniciado/Deslocamento/Pendente —
+    // as demais situações mantêm a cor de prazo (dentro/perto/fora) e ganham
+    // um selinho de alerta em cima, pra não perder a info de urgência.
+    let color;
+    if (statusChamado === 'iniciado') color = 'ok';
+    else if (statusChamado === 'deslocamento') color = 'deslocamento';
+    else if (statusChamado === 'pausado') color = 'warn';
+    else if (statusChamado === 'pendente') color = 'neutral';
+    else color = runwayColor(r);
+
+    const badges = [];
+    if (statusChamado === 'atendimento_atrasado') badges.push({ icon: '🚨', title: 'Atendimento atrasado' });
+    if (OPS.checkProjectError(r)) badges.push({ icon: '🚩', title: 'Erro de projeto' });
+    if (coords.reason) badges.push({ icon: '◇', title: coords.reason === 'out_of_area' ? 'Lat/long fora da área — corrigida' : 'Sem coordenada própria' });
+    if (statusChamado === 'atendimento_hoje') badges.push({ icon: '⏰', title: 'Atendimento para hoje' });
+    if (statusChamado === 'futuro') badges.push({ icon: '📅', title: 'Agendamento futuro' });
+    const badgesHtml = badges.length
+      ? `<div class="marker-badges">${badges.map(b => `<span title="${b.title}">${b.icon}</span>`).join('')}</div>`
+      : '';
 
     const markerIcon = L.divIcon({
       className: '',
-      html: `<div class="marker-label ${color}"><span class="code">${label}</span><span class="hrs">${fmtElapsed(r)}</span></div>`,
+      html: `<div class="marker-label ${color}">${badgesHtml}<span class="code">${label}</span><span class="hrs">${fmtElapsed(r)}</span></div>`,
       iconSize: [42, 32],
       iconAnchor: [21, 28],
     });

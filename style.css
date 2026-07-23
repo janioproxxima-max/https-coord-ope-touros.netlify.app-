@@ -351,7 +351,7 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 
 .marker-label{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  min-width:38px; padding:3px 6px; border-radius:7px;
+  min-width:38px; padding:3px 6px; border-radius:7px; position:relative;
   box-shadow:0 2px 6px rgba(0,0,0,.45); border:1px solid rgba(0,0,0,.3);
   font-family:var(--f-display); line-height:1.15; text-align:center;
 }
@@ -365,6 +365,13 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .marker-label.crit .code, .marker-label.crit .hrs{ color:#3a0006; }
 .marker-label.neutral{ background:var(--bg-raised); border-color:var(--line); }
 .marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim); }
+.marker-label.deslocamento{ background:var(--brand); }
+.marker-label.deslocamento .code, .marker-label.deslocamento .hrs{ color:#00232b; }
+.marker-badges{
+  position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+  display:flex; gap:1px; font-size:11px; line-height:1; white-space:nowrap;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
+}
 
 @keyframes marker-pulse{
   0%   { box-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 0 0 rgba(0,212,255,.7); }
