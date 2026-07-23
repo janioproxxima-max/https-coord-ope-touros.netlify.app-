@@ -40,8 +40,11 @@
       <select id="f-tipo"><option value="">Todos</option></select>
     </div>
     <div class="field">
-      <label for="f-responsavel">Responsável</label>
-      <select id="f-responsavel"><option value="">Todos</option></select>
+      <label for="f-responsavel-btn">Responsável</label>
+      <div class="multi-select" id="f-responsavel-wrap">
+        <button type="button" class="btn ghost" id="f-responsavel-btn">Todos ▾</button>
+        <div class="multi-select-panel" id="f-responsavel-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="field">
       <label for="f-prazo">Status</label>
@@ -303,12 +306,14 @@ const els = {
   projeto: document.getElementById('f-projeto'),
   sigla: document.getElementById('f-sigla'),
   statusAtend: document.getElementById('f-status-atend'),
-  responsavel: document.getElementById('f-responsavel'),
+  responsavelBtn: document.getElementById('f-responsavel-btn'),
+  responsavelPanel: document.getElementById('f-responsavel-panel'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
 };
 let selectedCities = new Set(); // vazio = todas as cidades
+let selectedResponsaveis = new Set(); // vazio = todos os responsáveis
 
 // -------- cálculo dinâmico (tempo real) --------
 function getElapsedHours(r){
@@ -470,8 +475,48 @@ function populateFilterOptions(){
     tipos.map(t => `<option value="${t}">${t}</option>`).join('');
 
   const responsaveis = [...new Set(records.filter(r => !isAlwaysHidden(r)).map(r => r.responsavel).filter(Boolean))].sort();
-  els.responsavel.innerHTML = '<option value="">Todos</option>' +
-    responsaveis.map(n => `<option value="${n}">${n}</option>`).join('');
+  selectedResponsaveis = new Set([...selectedResponsaveis].filter(n => responsaveis.includes(n)));
+  els.responsavelPanel.innerHTML = `
+    <input class="input" id="ms-resp-search" placeholder="Buscar responsável..." style="width:100%;margin-bottom:8px">
+    <div class="ms-actions">
+      <button type="button" id="ms-resp-all">Marcar todos</button>
+      <button type="button" id="ms-resp-none">Limpar</button>
+    </div>
+    <div id="ms-resp-list">
+      ${responsaveis.map(n => `
+        <label data-resp="${n}"><input type="checkbox" value="${n}" ${selectedResponsaveis.has(n) ? 'checked' : ''}> ${n}</label>
+      `).join('')}
+    </div>
+  `;
+  updateResponsavelButtonLabel(responsaveis.length);
+
+  document.getElementById('ms-resp-search').addEventListener('input', (e) => {
+    const q = OPS.normalize(e.target.value);
+    els.responsavelPanel.querySelectorAll('#ms-resp-list label').forEach(label => {
+      label.style.display = OPS.normalize(label.dataset.resp).includes(q) ? 'flex' : 'none';
+    });
+  });
+  document.getElementById('ms-resp-search').addEventListener('click', e => e.stopPropagation());
+
+  els.responsavelPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedResponsaveis.add(cb.value); else selectedResponsaveis.delete(cb.value);
+      updateResponsavelButtonLabel(responsaveis.length);
+      renderAll();
+    });
+  });
+  document.getElementById('ms-resp-all').onclick = () => {
+    selectedResponsaveis = new Set(responsaveis);
+    els.responsavelPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+    updateResponsavelButtonLabel(responsaveis.length);
+    renderAll();
+  };
+  document.getElementById('ms-resp-none').onclick = () => {
+    selectedResponsaveis = new Set();
+    els.responsavelPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    updateResponsavelButtonLabel(responsaveis.length);
+    renderAll();
+  };
 
   const siglas = [...new Set(
     records.filter(r => !isAlwaysHidden(r) && (!isDefaultHiddenRecolhimento(r))).map(r => getMapLabel(r))
@@ -497,44 +542,58 @@ function updateCityButtonLabel(total){
   }
 }
 
+function updateResponsavelButtonLabel(total){
+  if (selectedResponsaveis.size === 0 || selectedResponsaveis.size === total) els.responsavelBtn.textContent = 'Todos ▾';
+  else if (selectedResponsaveis.size === 1) els.responsavelBtn.textContent = [...selectedResponsaveis][0] + ' ▾';
+  else els.responsavelBtn.textContent = selectedResponsaveis.size + ' responsáveis ▾';
+}
+
 els.cidadeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   els.cidadePanel.style.display = els.cidadePanel.style.display === 'none' ? 'block' : 'none';
+});
+els.responsavelBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  els.responsavelPanel.style.display = els.responsavelPanel.style.display === 'none' ? 'block' : 'none';
 });
 document.addEventListener('click', (e) => {
   if (!document.getElementById('f-cidade-wrap').contains(e.target)){
     els.cidadePanel.style.display = 'none';
   }
+  if (!document.getElementById('f-responsavel-wrap').contains(e.target)){
+    els.responsavelPanel.style.display = 'none';
+  }
 });
 
-function getFiltered(){
+function matchesActiveFilters(r, { skipStatusChamado = false } = {}){
   const q = OPS.normalize(els.search.value);
   const tipo = els.tipo.value;
   const prazo = els.prazo.value;
   const projetoFiltro = els.projeto.value;
   const sigla = els.sigla.value;
   const statusAtend = els.statusAtend.value;
-  const responsavelFiltro = els.responsavel ? els.responsavel.value : '';
 
-  return records.filter(r => {
-    if (isAlwaysHidden(r)) return false;
-    if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
-    if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
-    if (tipo && r.tipoCurto !== tipo) return false;
-    if (responsavelFiltro && r.responsavel !== responsavelFiltro) return false;
-    if (sigla && getMapLabel(r) !== sigla) return false;
-    if (prazo === 'perto'){ if (runwayColor(r) !== 'warn') return false; }
-    else if (prazo && getStatus(r) !== prazo) return false;
-    if (statusAtend && classifyStatusAtendimento(r.statusAtendimento) !== statusAtend) return false;
-    if (statusChamadoFiltro && classifyStatusChamado(r) !== statusChamadoFiltro) return false;
-    if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
-    if (somenteProblema && !(OPS.resolveCoords(r).approx || OPS.checkProjectError(r))) return false;
-    if (q){
-      const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||''));
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  if (isAlwaysHidden(r)) return false;
+  if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
+  if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
+  if (tipo && r.tipoCurto !== tipo) return false;
+  if (selectedResponsaveis.size > 0 && !selectedResponsaveis.has(r.responsavel)) return false;
+  if (sigla && getMapLabel(r) !== sigla) return false;
+  if (prazo === 'perto'){ if (runwayColor(r) !== 'warn') return false; }
+  else if (prazo && getStatus(r) !== prazo) return false;
+  if (statusAtend && classifyStatusAtendimento(r.statusAtendimento) !== statusAtend) return false;
+  if (!skipStatusChamado && statusChamadoFiltro && classifyStatusChamado(r) !== statusChamadoFiltro) return false;
+  if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
+  if (somenteProblema && !(OPS.resolveCoords(r).approx || OPS.checkProjectError(r))) return false;
+  if (q){
+    const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||'') + ' ' + (r.responsavel||''));
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function getFiltered(){
+  return records.filter(r => matchesActiveFilters(r));
 }
 
 function computeStats(list){
@@ -1322,7 +1381,7 @@ let somenteProblema = false;
 let statusChamadoFiltro = '';
 
 function renderStatusChamadosList(){
-  const base = records.filter(r => !isAlwaysHidden(r) && !(isDefaultHiddenRecolhimento(r)));
+  const base = records.filter(r => matchesActiveFilters(r, { skipStatusChamado: true }));
   const counts = {};
   STATUS_CHAMADO_DEFS.forEach(d => counts[d.key] = 0);
   base.forEach(r => { const k = classifyStatusChamado(r); if (counts[k] !== undefined) counts[k]++; });
