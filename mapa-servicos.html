@@ -143,6 +143,7 @@
         <div class="field"><label>Responsável</label><input class="input" id="rec-responsavel"></div>
       </div>
       <div class="field"><label>Observação</label><input class="input" id="rec-observacao"></div>
+      <div class="field"><label>Observação do técnico</label><input class="input" id="rec-observacao-tecnico"></div>
       <div class="grid2">
         <div class="field"><label>Endereço (rua)</label><input class="input" id="rec-endereco"></div>
         <div class="field"><label>Número</label><input class="input" id="rec-numero"></div>
@@ -749,13 +750,21 @@ function openDetail(rec){
     <div class="status-row"><span class="status-name">Responsável</span><span class="status-val">${rec.responsavel || '—'}</span></div>
     <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
-    <div class="status-row"><span class="status-name">Latitude</span><span class="status-val">${rec.lat != null ? rec.lat : '—'}</span></div>
-    <div class="status-row"><span class="status-name">Longitude</span><span class="status-val">${rec.lng != null ? rec.lng : '—'}</span></div>
+    <div class="status-row">
+      <span class="status-name">Latitude/Longitude</span>
+      <span class="status-val">${rec.lat != null && rec.lng != null
+        ? `<a href="https://www.google.com/maps?q=${rec.lat},${rec.lng}" target="_blank" rel="noopener" style="color:var(--brand)">${rec.lat}, ${rec.lng}</a>`
+        : '—'}</span>
+    </div>
     <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val" style="font-size:12.5px">${abertura}</span></div>
     <div class="status-row"><span class="status-name">SLA</span><span class="status-val">${rec.slaHoras ? rec.slaHoras + 'h' : 'não definido'}</span></div>
     <div class="status-row" style="display:block">
       <span class="status-name" style="margin-bottom:6px">Observação</span>
       <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${rec.observacao || '—'}</div>
+    </div>
+    <div class="status-row" style="display:block">
+      <span class="status-name" style="margin-bottom:6px">Observação do técnico</span>
+      <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${rec.observacaoTecnico || '—'}</div>
     </div>
   `;
   // reseta qualquer posição arrastada de uma abertura anterior
@@ -854,6 +863,7 @@ function openModal(rec){
   document.getElementById('rec-telefone').value = rec ? (rec.telefone||'') : '';
   document.getElementById('rec-responsavel').value = rec ? (rec.responsavel||'') : '';
   document.getElementById('rec-observacao').value = rec ? (rec.observacao||'') : '';
+  document.getElementById('rec-observacao-tecnico').value = rec ? (rec.observacaoTecnico||'') : '';
   document.getElementById('rec-endereco').value = rec ? (rec.endereco||'') : '';
   document.getElementById('rec-numero').value = rec ? (rec.numero||'') : '';
   document.getElementById('rec-complemento').value = rec ? (rec.complemento||'') : '';
@@ -892,6 +902,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
     telefone: document.getElementById('rec-telefone').value.trim(),
     responsavel: document.getElementById('rec-responsavel').value.trim(),
     observacao: document.getElementById('rec-observacao').value.trim(),
+    observacaoTecnico: document.getElementById('rec-observacao-tecnico').value.trim(),
     endereco: document.getElementById('rec-endereco').value.trim(),
     numero: document.getElementById('rec-numero').value.trim(),
     complemento: document.getElementById('rec-complemento').value.trim(),
@@ -938,6 +949,7 @@ function mapHeader(h){
   if (n === 'responsavel') return 'responsavel';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
+  if (n.includes('observacao') && n.includes('tecnico')) return 'observacaoTecnico';
   if (n.includes('latitude') && n.includes('longitude')) return 'latlng';
   if (n.includes('criado em')) return 'criadoEmLegacy';
   if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
@@ -1042,6 +1054,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         complemento: row.complemento || '',
         projeto: row.projeto || '',
         observacao: row.observacao || '',
+        observacaoTecnico: row.observacaoTecnico || '',
         lat, lng,
         criadoEm: baseDt ? baseDt.toISOString() : null,
         tempoManual, prazoManual,
@@ -1105,9 +1118,9 @@ document.getElementById('file-import').addEventListener('change', (e) => {
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS','LAT','LNG'];
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','RESPONSÁVEL','PROJETO','OBSERVAÇÃO','OBSERVAÇÃO DO TÉCNICO','CRIADO EM','SLA HORAS','LAT','LNG'];
   const rows = records.map(r => [
-    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.projeto, r.observacao,
+    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.responsavel || '', r.projeto, r.observacao, r.observacaoTecnico || '',
     r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
   ]);
   OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
