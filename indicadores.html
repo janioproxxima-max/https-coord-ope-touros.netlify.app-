@@ -130,6 +130,9 @@ const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE IN
 function isAlwaysHidden(r){
   if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
   if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
+  const nCompleto = OPS.normalize(r.tituloCompleto);
+  if (nCompleto.includes('bot backoffice') || nCompleto.includes('solicitacao inativa')) return true;
+  if (OPS.normalize(r.tipoCurto).includes('bot backoffice') || OPS.normalize(r.tipoCurto).includes('solicitacao inativa')) return true;
   return false;
 }
 function isDefaultHiddenRecolhimento(r){

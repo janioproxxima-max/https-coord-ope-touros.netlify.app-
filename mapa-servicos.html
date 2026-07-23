@@ -389,6 +389,10 @@ function isAlwaysHidden(r){
   if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
   // tipos não catalogados de atendimento financeiro/CRE — nunca precisam aparecer
   if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
+  // desconsiderar sempre, venha como tipo de serviço ou dentro do título
+  const nCompleto = OPS.normalize(r.tituloCompleto);
+  if (nCompleto.includes('bot backoffice') || nCompleto.includes('solicitacao inativa')) return true;
+  if (OPS.normalize(r.tipoCurto).includes('bot backoffice') || OPS.normalize(r.tipoCurto).includes('solicitacao inativa')) return true;
   return false;
 }
 // Os outros tipos de recolhimento (estoque, comodato etc.) ficam escondidos
@@ -669,7 +673,7 @@ function renderTable(){
       <tr data-id="${r.id}" class="${r.id === lastHighlightedRowId ? 'row-highlight' : ''}">
         <td class="proto">${r.protocolo}${(() => {
           const err = OPS.checkProjectError(r);
-          return err ? `<span class="coord-alert" title="Cidade é da Unidade Touros, mas o projeto é ${err.encontrado}${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''} — esperado ${err.esperado}">🚩 projeto</span>` : '';
+          return err ? `<span class="coord-alert" title="Cidade é da ${OPS.unitForCity(r.cidade) ? 'Unidade ' + OPS.unitForCity(r.cidade).charAt(0) + OPS.unitForCity(r.cidade).slice(1).toLowerCase() : 'unidade'}, mas o projeto é ${err.encontrado}${err.unidadeDetectada ? ' (' + err.unidadeDetectada + ')' : ''} — esperado ${err.esperado}">🚩 projeto</span>` : '';
         })()}</td>
         <td>
           <span class="svc-type">
@@ -776,8 +780,21 @@ function renderMap(fitView = true){
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
       </div>
     `);
-    marker.on('mouseover', () => marker.openPopup());
-    marker.on('mouseout', () => marker.closePopup());
+    marker.on('mouseover', () => {
+      clearTimeout(marker._closeTimer);
+      marker.openPopup();
+    });
+    marker.on('mouseout', () => {
+      marker._closeTimer = setTimeout(() => {
+        const popupEl = marker.getPopup() && marker.getPopup().getElement();
+        if (popupEl && popupEl.matches(':hover')) return; // mouse está em cima do popup, não fecha
+        marker.closePopup();
+      }, 250);
+    });
+    marker.on('popupopen', () => {
+      const popupEl = marker.getPopup() && marker.getPopup().getElement();
+      if (popupEl) popupEl.addEventListener('mouseleave', () => marker.closePopup(), { once: true });
+    });
     marker.on('click', () => {
       highlightListRow(r.id);
       openDetail(r);

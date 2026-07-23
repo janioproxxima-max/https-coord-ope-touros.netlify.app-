@@ -329,6 +329,7 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 
 .leaflet-popup-content-wrapper{ background:var(--bg-panel-2); color:var(--ink); border-radius:8px; }
 .leaflet-popup-tip{ background:var(--bg-panel-2); }
+.popup-svc{ user-select:text; cursor:text; }
 .popup-svc .proto{ display:block; margin-bottom:4px; }
 .popup-svc .title{ font-weight:700; font-size:13px; margin-bottom:3px; }
 .popup-svc .meta{ font-size:12px; color:var(--ink-dim); }
@@ -533,7 +534,7 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .status-row:last-child{ border-bottom:none; }
 .status-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-right:7px; display:inline-block; }
 .status-name{ display:flex; align-items:center; color:var(--ink-dim); }
-.status-val{ font-family:var(--f-display); font-weight:700; }
+.status-val{ font-family:var(--f-display); font-weight:700; user-select:text; cursor:text; }
 
 .tbl-wrap{ background:var(--bg-panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:18px; }
 .tbl-wrap table{ width:100%; border-collapse:collapse; }

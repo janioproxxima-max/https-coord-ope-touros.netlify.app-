@@ -111,6 +111,9 @@ const OPS = (() => {
   }
 
   const TOUROS_PROJECT_CODE = 'OP-INST-VT-TOUROS';
+  const NATAL_PROJECT_CODE = 'OP-INST-VT-NATAL';
+  // Código de projeto esperado por unidade — adicionar aqui quando cadastrar novas unidades.
+  const UNIT_PROJECT_CODE = { TOUROS: TOUROS_PROJECT_CODE, NATAL: NATAL_PROJECT_CODE };
   // Mapeamento conhecido de sufixo do código de projeto -> nome da unidade.
   // Sufixos não listados aqui viram "Unidade <Sufixo>" automaticamente.
   const KNOWN_PROJECT_UNITS = {
@@ -129,15 +132,19 @@ const OPS = (() => {
       ('Unidade ' + suffix.charAt(0) + suffix.slice(1).toLowerCase());
     return { suffix, unitName };
   }
-  // Verifica se o registro tem erro de projeto: cidade é da Unidade Touros
-  // mas o projeto não é OP-INST-VT-TOUROS.
+  // Verifica se o registro tem erro de projeto: a cidade pertence a alguma
+  // unidade cadastrada (Touros, Natal, ...) mas o projeto não é o código
+  // esperado para aquela unidade.
   function checkProjectError(record){
-    if (!isTourosUnitCity(record.cidade)) return null;
+    const unidade = unitForCity(record.cidade);
+    if (!unidade) return null;
+    const esperado = UNIT_PROJECT_CODE[unidade];
+    if (!esperado) return null; // unidade cadastrada mas sem código de projeto definido ainda
     const projetoNorm = (record.projeto || '').toString().trim().toUpperCase();
-    if (projetoNorm === TOUROS_PROJECT_CODE) return null;
+    if (projetoNorm === esperado) return null;
     const unit = projectUnit(record.projeto);
     return {
-      esperado: TOUROS_PROJECT_CODE,
+      esperado,
       encontrado: record.projeto || '(vazio)',
       unidadeDetectada: unit ? unit.unitName : null,
     };
@@ -751,7 +758,7 @@ const OPS = (() => {
     loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
-    TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE,
+    TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
     SUPERVISOR_BY_CITY, supervisorForCity,
     syncPull, syncPush, syncPushWithToast, showToast,
