@@ -119,8 +119,10 @@
           <span data-prazo="fora" style="cursor:pointer"><span class="sw" style="background:var(--crit)"></span>Fora do prazo</span>
           <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
         </div>
-        <button type="button" class="icon-btn" id="btn-map-filters" title="Filtros" style="display:none">🔍</button>
-        <button type="button" class="icon-btn" id="btn-map-fullscreen" title="Tela cheia">⛶</button>
+        <div class="map-head-actions">
+          <button type="button" class="icon-btn" id="btn-map-filters" title="Filtros" style="display:none">🔍</button>
+          <button type="button" class="icon-btn" id="btn-map-fullscreen" title="Tela cheia">⛶</button>
+        </div>
       </div>
       <div id="map"></div>
       <div id="map-filters-drawer" class="map-filters-drawer" style="display:none"></div>
@@ -647,6 +649,8 @@ function renderMap(fitView = true){
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
       </div>
     `);
+    marker.on('mouseover', () => marker.openPopup());
+    marker.on('mouseout', () => marker.closePopup());
     marker.on('click', () => {
       highlightListRow(r.id);
       openDetail(r);

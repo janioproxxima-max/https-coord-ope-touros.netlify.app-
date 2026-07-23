@@ -74,16 +74,40 @@
     </div>
   </div>
 
-  <div class="card" style="margin-top:18px">
-    <div class="card-head">
-      <h3>📉 Ausências por período</h3>
-      <select id="f-ausencia-agrupamento" style="margin-left:auto;min-width:140px">
-        <option value="mes">Por mês</option>
-        <option value="motivo">Por motivo</option>
-        <option value="colaborador">Por colaborador</option>
-      </select>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:18px">
+    <div class="card">
+      <div class="card-head"><h3>📅 Folga fixa — Segunda a Sexta</h3></div>
+      <div style="position:relative;height:260px;padding:16px"><canvas id="chart-escala-semana"></canvas></div>
+      <p class="page-sub" style="padding:0 16px 14px;margin:0">Clique numa coluna pra ver os nomes.</p>
     </div>
-    <div style="position:relative;height:280px;padding:16px"><canvas id="chart-ausencias"></canvas></div>
+    <div class="card">
+      <div class="card-head"><h3>🔁 Rodízio de fim de semana</h3></div>
+      <div style="position:relative;height:260px;padding:16px"><canvas id="chart-rodizio-fds"></canvas></div>
+      <p class="page-sub" style="padding:0 16px 14px;margin:0">Próximo fim de semana. Clique pra ver os nomes.</p>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h3>📉 Ausências por período</h3>
+        <select id="f-ausencia-agrupamento" style="margin-left:auto;min-width:140px">
+          <option value="mes">Por mês</option>
+          <option value="motivo">Por motivo</option>
+          <option value="colaborador">Por colaborador</option>
+        </select>
+      </div>
+      <div style="position:relative;height:260px;padding:16px"><canvas id="chart-ausencias"></canvas></div>
+      <p class="page-sub" style="padding:0 16px 14px;margin:0">Clique numa coluna pra ver nomes e datas.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalhe ao clicar numa coluna dos gráficos -->
+<div class="modal-backdrop" id="modal-detalhe-grafico" style="display:none">
+  <div class="modal">
+    <h3 id="detalhe-grafico-title">Detalhe</h3>
+    <div id="detalhe-grafico-body" style="max-height:340px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btn-detalhe-grafico-close">Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -352,7 +376,7 @@ function renderTable(){
   `).join('');
 }
 
-function renderAll(){ renderStats(); renderTable(); renderAusenciasChart(); }
+function renderAll(){ renderStats(); renderTable(); renderAusenciasChart(); renderEscalaSemanaChart(); renderRodizioFDSChart(); }
 
 [els.search, els.cc, els.gestor, els.status].forEach(el => {
   el.addEventListener('input', renderAll);
@@ -593,10 +617,23 @@ document.getElementById('btn-export').onclick = () => {
   OPS.downloadCSV('gestao-pessoas-touros.csv', headers, rows);
 };
 
+// ---------- modal de detalhe (usado pelos 3 gráficos) ----------
+const modalDetalheGrafico = document.getElementById('modal-detalhe-grafico');
+function abrirDetalheGrafico(titulo, linhas){
+  document.getElementById('detalhe-grafico-title').textContent = titulo;
+  const body = document.getElementById('detalhe-grafico-body');
+  body.innerHTML = linhas.length
+    ? linhas.map(l => `<div class="status-row"><span class="status-name">${l.principal}</span>${l.secundario ? `<span class="status-val" style="font-size:12px">${l.secundario}</span>` : ''}</div>`).join('')
+    : '<p style="color:var(--ink-dim);font-size:13px;padding:8px 0">Ninguém nessa categoria.</p>';
+  modalDetalheGrafico.style.display = 'flex';
+}
+document.getElementById('btn-detalhe-grafico-close').onclick = () => modalDetalheGrafico.style.display = 'none';
+modalDetalheGrafico.addEventListener('click', e => { if (e.target === modalDetalheGrafico) modalDetalheGrafico.style.display = 'none'; });
+
 let chartAusencias = null;
 function renderAusenciasChart(){
   const modo = document.getElementById('f-ausencia-agrupamento').value;
-  const counts = {};
+  const grupos = {}; // chave -> lista de ausências daquele grupo
   ausencias.forEach(a => {
     let chave;
     if (modo === 'mes'){
@@ -608,19 +645,29 @@ function renderAusenciasChart(){
       const colab = records.find(r => r.id === a.colaboradorId);
       chave = colab ? colab.nome : 'Desconhecido';
     }
-    counts[chave] = (counts[chave] || 0) + 1;
+    (grupos[chave] = grupos[chave] || []).push(a);
   });
-  const entries = Object.entries(counts).sort((a,b) => modo === 'mes' ? a[0].localeCompare(b[0]) : b[1]-a[1]);
+  const entries = Object.entries(grupos).sort((a,b) => modo === 'mes' ? a[0].localeCompare(b[0]) : b[1].length - a[1].length);
 
   if (chartAusencias) chartAusencias.destroy();
   chartAusencias = new Chart(document.getElementById('chart-ausencias'), {
     type: 'bar',
     data: {
       labels: entries.map(([k]) => k),
-      datasets: [{ label: 'Ausências', data: entries.map(([,v]) => v), backgroundColor: '#ff4d6d' }],
+      datasets: [{ label: 'Ausências', data: entries.map(([,v]) => v.length), backgroundColor: '#ff4d6d' }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return;
+        const [, lista] = entries[elementos[0].index];
+        const linhas = lista.map(a => {
+          const colab = records.find(r => r.id === a.colaboradorId);
+          return { principal: colab ? colab.nome : 'Desconhecido', secundario: `${OPS.formatDateBR(a.data)} · ${a.motivo}` };
+        });
+        abrirDetalheGrafico(entries[elementos[0].index][0], linhas);
+      },
+      onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
       scales: {
         x: { ticks: { color: '#8a97ab', maxRotation: 60, minRotation: 30 }, grid: { display: false } },
         y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
@@ -630,6 +677,71 @@ function renderAusenciasChart(){
   });
 }
 document.getElementById('f-ausencia-agrupamento').addEventListener('change', renderAusenciasChart);
+
+// ---------- gráfico: folga fixa Segunda a Sexta ----------
+const DIAS_UTEIS = ['Segunda','Terça','Quarta','Quinta','Sexta'];
+let chartEscalaSemana = null;
+function renderEscalaSemanaChart(){
+  const ativos = records.filter(r => r.status === 'ativo');
+  const porDia = DIAS_UTEIS.map(dia => ativos.filter(r => r.folgaFixaSemana === dia));
+
+  if (chartEscalaSemana) chartEscalaSemana.destroy();
+  chartEscalaSemana = new Chart(document.getElementById('chart-escala-semana'), {
+    type: 'bar',
+    data: {
+      labels: DIAS_UTEIS,
+      datasets: [{ label: 'Folgam', data: porDia.map(l => l.length), backgroundColor: '#a78bfa' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return;
+        const i = elementos[0].index;
+        const linhas = porDia[i].map(r => ({ principal: r.nome, secundario: r.cargo || '' }));
+        abrirDetalheGrafico(`Folga fixa — ${DIAS_UTEIS[i]}`, linhas);
+      },
+      onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+      scales: {
+        x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+// ---------- gráfico: rodízio de fim de semana (folga/trabalha no próximo FDS) ----------
+let chartRodizioFDS = null;
+function renderRodizioFDSChart(){
+  const ativos = records.filter(r => r.status === 'ativo' && r.grupoFDS);
+  const folgam = ativos.filter(r => OPS.proximoFimDeSemanaStatus(r).status === 'folga');
+  const trabalham = ativos.filter(r => OPS.proximoFimDeSemanaStatus(r).status === 'trabalha');
+  const grupos = [folgam, trabalham];
+
+  if (chartRodizioFDS) chartRodizioFDS.destroy();
+  chartRodizioFDS = new Chart(document.getElementById('chart-rodizio-fds'), {
+    type: 'bar',
+    data: {
+      labels: ['Folga no próximo FDS', 'Trabalha no próximo FDS'],
+      datasets: [{ label: 'Colaboradores', data: [folgam.length, trabalham.length], backgroundColor: ['#ff4d6d', '#00e5a0'] }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return;
+        const i = elementos[0].index;
+        const linhas = grupos[i].map(r => ({ principal: r.nome, secundario: `Grupo ${r.grupoFDS}` }));
+        abrirDetalheGrafico(i === 0 ? 'Folga no próximo fim de semana' : 'Trabalha no próximo fim de semana', linhas);
+      },
+      onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+      scales: {
+        x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
