@@ -338,6 +338,9 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .popup-svc .title{ font-weight:700; font-size:13px; margin-bottom:3px; }
 .popup-svc .meta{ font-size:12px; color:var(--ink-dim); }
 .popup-svc .approx{ color:var(--warn); font-size:11px; margin-top:5px; }
+.popup-problemas{ margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+.popup-problemas-title{ font-size:11.5px; font-weight:700; color:var(--crit); margin-bottom:4px; }
+.popup-problemas .approx{ margin-top:2px; }
 
 .marker-emoji{
   display:flex; align-items:center; justify-content:center;
