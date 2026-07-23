@@ -81,6 +81,7 @@
               <th data-sort="tipoCurto">Serviço</th>
               <th data-sort="cidade">Cidade</th>
               <th data-sort="bairro">Bairro</th>
+              <th data-sort="responsavel">Responsável</th>
               <th data-sort="__tempo">Tempo</th>
               <th data-sort="__status">Prazo</th>
               <th></th>
@@ -139,8 +140,9 @@
       </div>
       <div class="grid2">
         <div class="field"><label>Telefone</label><input class="input" id="rec-telefone"></div>
-        <div class="field"><label>Observação</label><input class="input" id="rec-observacao"></div>
+        <div class="field"><label>Responsável</label><input class="input" id="rec-responsavel"></div>
       </div>
+      <div class="field"><label>Observação</label><input class="input" id="rec-observacao"></div>
       <div class="grid2">
         <div class="field"><label>Endereço (rua)</label><input class="input" id="rec-endereco"></div>
         <div class="field"><label>Número</label><input class="input" id="rec-numero"></div>
@@ -521,6 +523,7 @@ function renderTable(){
             ? '<span class="coord-alert" title="Latitude/Longitude informada caía fora da área da cidade — corrigida para o centro dela">⚠︎ lat/lng</span>'
             : '';
         })()}</td>
+        <td>${r.responsavel || '—'}</td>
         <td>
           <div class="runway">
             <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
@@ -598,6 +601,7 @@ function renderMap(fitView = true){
         <span class="proto">${r.protocolo}</span>
         <div class="title">${label} · ${r.tipoCurto || r.tituloCompleto || ''}</div>
         <div class="meta">${r.cidade || ''}${r.bairro ? ' · ' + r.bairro : ''}</div>
+        ${r.responsavel ? `<div class="meta">👤 ${r.responsavel}</div>` : ''}
         <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''} · ${status === 'dentro' ? 'Dentro do prazo' : status === 'fora' ? 'Fora do prazo' : 'Sem SLA'}</div>
         ${coords.reason === 'out_of_area' ? '<div class="approx">⚠︎ Latitude/Longitude informada estava fora da área da cidade — corrigida</div>' : ''}
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
@@ -742,6 +746,7 @@ function openDetail(rec){
       <span class="status-name" style="margin-bottom:6px">Endereço</span>
       <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${enderecoCompleto || '—'}</div>
     </div>
+    <div class="status-row"><span class="status-name">Responsável</span><span class="status-val">${rec.responsavel || '—'}</span></div>
     <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
     <div class="status-row"><span class="status-name">Latitude</span><span class="status-val">${rec.lat != null ? rec.lat : '—'}</span></div>
@@ -847,6 +852,7 @@ function openModal(rec){
   document.getElementById('rec-cidade').value = rec ? rec.cidade : '';
   document.getElementById('rec-bairro').value = rec ? rec.bairro : '';
   document.getElementById('rec-telefone').value = rec ? (rec.telefone||'') : '';
+  document.getElementById('rec-responsavel').value = rec ? (rec.responsavel||'') : '';
   document.getElementById('rec-observacao').value = rec ? (rec.observacao||'') : '';
   document.getElementById('rec-endereco').value = rec ? (rec.endereco||'') : '';
   document.getElementById('rec-numero').value = rec ? (rec.numero||'') : '';
@@ -884,6 +890,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
     cidade: OPS.canonicalCity(document.getElementById('rec-cidade').value.trim()),
     bairro: document.getElementById('rec-bairro').value.trim(),
     telefone: document.getElementById('rec-telefone').value.trim(),
+    responsavel: document.getElementById('rec-responsavel').value.trim(),
     observacao: document.getElementById('rec-observacao').value.trim(),
     endereco: document.getElementById('rec-endereco').value.trim(),
     numero: document.getElementById('rec-numero').value.trim(),
