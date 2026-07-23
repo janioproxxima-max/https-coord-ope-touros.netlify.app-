@@ -74,6 +74,7 @@
         <option value="iniciado">Iniciado</option>
         <option value="deslocamento">Deslocamento</option>
         <option value="pausado">Pausado</option>
+        <option value="aguardando">Aguardando</option>
         <option value="outro">Outro</option>
       </select>
     </div>
@@ -358,6 +359,7 @@ function classifyStatusAtendimento(raw){
   if (n.includes('pausa') || n.includes('interromper')) return 'pausado';
   if (n.includes('deslocamento')) return 'deslocamento';
   if (n.includes('iniciado')) return 'iniciado';
+  if (n.includes('aguardando')) return 'aguardando';
   return 'outro';
 }
 
@@ -367,6 +369,7 @@ const STATUS_CHAMADO_DEFS = [
   { key: 'iniciado', label: 'Atendimento iniciado', cor: 'var(--ok)' },
   { key: 'deslocamento', label: 'Atendimento em deslocamento', cor: 'var(--brand)' },
   { key: 'pausado', label: 'Atendimento pausado', cor: 'var(--warn)' },
+  { key: 'proximo_atendimento', label: 'Próximo atendimento', cor: 'var(--accent2)' },
   { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
   { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--ink-faint)' },
   { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
@@ -393,6 +396,7 @@ function classifyStatusChamado(r){
   if (dtAgendamento){
     const hojeData = new Date(); hojeData.setHours(0,0,0,0);
     const agData = new Date(dtAgendamento); agData.setHours(0,0,0,0);
+    if (agData.getTime() === hojeData.getTime()) return 'proximo_atendimento'; // agendado pra hoje, já tem responsável
     if (agData.getTime() > hojeData.getTime()) return 'futuro'; // agendado pra depois de hoje
   }
   if (getStatus(r) === 'fora') return 'atendimento_atrasado';
@@ -781,11 +785,13 @@ function renderMap(fitView = true){
     if (statusChamado === 'iniciado') color = 'ok';
     else if (statusChamado === 'deslocamento') color = 'deslocamento';
     else if (statusChamado === 'pausado') color = 'warn';
+    else if (statusChamado === 'proximo_atendimento') color = 'proximo';
     else if (statusChamado === 'pendente') color = 'neutral';
     else color = runwayColor(r);
 
     const badges = [];
     if (statusChamado === 'atendimento_atrasado') badges.push({ icon: '🚨', title: 'Atendimento atrasado' });
+    if (statusChamado === 'proximo_atendimento') badges.push({ icon: '🔔', title: 'Próximo atendimento — agendado para hoje' });
     if (OPS.checkProjectError(r)) badges.push({ icon: '🚩', title: 'Erro de projeto' });
     if (coords.reason) badges.push({ icon: '◇', title: coords.reason === 'out_of_area' ? 'Lat/long fora da área — corrigida' : 'Sem coordenada própria' });
     if (statusChamado === 'atendimento_hoje') badges.push({ icon: '⏰', title: 'Atendimento para hoje' });

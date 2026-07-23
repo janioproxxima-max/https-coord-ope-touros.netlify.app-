@@ -367,6 +367,8 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim); }
 .marker-label.deslocamento{ background:var(--brand); }
 .marker-label.deslocamento .code, .marker-label.deslocamento .hrs{ color:#00232b; }
+.marker-label.proximo{ background:var(--accent2); }
+.marker-label.proximo .code, .marker-label.proximo .hrs{ color:#1e1035; }
 .marker-badges{
   position:absolute; top:-9px; left:50%; transform:translateX(-50%);
   display:flex; gap:1px; font-size:11px; line-height:1; white-space:nowrap;
