@@ -126,7 +126,20 @@
         </div>
       </div>
       <div id="map"></div>
-      <div id="map-filters-drawer" class="map-filters-drawer" style="display:none"></div>
+      <div id="map-filters-drawer" class="map-filters-drawer" style="display:none">
+        <div class="qf-block">
+          <div class="qf-label">Sigla</div>
+          <div class="qf-tiles" id="qf-sigla-tiles"></div>
+        </div>
+        <div class="qf-block">
+          <div class="qf-label">Qualidade do dado</div>
+          <div class="qf-tiles">
+            <button type="button" class="qf-tile" data-qualidade="">Todos</button>
+            <button type="button" class="qf-tile" data-qualidade="problema">⚠️ Sem lat/long ou erro de projeto</button>
+          </div>
+        </div>
+        <div id="map-filters-toolbar-slot"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -470,6 +483,7 @@ function getFiltered(){
     else if (prazo && getStatus(r) !== prazo) return false;
     if (statusAtend && classifyStatusAtendimento(r.statusAtendimento) !== statusAtend) return false;
     if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
+    if (somenteProblema && !(OPS.resolveCoords(r).approx || OPS.checkProjectError(r))) return false;
     if (q){
       const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||''));
       if (!hay.includes(q)) return false;
@@ -719,6 +733,7 @@ function renderAll(fitView = true){
   renderStats();
   renderTable();
   renderMap(fitView);
+  if (typeof renderSiglaTiles === 'function') renderSiglaTiles();
 }
 
 const IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
@@ -1232,13 +1247,14 @@ document.addEventListener('keydown', (e) => {
 const toolbarOriginal = document.getElementById('mapa-toolbar');
 const toolbarAnchor = document.getElementById('mapa-toolbar-anchor');
 const filtersDrawer = document.getElementById('map-filters-drawer');
+const toolbarSlot = document.getElementById('map-filters-toolbar-slot');
 function openFiltersDrawer(){
-  filtersDrawer.appendChild(toolbarOriginal);
+  toolbarSlot.appendChild(toolbarOriginal);
   filtersDrawer.style.display = 'block';
   document.getElementById('btn-map-filters').textContent = '✕';
 }
 function closeFiltersDrawer(){
-  if (toolbarOriginal.parentElement === filtersDrawer){
+  if (toolbarOriginal.parentElement === toolbarSlot){
     toolbarAnchor.parentElement.insertBefore(toolbarOriginal, toolbarAnchor);
   }
   filtersDrawer.style.display = 'none';
@@ -1247,6 +1263,32 @@ function closeFiltersDrawer(){
 document.getElementById('btn-map-filters').addEventListener('click', () => {
   if (filtersDrawer.style.display === 'none') openFiltersDrawer();
   else closeFiltersDrawer();
+});
+
+// ---------- filtros rápidos em botão (sigla + qualidade do dado) ----------
+let somenteProblema = false;
+function renderSiglaTiles(){
+  const siglas = ['', 'VT', 'AT', 'MDE', 'SA', 'REC/MDE'];
+  const rotulos = { '': 'Todas', 'VT':'VT', 'AT':'AT', 'MDE':'MDE', 'SA':'SA', 'REC/MDE':'REC/MDE' };
+  const container = document.getElementById('qf-sigla-tiles');
+  container.innerHTML = siglas.map(s => `<button type="button" class="qf-tile ${els.sigla.value === s ? 'active' : ''}" data-sigla="${s}">${rotulos[s]}</button>`).join('');
+  container.querySelectorAll('.qf-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      els.sigla.value = btn.dataset.sigla;
+      renderSiglaTiles();
+      renderAll();
+    });
+  });
+}
+renderSiglaTiles();
+
+document.querySelectorAll('.qf-tiles [data-qualidade]').forEach(btn => {
+  if (btn.dataset.qualidade === '' && !somenteProblema) btn.classList.add('active');
+  btn.addEventListener('click', () => {
+    somenteProblema = btn.dataset.qualidade === 'problema';
+    document.querySelectorAll('.qf-tiles [data-qualidade]').forEach(b => b.classList.toggle('active', b === btn));
+    renderAll();
+  });
 });
 
 // legenda do mapa funciona como atalho de filtro de prazo

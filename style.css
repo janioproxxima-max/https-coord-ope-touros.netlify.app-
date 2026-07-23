@@ -230,8 +230,18 @@ select:focus, .input:focus, button:focus-visible{
   padding:0; background:transparent; border:none;
 }
 .map-filters-drawer .field{ width:100%; }
-.map-filters-drawer select, .map-filters-drawer .input{ width:100%; }
+.map-filters-drawer .toolbar select, .map-filters-drawer .toolbar .input{ width:100%; }
 .map-filters-drawer .multi-select .btn{ width:100%; }
+
+.qf-block{ margin-bottom:16px; }
+.qf-label{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); margin-bottom:8px; }
+.qf-tiles{ display:flex; flex-wrap:wrap; gap:8px; }
+.qf-tile{
+  flex:1; min-width:70px; background:var(--bg-raised); border:1px solid var(--line); border-radius:8px;
+  padding:9px 8px; font-size:12.5px; font-weight:600; color:var(--ink-dim); cursor:pointer; text-align:center;
+}
+.qf-tile:hover{ border-color:var(--brand); color:var(--ink); }
+.qf-tile.active{ background:var(--brand-wash); border-color:var(--brand); color:var(--brand); }
 
 /* ---------------- table ---------------- */
 .table-wrap{ overflow:auto; max-height:640px; }
