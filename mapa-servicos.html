@@ -367,22 +367,35 @@ const STATUS_CHAMADO_DEFS = [
   { key: 'iniciado', label: 'Atendimento iniciado', cor: 'var(--ok)' },
   { key: 'deslocamento', label: 'Atendimento em deslocamento', cor: 'var(--brand)' },
   { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
-  { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--accent2)' },
-  { key: 'atrasado_sem_agendamento', label: 'Atrasado sem agendamento', cor: 'var(--warn)' },
-  { key: 'agendado_aguardando', label: 'Agendado aguardando', cor: '#5eead4' },
-  { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)' },
+  { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--ink-faint)' },
+  { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
+  { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)', alerta: true },
 ];
+
+// Vence até amanhã às 9h? (ex: SLA 24h aberto hoje 8h vence amanhã 8h — antes
+// das 9h de amanhã, então precisa ser atendido hoje)
+function venceAteAmanha9h(r){
+  if (!r.criadoEm || !r.slaHoras) return false;
+  const vencimento = new Date(new Date(r.criadoEm).getTime() + r.slaHoras * 3600000);
+  const hoje = new Date();
+  const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
+  return vencimento.getTime() <= amanha9h.getTime();
+}
+
 function classifyStatusChamado(r){
   const cat = classifyStatusAtendimento(r.statusAtendimento);
   if (cat === 'iniciado') return 'iniciado';
   if (cat === 'deslocamento') return 'deslocamento';
   if (!r.responsavel) return 'pendente';
-  const suffixMatch = (r.protocolo || '').match(/\/(\d+)\s*$/);
-  const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
-  if (suffix >= 2) return 'futuro';
-  if (!r.dataAgendamento) return 'atrasado_sem_agendamento';
-  if (getStatus(r) === 'dentro') return 'agendado_aguardando';
-  return 'atendimento_atrasado';
+  const dtAgendamento = OPS.toDateSafe(r.dataAgendamento);
+  if (dtAgendamento){
+    const hojeData = new Date(); hojeData.setHours(0,0,0,0);
+    const agData = new Date(dtAgendamento); agData.setHours(0,0,0,0);
+    if (agData.getTime() > hojeData.getTime()) return 'futuro'; // agendado pra depois de hoje
+  }
+  if (getStatus(r) === 'fora') return 'atendimento_atrasado';
+  if (venceAteAmanha9h(r)) return 'atendimento_hoje';
+  return null; // dentro do prazo, sem urgência — não entra em nenhuma categoria
 }
 
 function isAlwaysHidden(r){
@@ -1405,8 +1418,8 @@ function renderStatusChamadosList(){
   document.getElementById('qf-status-total').textContent = base.length;
   document.getElementById('qf-status-list').innerHTML = STATUS_CHAMADO_DEFS.map(d => `
     <div class="qf-status-row ${statusChamadoFiltro === d.key ? 'active' : ''}" data-status-chamado="${d.key}">
-      <span class="qf-status-name"><span class="qf-status-dot" style="background:${d.cor}"></span>${d.label}</span>
-      <span class="qf-status-count">${counts[d.key]}</span>
+      <span class="qf-status-name"><span class="qf-status-dot" style="background:${d.cor}"></span>${d.label}${d.alerta && counts[d.key] > 0 ? ' <span title="Chamados atrasados precisam de atenção">🚨</span>' : ''}</span>
+      <span class="qf-status-count" style="${d.alerta && counts[d.key] > 0 ? 'background:var(--crit);animation:pulse-alert 1.4s ease-in-out infinite' : ''}">${counts[d.key]}</span>
     </div>
   `).join('');
   document.querySelectorAll('[data-status-chamado]').forEach(row => {
