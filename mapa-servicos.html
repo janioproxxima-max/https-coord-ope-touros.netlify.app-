@@ -888,7 +888,7 @@ setInterval(pullAndRefresh, 5 * 60 * 1000);
 window.OPS_ON_REFRESH = pullAndRefresh;
 
 // ---------- filtros ----------
-[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend, els.responsavel].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
