@@ -94,6 +94,7 @@
               <th data-sort="cidade">Cidade</th>
               <th data-sort="bairro">Bairro</th>
               <th data-sort="responsavel">Responsável</th>
+              <th data-sort="statusAtendimento">Atendimento</th>
               <th data-sort="__tempo">Tempo</th>
               <th data-sort="__status">Prazo</th>
               <th></th>
@@ -566,6 +567,13 @@ function renderTable(){
             : '';
         })()}</td>
         <td>${r.responsavel || '—'}</td>
+        <td>${(() => {
+          const cat = classifyStatusAtendimento(r.statusAtendimento);
+          if (!cat) return '—';
+          const cores = { iniciado:'ok', deslocamento:'', pausado:'warn', outro:'neutral' };
+          const rotulos = { iniciado:'Iniciado', deslocamento:'Deslocamento', pausado:'Pausado', outro: r.statusAtendimento };
+          return `<span class="badge ${cores[cat]}" title="${r.statusAtendimento}"><span class="dot"></span>${rotulos[cat]}</span>`;
+        })()}</td>
         <td>
           <div class="runway">
             <div class="track"><div class="fill ${color}" style="width:${pct}%"></div></div>
@@ -644,6 +652,7 @@ function renderMap(fitView = true){
         <div class="title">${label} · ${r.tipoCurto || r.tituloCompleto || ''}</div>
         <div class="meta">${r.cidade || ''}${r.bairro ? ' · ' + r.bairro : ''}</div>
         ${r.responsavel ? `<div class="meta">👤 ${r.responsavel}</div>` : ''}
+        ${r.statusAtendimento ? `<div class="meta">📶 ${r.statusAtendimento}</div>` : ''}
         <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''} · ${status === 'dentro' ? 'Dentro do prazo' : status === 'fora' ? 'Fora do prazo' : 'Sem SLA'}</div>
         ${coords.reason === 'out_of_area' ? '<div class="approx">⚠︎ Latitude/Longitude informada estava fora da área da cidade — corrigida</div>' : ''}
         ${coords.reason === 'missing' ? '<div class="approx">◇ Sem coordenada própria (centro da cidade)</div>' : ''}
@@ -801,6 +810,7 @@ function openDetail(rec){
         : '—'}</span>
     </div>
     <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val" style="font-size:12.5px">${abertura}</span></div>
+    <div class="status-row"><span class="status-name">Status do atendimento</span><span class="status-val">${rec.statusAtendimento || '—'}</span></div>
     <div class="status-row"><span class="status-name">SLA</span><span class="status-val">${rec.slaHoras ? rec.slaHoras + 'h' : 'não definido'}</span></div>
     <div class="status-row" style="display:block">
       <span class="status-name" style="margin-bottom:6px">Observação</span>
