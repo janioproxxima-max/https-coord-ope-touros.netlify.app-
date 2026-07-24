@@ -379,11 +379,14 @@ const STATUS_CHAMADO_DEFS = [
 // Vence até amanhã às 9h? (ex: SLA 24h aberto hoje 8h vence amanhã 8h — antes
 // das 9h de amanhã, então precisa ser atendido hoje)
 function venceAteAmanha9h(r){
-  if (!r.criadoEm || !r.slaHoras) return false;
-  const vencimento = new Date(new Date(r.criadoEm).getTime() + r.slaHoras * 3600000);
+  if (!r.slaHoras) return false;
+  const elapsed = getElapsedHours(r);
+  if (elapsed == null) return false;
+  const restante = r.slaHoras - elapsed; // horas até vencer
   const hoje = new Date();
   const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
-  return vencimento.getTime() <= amanha9h.getTime();
+  const horasAteAmanha9h = (amanha9h.getTime() - hoje.getTime()) / 3600000;
+  return restante <= horasAteAmanha9h;
 }
 
 function classifyStatusChamado(r){
@@ -391,6 +394,10 @@ function classifyStatusChamado(r){
   if (cat === 'iniciado') return 'iniciado';
   if (cat === 'deslocamento') return 'deslocamento';
   if (cat === 'pausado') return 'pausado';
+  // urgência de prazo vem antes de "pendente" — mesmo sem responsável ainda,
+  // se está atrasado ou vence hoje, precisa aparecer nessas categorias
+  if (getStatus(r) === 'fora') return 'atendimento_atrasado';
+  if (venceAteAmanha9h(r)) return 'atendimento_hoje';
   if (!r.responsavel) return 'pendente';
   const dtAgendamento = OPS.toDateSafe(r.dataAgendamento);
   if (dtAgendamento){
@@ -399,8 +406,6 @@ function classifyStatusChamado(r){
     if (agData.getTime() === hojeData.getTime()) return 'proximo_atendimento'; // agendado pra hoje, já tem responsável
     if (agData.getTime() > hojeData.getTime()) return 'futuro'; // agendado pra depois de hoje
   }
-  if (getStatus(r) === 'fora') return 'atendimento_atrasado';
-  if (venceAteAmanha9h(r)) return 'atendimento_hoje';
   return null; // dentro do prazo, sem urgência — não entra em nenhuma categoria
 }
 
