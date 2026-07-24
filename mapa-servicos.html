@@ -371,7 +371,7 @@ const STATUS_CHAMADO_DEFS = [
   { key: 'pausado', label: 'Atendimento pausado', cor: 'var(--warn)' },
   { key: 'proximo_atendimento', label: 'Próximo atendimento', cor: 'var(--accent2)' },
   { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
-  { key: 'futuro', label: 'Agendamento futuro', cor: 'var(--ink-faint)' },
+  { key: 'futuro', label: 'Agendamento futuro', cor: '#5eead4' },
   { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
   { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)', alerta: true },
 ];
@@ -786,19 +786,18 @@ function renderMap(fitView = true){
     else if (statusChamado === 'deslocamento') color = 'deslocamento';
     else if (statusChamado === 'pausado') color = 'warn';
     else if (statusChamado === 'proximo_atendimento') color = 'proximo';
+    else if (statusChamado === 'futuro') color = 'futuro';
     else if (statusChamado === 'pendente') color = 'neutral';
     else color = runwayColor(r);
 
     const badges = [];
     if (statusChamado === 'atendimento_atrasado') badges.push({ icon: '🚨', title: 'Atendimento atrasado' });
-    if (statusChamado === 'proximo_atendimento') badges.push({ icon: '🔔', title: 'Próximo atendimento — agendado para hoje' });
     if (OPS.checkProjectError(r)) {
       const errProj = OPS.checkProjectError(r);
       badges.push({ icon: '🚩', title: `Erro de projeto — esperado ${errProj.esperado}, veio ${errProj.encontrado}` });
     }
     if (coords.reason) badges.push({ icon: '◇', title: coords.reason === 'out_of_area' ? 'Lat/long fora da área — corrigida' : 'Sem coordenada própria' });
     if (statusChamado === 'atendimento_hoje') badges.push({ icon: '⏰', title: 'Atendimento para hoje' });
-    if (statusChamado === 'futuro') badges.push({ icon: '📅', title: 'Agendamento futuro' });
     const badgesHtml = badges.length
       ? `<div class="marker-badges">${badges.map(b => `<span title="${b.title}">${b.icon}</span>`).join('')}</div>`
       : '';
