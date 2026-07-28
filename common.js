@@ -817,6 +817,7 @@ const OPS = (() => {
   async function importMapaServicosFile(file){
     return new Promise((resolve) => {
       readSpreadsheetFile(file, async (rows) => {
+       try{
         if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); resolve(null); return; }
 
         function scoreRow(row){
@@ -947,6 +948,13 @@ const OPS = (() => {
         await syncPushWithToast('MapaServicosData', finalRecords);
         await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
 
+        alert(
+          `✅ Planilha importada com sucesso!\n\n` +
+          `${imported.length} registro(s) lido(s) da planilha.\n` +
+          `${mode ? `A base foi substituída — agora tem ${finalRecords.length} protocolo(s) no total.` : `Foram adicionados aos que já existiam — agora tem ${finalRecords.length} protocolo(s) no total.`}\n\n` +
+          `Já sincronizado pra todo mundo ver.`
+        );
+
         if (missingTypes.size){
           alert(
             `Atenção: ${missingTypes.size} tipo(s) de serviço não estavam no catálogo (ficaram com o nome completo em vez do nome curto):\n\n` +
@@ -956,6 +964,11 @@ const OPS = (() => {
         }
 
         resolve(finalRecords);
+       }catch(err){
+         console.error('Falha ao importar planilha', err);
+         alert('❌ Deu um erro ao importar a planilha:\n\n' + (err && err.message ? err.message : err) + '\n\nMe avise na conversa com esse texto do erro.');
+         resolve(null);
+       }
       });
     });
   }
