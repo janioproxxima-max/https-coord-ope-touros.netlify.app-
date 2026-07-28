@@ -751,6 +751,199 @@ const OPS = (() => {
     return ok;
   }
 
+  // -------- importação da planilha do Mapa de Serviços --------
+  // Fica aqui (compartilhado) pra funcionar de qualquer aba do site, não só
+  // de dentro do Mapa de Serviços.
+  function mapHeaderMapaServicos(h){
+    const n = normalize(h);
+    if (n.includes('ordem servico') || n === 'protocolo') return 'protocolo';
+    if (n === 'tipo de servico') return 'tituloCompleto';
+    if (n.includes('titulo') && !n.includes('subtipo')) return 'tituloCompleto';
+    if (n === 'area') return 'areaCidade';
+    if (n === 'localidade') return 'localidadeBairro';
+    if (n === 'cidade') return 'cidadeLiteral';
+    if (n === 'bairro') return 'bairroLiteral';
+    if (n === 'endereco') return 'endereco';
+    if (n === 'numero') return 'numero';
+    if (n === 'complemento') return 'complemento';
+    if (n.includes('telefone principal')) return 'telefone';
+    if (n === 'supervisor') return 'supervisor';
+    if (n === 'status') return 'statusAtendimento';
+    if (n.includes('data') && n.includes('agendamento')) return 'dataAgendamento';
+    if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
+    if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
+    if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
+    if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
+    if (n === 'responsavel') return 'responsavel';
+    if (n === 'cliente') return 'nomeCliente';
+    if (n.includes('projeto')) return 'projeto';
+    if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
+    if (n.includes('observacao') && n.includes('tecnico')) return 'observacaoTecnico';
+    if (n.includes('latitude') && n.includes('longitude')) return 'latlng';
+    if (n.includes('criado em')) return 'criadoEmLegacy';
+    if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
+    if (n.includes('abertura original')) return 'dataAberturaOriginal';
+    if (n.includes('sla horas')) return 'slaLegacy';
+    if (n.includes('tempo')) return 'tempoLegacy';
+    if (n.includes('prazo')) return 'prazoRawLegacy';
+    if (n === 'lat') return 'lat';
+    if (n === 'lng' || n === 'lon') return 'lng';
+    return null;
+  }
+
+  const MAPA_SERVICOS_IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
+  const MAPA_SERVICOS_IMPORT_META_SYNC = 'MapaServicosImportMetaData';
+
+  // Importa um arquivo (Excel/CSV) do Mapa de Serviços — pode ser chamado de
+  // qualquer página do site. Busca os dados atuais na nuvem, mescla ou
+  // substitui conforme escolha do usuário, e sincroniza pra todo mundo.
+  // Devolve a lista final de registros, ou null se cancelado/sem dados.
+  async function importMapaServicosFile(file){
+    return new Promise((resolve) => {
+      readSpreadsheetFile(file, async (rows) => {
+        if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); resolve(null); return; }
+
+        function scoreRow(row){
+          const mapped = (row || []).map(mapHeaderMapaServicos);
+          return { score: mapped.filter(Boolean).length, temProtocolo: mapped.includes('protocolo') };
+        }
+        let headerRowIdx;
+        const row1Score = scoreRow(rows[1]);
+        const row0Score = scoreRow(rows[0]);
+        if (row1Score.temProtocolo) headerRowIdx = 1;
+        else if (row0Score.temProtocolo) headerRowIdx = 0;
+        else {
+          headerRowIdx = 1;
+          let bestScore = -1;
+          for (let i = 0; i < Math.min(rows.length, 10); i++){
+            const s = scoreRow(rows[i]);
+            if (s.temProtocolo && s.score > bestScore){ bestScore = s.score; headerRowIdx = i; }
+          }
+        }
+        const headers = rows[headerRowIdx].map(mapHeaderMapaServicos);
+        const missingTypes = new Set();
+
+        const imported = rows.slice(headerRowIdx + 1).map(cols => {
+          const row = {};
+          headers.forEach((key, idx) => { if (key) row[key] = (cols[idx] ?? '').toString().trim(); });
+          if (!row.protocolo) return null;
+
+          const tituloCompleto = row.tituloCompleto || '';
+          const svc = lookupService(tituloCompleto);
+          if (tituloCompleto && !svc.catalogado) missingTypes.add(tituloCompleto);
+
+          const cidade = canonicalCity(row.areaCidade || row.cidadeLiteral || '');
+          const bairro = row.localidadeBairro || row.bairroLiteral || '';
+
+          let lat, lng;
+          if (row.latlng){
+            const parts = row.latlng.split(',').map(s => parseFloat(s.trim()));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])){ lat = parts[0]; lng = parts[1]; }
+          }
+          if (lat === undefined && row.lat){ const v = parseFloat(row.lat.replace(',', '.')); if (!isNaN(v)) lat = v; }
+          if (lng === undefined && row.lng){ const v = parseFloat(row.lng.replace(',', '.')); if (!isNaN(v)) lng = v; }
+
+          const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
+          const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+          let baseDt = null;
+          if (row.criadoEmLegacy){
+            const d = new Date(row.criadoEmLegacy);
+            if (!isNaN(d.getTime())) baseDt = d;
+          }
+          if (!baseDt){
+            const dtCriacao = parseBRDateTime(row.dataCriacao);
+            const dtOriginal = parseBRDateTime(row.dataAberturaOriginal);
+            baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
+          }
+
+          let slaHoras = svc.catalogado ? svc.slaHoras : null;
+          if (row.slaLegacy){ const v = Number(row.slaLegacy.replace(',', '.')); if (!isNaN(v)) slaHoras = v; }
+
+          let tempoManual = null, prazoManual = null;
+          if (!baseDt && row.tempoLegacy){ const v = Number(row.tempoLegacy.replace(',', '.')); if (!isNaN(v)) tempoManual = v; }
+          if (!baseDt && row.prazoRawLegacy) prazoManual = normalize(row.prazoRawLegacy).includes('fora') ? 'fora' : 'dentro';
+
+          return {
+            id: uid(),
+            protocolo: row.protocolo,
+            tituloCompleto,
+            tipoCurto: svc.catalogado ? svc.tipoCurto : (tituloCompleto || 'Outros'),
+            slaHoras,
+            catalogado: svc.catalogado,
+            cidade, bairro,
+            telefone: row.telefone || '',
+            supervisor: row.supervisor || '',
+            statusAtendimento: row.statusAtendimento || '',
+            dataAgendamento: (() => {
+              const d = parseBRDateTime(row.dataAgendamento);
+              return d ? d.toISOString() : null;
+            })(),
+            endereco: row.endereco || '',
+            numero: row.numero || '',
+            complemento: row.complemento || '',
+            projeto: row.projeto || '',
+            observacao: row.observacao || '',
+            observacaoTecnico: row.observacaoTecnico || '',
+            lat, lng,
+            criadoEm: baseDt ? baseDt.toISOString() : null,
+            tempoManual, prazoManual,
+            descricaoEncerramento: row.descricaoEncerramento || '',
+            dataFimAtendimento: (() => {
+              const d = parseBRDateTime(row.dataFimAtendimento);
+              return d ? d.toISOString() : null;
+            })(),
+            planoProduto: row.planoProduto || '',
+            responsavel: row.responsavel || '',
+            nomeCliente: row.nomeCliente || '',
+            tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
+          };
+        }).filter(Boolean);
+
+        if (!imported.length){
+          const colunasAchadas = headers.filter(Boolean);
+          alert(
+            `Não encontrei registros válidos nessa planilha.\n\n` +
+            `Usei a linha ${headerRowIdx + 1} como cabeçalho e reconheci ${colunasAchadas.length} coluna(s): ${colunasAchadas.join(', ') || '(nenhuma)'}.\n\n` +
+            `Confira se a linha ${headerRowIdx + 1} da planilha é mesmo a que tem "Nº. Ordem Serviço", "Tipo de Serviço", "Área", "Localidade" etc. Se não for, me avise qual linha é.`
+          );
+          resolve(null);
+          return;
+        }
+
+        const cidadesNovas = [...new Set(imported.map(r => r.cidade).filter(Boolean))].filter(c => !cityCenter(c));
+        if (cidadesNovas.length){
+          const toast = showToast(`📍 Localizando cidades novas no mapa... (0/${cidadesNovas.length})`);
+          for (let i = 0; i < cidadesNovas.length; i++){
+            toast.textContent = `📍 Localizando cidades novas no mapa... (${i+1}/${cidadesNovas.length}: ${cidadesNovas[i]})`;
+            await ensureCityGeocoded(cidadesNovas[i]);
+            if (i < cidadesNovas.length - 1) await new Promise(res => setTimeout(res, 1100));
+          }
+          toast.remove();
+        }
+
+        const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
+        const atual = (await syncPull('MapaServicosData')) || loadData(STORAGE_KEY) || [];
+        const finalRecords = mode ? imported : [...atual, ...imported];
+
+        saveData(STORAGE_KEY, finalRecords);
+        const meta = { data: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || 'desconhecido' };
+        localStorage.setItem(MAPA_SERVICOS_IMPORT_META_KEY, JSON.stringify(meta));
+        await syncPushWithToast('MapaServicosData', finalRecords);
+        await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
+
+        if (missingTypes.size){
+          alert(
+            `Atenção: ${missingTypes.size} tipo(s) de serviço não estavam no catálogo (ficaram com o nome completo em vez do nome curto):\n\n` +
+            [...missingTypes].join('\n') +
+            `\n\nMe avise esses nomes na conversa que eu adiciono ao catálogo.`
+          );
+        }
+
+        resolve(finalRecords);
+      });
+    });
+  }
+
   return {
     STORAGE_KEY, CITY_CENTERS, CITY_REGISTRY, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
     normalize, cityCenter, canonicalCity, haversineKm, resolveCoords,
@@ -763,7 +956,7 @@ const OPS = (() => {
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
     SUPERVISOR_BY_CITY, supervisorForCity,
-    syncPull, syncPush, syncPushWithToast, showToast,
+    syncPull, syncPush, syncPushWithToast, showToast, importMapaServicosFile,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
     grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
     toDateSafe, formatDateBR, formatDateTimeBR, toDateInputValue,
@@ -918,11 +1111,11 @@ function initShell(active, pageTitle){
       <h1>Coord. Regional</h1>
       <p>Unidade Touros</p>
     </div>
-    ${active === 'mapa-servicos.html' ? `
     <div class="sb-import-box" id="sb-import-box" title="Importar planilha (Excel/CSV)">
       <span class="ico">📥</span>
       <span>Importar planilha<br><small>Excel / CSV</small></span>
-    </div>` : ''}
+    </div>
+    <input type="file" id="sb-file-import" accept=".csv,.xlsx,.xls" style="display:none">
     <div class="sb-section">Painéis</div>
     ${visibleLinks.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
     <div class="sb-footer">
@@ -1006,10 +1199,15 @@ function initShell(active, pageTitle){
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
 
   const importBox = sidebar.querySelector('#sb-import-box');
-  if (importBox){
-    importBox.addEventListener('click', () => {
-      const fileInput = document.getElementById('file-import');
-      if (fileInput) fileInput.click();
+  const importFileInput = sidebar.querySelector('#sb-file-import');
+  if (importBox && importFileInput){
+    importBox.addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const resultado = await importMapaServicosFile(file);
+      e.target.value = '';
+      if (resultado && typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
     });
   }
 
