@@ -80,13 +80,6 @@
     </div>
     </div>
     <div style="flex:1"></div>
-    <div class="view-toggle" id="view-toggle">
-      <button data-view="split">Lista + Mapa</button>
-      <button data-view="list">Lista</button>
-      <button data-view="map" class="active">Mapa</button>
-    </div>
-    <button class="btn primary" id="btn-add">＋ Adicionar</button>
-    <button class="btn" id="btn-import">⇪ Importar planilha (Excel/CSV)</button>
     <button class="btn" id="btn-export">⇩ Exportar CSV</button>
     <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
     <input type="file" id="file-import" accept=".csv,.xlsx,.xls" style="display:none">
@@ -869,11 +862,6 @@ function renderMap(fitView = true){
 function focusOnMap(id){
   const marker = markerRegistry[id];
   if (!marker) return;
-  // garante que o mapa está visível (troca pra visão dividida se estava só na lista)
-  const activeViewBtn = document.querySelector('#view-toggle button.active');
-  if (activeViewBtn && activeViewBtn.dataset.view === 'list'){
-    document.querySelector('#view-toggle button[data-view="split"]').click();
-  }
   setTimeout(() => {
     leafletMap.setView(marker.getLatLng(), Math.max(leafletMap.getZoom(), 13), { animate: true });
     marker.openPopup();
@@ -1131,7 +1119,7 @@ function openModal(rec){
   modal.style.display = 'flex';
 }
 function closeModal(){ modal.style.display = 'none'; }
-document.getElementById('btn-add').onclick = () => openModal(null);
+
 document.getElementById('btn-add-empty').onclick = () => openModal(null);
 document.getElementById('btn-cancel').onclick = closeModal;
 modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
@@ -1221,7 +1209,7 @@ function mapHeader(h){
   return null;
 }
 
-document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+
 document.getElementById('file-import').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1401,21 +1389,15 @@ document.getElementById('btn-clear').onclick = async () => {
   }
 };
 
-// ---------- alternância de visualização (lista/mapa/split) ----------
+// ---------- visão do mapa (agora sempre em tela cheia, sem alternância) ----------
 const splitView = document.getElementById('split-view');
 function setMapaView(view){
-  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
   document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
   splitView.classList.toggle('view-list', view === 'list');
   splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
 }
-document.getElementById('view-toggle').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-view]');
-  if (!btn) return;
-  setMapaView(btn.dataset.view);
-});
 setMapaView('map'); // visão padrão: só o mapa, sem a lista do lado
 
 // ---------- tela cheia do mapa ----------

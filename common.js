@@ -916,6 +916,11 @@ function initShell(active, pageTitle){
       <h1>Coord. Regional</h1>
       <p>Unidade Touros</p>
     </div>
+    ${active === 'mapa-servicos.html' ? `
+    <div class="sb-import-box" id="sb-import-box" title="Importar planilha (Excel/CSV)">
+      <span class="ico">📥</span>
+      <span>Importar planilha<br><small>Excel / CSV</small></span>
+    </div>` : ''}
     <div class="sb-section">Painéis</div>
     ${visibleLinks.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
     <div class="sb-footer">
@@ -997,6 +1002,14 @@ function initShell(active, pageTitle){
   }
   stampUltimaImportacao();
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
+
+  const importBox = sidebar.querySelector('#sb-import-box');
+  if (importBox){
+    importBox.addEventListener('click', () => {
+      const fileInput = document.getElementById('file-import');
+      if (fileInput) fileInput.click();
+    });
+  }
 
   sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
     const btn = sidebar.querySelector('#sb-refresh');

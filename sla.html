@@ -6,21 +6,19 @@
 <title>SLA · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  /* Tema claro só pra essa página — o resto do site continua escuro */
-  :root{
-    --bg:            #eef1f6;
+  /* Tema claro só na lista/tabela — o resto da página (sidebar, topo, cartões,
+     abas, filtros) continua no padrão escuro do site. */
+  #table-panel{
     --bg-panel:      #ffffff;
     --bg-panel-2:    #f7f9fc;
     --bg-raised:     #eef2f8;
     --line:          #dfe5ee;
-    --line-soft:     #eaeef4;
 
     --ink:           #1c2530;
     --ink-dim:       #62718a;
     --ink-faint:     #9aa7bb;
 
     --brand:         #0284c7;
-    --brand-dim:     #0369a1;
     --brand-wash:    rgba(2,132,199,0.10);
 
     --ok:            #16a34a;
@@ -30,16 +28,8 @@
     --crit:          #dc2626;
     --crit-wash:     rgba(220,38,38,0.12);
 
-    --accent2:       #7c3aed;
-    --accent2-wash:  rgba(124,58,237,0.10);
-    --accent3:       #ea580c;
-
-    --shadow: 0 4px 16px rgba(30,41,59,0.08);
+    background:var(--bg-panel);
   }
-  .sidebar{ border-right-color:var(--line); }
-  .topbar{ border-bottom-color:var(--line); }
-  .marker-label.neutral{ background:#e2e8f0 !important; border-color:var(--line) !important; }
-  .marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim) !important; }
   /* mostra a tabela inteira sem precisar rolar dentro dela — a página rola normal */
   #table-panel .table-wrap{ max-height:none; overflow:visible; }
   #table-panel table thead th{ position:sticky; top:0; z-index:2; }
