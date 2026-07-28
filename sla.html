@@ -5,6 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SLA · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  /* Tema claro só pra essa página — o resto do site continua escuro */
+  :root{
+    --bg:            #eef1f6;
+    --bg-panel:      #ffffff;
+    --bg-panel-2:    #f7f9fc;
+    --bg-raised:     #eef2f8;
+    --line:          #dfe5ee;
+    --line-soft:     #eaeef4;
+
+    --ink:           #1c2530;
+    --ink-dim:       #62718a;
+    --ink-faint:     #9aa7bb;
+
+    --brand:         #0284c7;
+    --brand-dim:     #0369a1;
+    --brand-wash:    rgba(2,132,199,0.10);
+
+    --ok:            #16a34a;
+    --ok-wash:       rgba(22,163,74,0.12);
+    --warn:          #d97706;
+    --warn-wash:     rgba(217,119,6,0.12);
+    --crit:          #dc2626;
+    --crit-wash:     rgba(220,38,38,0.12);
+
+    --accent2:       #7c3aed;
+    --accent2-wash:  rgba(124,58,237,0.10);
+    --accent3:       #ea580c;
+
+    --shadow: 0 4px 16px rgba(30,41,59,0.08);
+  }
+  .sidebar{ border-right-color:var(--line); }
+  .topbar{ border-bottom-color:var(--line); }
+  .marker-label.neutral{ background:#e2e8f0 !important; border-color:var(--line) !important; }
+  .marker-label.neutral .code, .marker-label.neutral .hrs{ color:var(--ink-dim) !important; }
+  /* mostra a tabela inteira sem precisar rolar dentro dela — a página rola normal */
+  #table-panel .table-wrap{ max-height:none; overflow:visible; }
+  #table-panel table thead th{ position:sticky; top:0; z-index:2; }
+</style>
 </head>
 <body>
 
@@ -35,8 +74,9 @@
       <label for="f-statussla">Status SLA</label>
       <select id="f-statussla">
         <option value="">Todos</option>
-        <option value="hoje">🔴 Atender hoje</option>
-        <option value="espera">Pode esperar</option>
+        <option value="vencido">🔴 Atender vencido</option>
+        <option value="hoje">🟠 Atender hoje</option>
+        <option value="espera">🟢 Dentro do prazo</option>
       </select>
     </div>
     <div style="flex:1"></div>
@@ -60,7 +100,7 @@
             <th data-sort="__tempo">Tempo atual</th>
             <th>Prazo SLA</th>
             <th>Status</th>
-            <th>Status SLA</th>
+            <th data-sort="__statussla">Status SLA</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -133,13 +173,19 @@ function getStatusPrazo(r){
   return elapsed > r.slaHoras ? 'fora' : 'dentro';
 }
 function getStatusSLA(r){
-  if (getStatusPrazo(r) === 'fora') return 'hoje';
+  if (getStatusPrazo(r) === 'fora') return 'vencido';
   if (venceAteAmanha9h(r)) return 'hoje';
   return 'espera';
 }
+const STATUS_SLA_ORDEM = { vencido: 0, hoje: 1, espera: 2 };
+const STATUS_SLA_INFO = {
+  vencido: { label: '🔴 Atender vencido', badge: 'crit' },
+  hoje:    { label: '🟠 Atender hoje',    badge: 'warn' },
+  espera:  { label: '🟢 Dentro do prazo', badge: 'ok' },
+};
 
 let mapaRecords = [];
-let sortKey = '__tempo', sortDir = -1;
+let sortKey = '__statussla', sortDir = 1;
 let selectedCities = new Set(); // vazio = todas
 
 const els = {
@@ -291,6 +337,8 @@ function renderTable(){
       const eb = OPS.elapsedHoursSince(b.criadoEm) ?? -1;
       return (ea - eb) * sortDir;
     });
+  } else if (sortKey === '__statussla'){
+    list = [...list].sort((a,b) => (STATUS_SLA_ORDEM[getStatusSLA(a)] - STATUS_SLA_ORDEM[getStatusSLA(b)]) * sortDir);
   } else if (sortKey){
     list = [...list].sort((a,b) => {
       const av = OPS.normalize(a[sortKey]), bv = OPS.normalize(b[sortKey]);
@@ -320,7 +368,7 @@ function renderTable(){
       <td class="proto">${elapsed != null ? elapsed.toFixed(1) + 'h' : '—'}</td>
       <td><span class="badge ${prazo === 'dentro' ? 'ok' : 'crit'}"><span class="dot"></span>${prazo === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</span></td>
       <td style="font-size:12.5px;${statusCor[cat] ? '' : 'color:var(--ink-dim)'}"><span class="badge ${statusCor[cat]}"><span class="dot"></span>${r.statusAtendimento || '—'}</span></td>
-      <td><span class="badge ${statusSla === 'hoje' ? 'crit' : ''}"><span class="dot"></span>${statusSla === 'hoje' ? '🔴 Atender hoje' : 'Pode esperar'}</span></td>
+      <td><span class="badge ${STATUS_SLA_INFO[statusSla].badge}"><span class="dot"></span>${STATUS_SLA_INFO[statusSla].label}</span></td>
     </tr>`;
   }).join('');
 }
