@@ -821,6 +821,7 @@ function renderMap(fitView = true){
         <span class="proto">${r.protocolo}</span>
         <div class="title">${label} · ${r.tipoCurto || r.tituloCompleto || ''}</div>
         <div class="meta">${r.cidade || ''}${r.bairro ? ' · ' + r.bairro : ''}</div>
+        ${r.nomeCliente ? `<div class="meta">🧑 ${r.nomeCliente}</div>` : ''}
         ${r.responsavel ? `<div class="meta">👤 ${r.responsavel}</div>` : ''}
         ${r.statusAtendimento ? `<div class="meta">📶 ${r.statusAtendimento}</div>` : ''}
         <div class="meta">${fmtElapsed(r)}${r.slaHoras ? ' / ' + r.slaHoras + 'h' : ''} · ${status === 'dentro' ? 'Dentro do prazo' : status === 'fora' ? 'Fora do prazo' : 'Sem SLA'}</div>
@@ -987,6 +988,7 @@ function openDetail(rec){
       <span class="status-name" style="margin-bottom:6px">Endereço</span>
       <div style="color:var(--ink-dim);font-size:13px;margin-top:6px">${enderecoCompleto || '—'}</div>
     </div>
+    <div class="status-row"><span class="status-name">Cliente</span><span class="status-val">${rec.nomeCliente || '—'}</span></div>
     <div class="status-row"><span class="status-name">Responsável</span><span class="status-val">${rec.responsavel || '—'}</span></div>
     <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
@@ -1190,6 +1192,7 @@ function mapHeader(h){
   if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
   if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
   if (n === 'responsavel') return 'responsavel';
+  if (n === 'cliente') return 'nomeCliente';
   if (n.includes('projeto')) return 'projeto';
   if (n.includes('observacao') && !n.includes('tecnico')) return 'observacao';
   if (n.includes('observacao') && n.includes('tecnico')) return 'observacaoTecnico';
@@ -1313,6 +1316,7 @@ document.getElementById('file-import').addEventListener('change', (e) => {
         })(),
         planoProduto: row.planoProduto || '',
         responsavel: row.responsavel || '',
+        nomeCliente: row.nomeCliente || '',
         // "TECNICO AUXILIAR" vem tipo "12345 - Nome Sobrenome" — tira o código da frente
         tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
       };
