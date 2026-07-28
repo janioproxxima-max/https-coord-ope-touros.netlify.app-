@@ -36,6 +36,7 @@ const OPS = (() => {
     'guamare':                { name: 'GUAMARÉ',               lat: -5.1256, lng: -36.3169 },
     'macau':                  { name: 'MACAU',                 lat: -5.1189, lng: -36.6272 },
     'alto do rodrigues':      { name: 'ALTO DO RODRIGUES',      lat: -5.4444, lng: -36.8036 },
+    'bento fernandes':        { name: 'BENTO FERNANDES',        lat: -5.5942, lng: -35.9083 },
     'pendencias':             { name: 'PENDÊNCIAS',            lat: -5.2872, lng: -36.9439 },
     'caico':                  { name: 'CAICÓ',                 lat: -6.4650, lng: -37.0958 },
     'serra do mel':           { name: 'SERRA DO MEL',          lat: -5.1667, lng: -37.0500 },
@@ -63,7 +64,7 @@ const OPS = (() => {
     'touros', 'sao miguel do gostoso', 'joao camara', 'macau', 'rio do fogo',
     'guamare', 'pendencias', 'sao bento do norte', 'parazinho', 'caicara do norte',
     'pedra grande', 'alto do rodrigues', 'serra do mel', 'porto do mangue',
-    'ipanguacu', 'afonso bezerra',
+    'ipanguacu', 'afonso bezerra', 'bento fernandes',
   ];
   const NATAL_UNIT_CITIES = [
     'senador georgino avelino', 'sao jose de mipibu', 'nisia floresta', 'ares',
@@ -105,6 +106,7 @@ const OPS = (() => {
     'macau': 'MARCELLO ROCHA',
     'alto do rodrigues': 'MARCELLO ROCHA',
     'pendencias': 'MARCELLO ROCHA',
+    'bento fernandes': 'MARCELLO ROCHA',
   };
   function supervisorForCity(cidade){
     return SUPERVISOR_BY_CITY[normalize(cidade)] || null;

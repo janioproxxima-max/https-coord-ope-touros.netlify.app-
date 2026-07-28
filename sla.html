@@ -40,7 +40,15 @@
       <input class="input" id="f-search" placeholder="Protocolo, responsável, cidade, bairro...">
     </div>
     <div class="field">
-      <label for="f-cidade-btn">Unidade / Cidade</label>
+      <label for="f-unidade">Unidade</label>
+      <select id="f-unidade">
+        <option value="">Todas</option>
+        <option value="TOUROS">📍 Unidade Touros</option>
+        <option value="NATAL">📍 Unidade Natal</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-cidade-btn">Cidade</label>
       <div class="multi-select" id="f-cidade-wrap">
         <button type="button" class="btn ghost" id="f-cidade-btn">Todas as cidades ▾</button>
         <div class="multi-select-panel" id="f-cidade-panel" style="display:none"></div>
@@ -53,6 +61,14 @@
         <option value="vencido">🔴 Atender vencido</option>
         <option value="hoje">🟠 Atender hoje</option>
         <option value="espera">🟢 Dentro do prazo</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-supervisor">Supervisor</label>
+      <select id="f-supervisor">
+        <option value="">Todos</option>
+        <option value="JOEL TAVARES">Joel Tavares</option>
+        <option value="MARCELLO ROCHA">Marcello Rocha</option>
       </select>
     </div>
     <div style="flex:1"></div>
@@ -167,8 +183,10 @@ let selectedCities = new Set(); // vazio = todas
 const els = {
   search: document.getElementById('f-search'),
   cidadeBtn: document.getElementById('f-cidade-btn'),
+  unidade: document.getElementById('f-unidade'),
   cidadePanel: document.getElementById('f-cidade-panel'),
   statusSla: document.getElementById('f-statussla'),
+  supervisor: document.getElementById('f-supervisor'),
   erroProjeto: document.getElementById('f-erro-projeto'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
@@ -195,14 +213,11 @@ function renderTabs(){
 }
 
 function populateFilterOptions(){
-  const list = baseRecordsDaAba();
-  const cidades = [...new Set(list.map(r => r.cidade).filter(Boolean))].sort();
-  selectedCities = new Set([...selectedCities].filter(c => cidades.includes(c)));
+  const cidades = [...new Set(mapaRecords.filter(r => !isAlwaysHidden(r) && !isDefaultHiddenRecolhimento(r) && SIGLA_BY_TIPO[r.tipoCurto]).map(r => r.cidade).filter(Boolean))].sort();
 
   els.cidadePanel.innerHTML = `
     <input class="input" id="ms-city-search" placeholder="Buscar cidade..." style="width:100%;margin-bottom:8px">
     <div class="ms-actions">
-      ${Object.keys(OPS.UNIT_CITIES).map(u => `<button type="button" data-unidade="${u}" class="ms-unidade-btn">📍 Unidade ${u.charAt(0) + u.slice(1).toLowerCase()}</button>`).join('')}
       <button type="button" id="ms-city-all">Marcar todas</button>
       <button type="button" id="ms-city-none">Limpar</button>
     </div>
@@ -228,15 +243,6 @@ function populateFilterOptions(){
       updateCityButtonLabel(cidades.length);
       renderStats(); renderTable();
     });
-  });
-  els.cidadePanel.querySelectorAll('.ms-unidade-btn').forEach(btn => {
-    btn.onclick = () => {
-      const unidade = btn.dataset.unidade;
-      selectedCities = new Set(cidades.filter(c => OPS.isUnitCity(c, unidade)));
-      els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = selectedCities.has(cb.value); });
-      updateCityButtonLabel(cidades.length);
-      renderStats(); renderTable();
-    };
   });
   document.getElementById('ms-city-all').onclick = () => {
     selectedCities = new Set(cidades);
@@ -277,10 +283,12 @@ function getFiltered(){
   const q = OPS.normalize(els.search.value);
   const statusSla = els.statusSla.value;
   const soErro = els.erroProjeto.checked;
+  const supervisor = els.supervisor.value;
   return baseRecordsDaAba().filter(r => {
     if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
     if (statusSla && getStatusSLA(r) !== statusSla) return false;
     if (soErro && !OPS.checkProjectError(r)) return false;
+    if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
     if (q){
       const hay = OPS.normalize(r.protocolo + ' ' + (r.responsavel||'') + ' ' + (r.cidade||'') + ' ' + (r.bairro||''));
       if (!hay.includes(q)) return false;
@@ -351,7 +359,16 @@ function renderTable(){
 
 function renderAll(){ renderTabs(); renderStats(); renderTable(); }
 
-[els.search, els.statusSla, els.erroProjeto].forEach(el => {
+els.unidade.addEventListener('change', () => {
+  const unidade = els.unidade.value;
+  const todasCidades = [...new Set(mapaRecords.filter(r => !isAlwaysHidden(r) && !isDefaultHiddenRecolhimento(r) && SIGLA_BY_TIPO[r.tipoCurto]).map(r => r.cidade).filter(Boolean))];
+  selectedCities = unidade ? new Set(todasCidades.filter(c => OPS.isUnitCity(c, unidade))) : new Set();
+  els.cidadePanel.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = selectedCities.has(cb.value); });
+  updateCityButtonLabel(todasCidades.length);
+  renderStats(); renderTable();
+});
+
+[els.search, els.statusSla, els.erroProjeto, els.supervisor].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });

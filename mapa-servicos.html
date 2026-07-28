@@ -78,10 +78,17 @@
         <option value="outro">Outro</option>
       </select>
     </div>
+    <div class="field">
+      <label for="f-supervisor">Supervisor</label>
+      <select id="f-supervisor">
+        <option value="">Todos</option>
+        <option value="JOEL TAVARES">Joel Tavares</option>
+        <option value="MARCELLO ROCHA">Marcello Rocha</option>
+      </select>
+    </div>
     </div>
     <div style="flex:1"></div>
     <button class="btn" id="btn-export">⇩ Exportar CSV</button>
-    <button class="btn ghost danger" id="btn-clear">Limpar tudo</button>
     <input type="file" id="file-import" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
   <div id="mapa-toolbar-anchor"></div>
@@ -307,6 +314,7 @@ const els = {
   sigla: document.getElementById('f-sigla'),
   statusAtend: document.getElementById('f-status-atend'),
   responsavelBtn: document.getElementById('f-responsavel-btn'),
+  supervisor: document.getElementById('f-supervisor'),
   responsavelPanel: document.getElementById('f-responsavel-panel'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
@@ -599,12 +607,14 @@ function matchesActiveFilters(r, { skipStatusChamado = false } = {}){
   const projetoFiltro = els.projeto.value;
   const sigla = els.sigla.value;
   const statusAtend = els.statusAtend.value;
+  const supervisor = els.supervisor.value;
 
   if (isAlwaysHidden(r)) return false;
   if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
   if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
   if (tipo && r.tipoCurto !== tipo) return false;
   if (selectedResponsaveis.size > 0 && !selectedResponsaveis.has(r.responsavel)) return false;
+  if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
   if (sigla && getMapLabel(r) !== sigla) return false;
   if (prazo === 'perto'){ if (runwayColor(r) !== 'warn') return false; }
   else if (prazo && getStatus(r) !== prazo) return false;
@@ -950,7 +960,7 @@ setInterval(pullAndRefresh, 5 * 60 * 1000);
 window.OPS_ON_REFRESH = pullAndRefresh;
 
 // ---------- filtros ----------
-[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend].forEach(el => {
+[els.search, els.tipo, els.prazo, els.projeto, els.sigla, els.statusAtend, els.supervisor].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
@@ -1379,15 +1389,7 @@ document.getElementById('btn-export').onclick = () => {
   OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
 };
 
-document.getElementById('btn-clear').onclick = async () => {
-  if (confirm('Isso vai apagar TODOS os registros — inclusive pra quem mais usa o site, já que os dados são compartilhados. Deseja continuar?')){
-    records = [];
-    OPS.save(records);
-    await syncPushWithToast(records);
-    populateFilterOptions();
-    renderAll();
-  }
-};
+
 
 // ---------- visão do mapa (agora sempre em tela cheia, sem alternância) ----------
 const splitView = document.getElementById('split-view');
