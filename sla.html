@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SLA · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   /* mostra a tabela inteira sem precisar rolar dentro dela — a página rola normal */
   #table-panel .table-wrap{ max-height:none; overflow:visible; }
@@ -75,7 +77,7 @@
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim);white-space:nowrap">
       <input type="checkbox" id="f-erro-projeto"> 🚩 Só com erro de projeto
     </label>
-    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar Excel</button>
   </div>
 
   <div class="panel" id="table-panel">
@@ -390,7 +392,7 @@ document.getElementById('btn-export').onclick = () => {
       elapsed != null ? elapsed.toFixed(1) : '', getStatusPrazo(r) === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO',
       r.statusAtendimento || '', getStatusSLA(r) === 'hoje' ? 'ATENDER HOJE' : 'PODE ESPERAR'];
   });
-  OPS.downloadCSV(`sla-${abaAtiva.toLowerCase()}-touros.csv`, headers, rows);
+  OPS.downloadXLSX(`sla-${abaAtiva.toLowerCase()}-touros.xlsx`, headers, rows);
 };
 
 async function initPage(){

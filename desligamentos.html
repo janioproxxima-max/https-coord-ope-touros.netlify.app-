@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Desligamentos · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -34,7 +36,7 @@
     </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="btn-add">＋ Adicionar desligamento</button>
-    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar Excel</button>
   </div>
 
   <div class="panel" id="table-panel">
@@ -240,7 +242,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
 document.getElementById('btn-export').onclick = () => {
   const headers = ['NOME','CARGO','DATA','TIPO','MOTIVO'];
   const rows = records.map(r => [r.nome, r.cargo, r.data, TIPO_LABELS[r.tipo] || r.tipo, r.motivo]);
-  OPS.downloadCSV('desligamentos-touros.csv', headers, rows);
+  OPS.downloadXLSX('desligamentos-touros.xlsx', headers, rows);
 };
 
 window.OPS_ON_REFRESH = renderAll;

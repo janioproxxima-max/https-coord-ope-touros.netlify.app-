@@ -6,6 +6,8 @@
 <title>Frotas · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -54,7 +56,7 @@
     </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="btn-add">＋ Adicionar veículo</button>
-    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar Excel</button>
   </div>
 
   <div class="two-col">
@@ -659,7 +661,7 @@ document.getElementById('form-concluir').addEventListener('submit', async e => {
 document.getElementById('btn-export').onclick = () => {
   const headers = ['PLACA','VEÍCULO','RESPONSÁVEL','BASE','VENCIMENTO DOC','STATUS'];
   const rows = records.map(r => [r.placa, r.veiculo, r.responsavel, r.base, r.vencDoc, r.status]);
-  OPS.downloadCSV('frotas-touros.csv', headers, rows);
+  OPS.downloadXLSX('frotas-touros.xlsx', headers, rows);
 };
 
 async function initPage(){

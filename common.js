@@ -537,6 +537,22 @@ const OPS = (() => {
     a.click();
   }
 
+  // Exporta em Excel de verdade (.xlsx), usando a biblioteca SheetJS (XLSX)
+  // já carregada nas páginas. filename pode vir com ou sem ".xlsx".
+  function downloadXLSX(filename, headers, dataRows, sheetName){
+    if (typeof XLSX === 'undefined'){
+      // sem a biblioteca disponível por algum motivo — cai pra CSV, pra não travar
+      downloadCSV(filename.replace(/\.xlsx$/i, '.csv'), headers, dataRows);
+      return;
+    }
+    const aoa = [headers, ...dataRows.map(row => row.map(v => v ?? ''))];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, (sheetName || 'Dados').slice(0, 31));
+    const finalName = filename.toLowerCase().endsWith('.xlsx') ? filename : filename.replace(/\.csv$/i, '') + '.xlsx';
+    XLSX.writeFile(wb, finalName);
+  }
+
   // Lê um arquivo CSV ou Excel (.xlsx/.xls) e devolve uma matriz de linhas
   // (array de arrays) igual ao parseCSV — pronto pra mapear colunas.
   // callback(rows) é chamado quando terminar de ler.
@@ -950,7 +966,7 @@ const OPS = (() => {
     ensureCityGeocoded, loadGeocodeCache,
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid,
-    loadData, saveData, parseCSV, downloadCSV, readSpreadsheetFile,
+    loadData, saveData, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,

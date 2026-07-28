@@ -74,7 +74,7 @@
     </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="btn-import-fechamento">⇪ Importar planilha de fechamento</button>
-    <button class="btn" id="btn-export-fechamento">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export-fechamento">⇩ Exportar Excel</button>
     <input type="file" id="file-import-fechamento" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
   <p class="page-sub" id="fechamento-info" style="margin:-6px 0 16px"></p>
@@ -410,7 +410,7 @@ function renderFechamentoInfo(){
 document.getElementById('btn-export-fechamento').onclick = () => {
   const headers = ['PROTOCOLO','TIPO DE SERVIÇO','CIDADE','DESCRIÇÃO DO ENCERRAMENTO','PLANO/PRODUTO','RESPONSÁVEL','TÉCNICO AUXILIAR','CRIADO EM','FIM DO ATENDIMENTO'];
   const rows = fechamento.map(r => [r.protocolo, r.tituloCompleto, r.cidade, r.descricaoEncerramento, r.planoProduto, r.responsavel, r.tecnicoAuxiliar, r.criadoEm || '', r.dataFimAtendimento || '']);
-  OPS.downloadCSV('fechamento-touros.csv', headers, rows);
+  OPS.downloadXLSX('fechamento-touros.xlsx', headers, rows);
 };
 
 function produtivoFechamento(){

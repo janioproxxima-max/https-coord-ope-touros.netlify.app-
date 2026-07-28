@@ -6,6 +6,8 @@
 <title>Gestão de Pessoas · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -42,7 +44,7 @@
     <div style="flex:1"></div>
     <button class="btn ghost" id="btn-rodizio">📅 Calibrar rodízio de FDS</button>
     <button class="btn primary" id="btn-add">＋ Adicionar colaborador</button>
-    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar Excel</button>
   </div>
 
   <div class="panel" id="table-panel">
@@ -614,7 +616,7 @@ document.getElementById('form-atestado').addEventListener('submit', async e => {
 document.getElementById('btn-export').onclick = () => {
   const headers = ['NOME','CARGO','CIDADE','CENTRO DE CUSTO','GESTOR','TELEFONE','EMAIL','VEÍCULO','INSPETOR','SETOR','ADMISSÃO','FOLGA FIXA','GRUPO FDS','STATUS'];
   const rows = records.map(r => [r.nome, r.cargo, r.cidade, r.centroCusto, r.gestor, r.telefone, r.email, r.veiculo, r.inspetor, r.setor, r.admissao, r.folgaFixaSemana, r.grupoFDS, r.status === 'ativo' ? 'ATIVO' : 'INATIVO']);
-  OPS.downloadCSV('gestao-pessoas-touros.csv', headers, rows);
+  OPS.downloadXLSX('gestao-pessoas-touros.xlsx', headers, rows);
 };
 
 // ---------- modal de detalhe (usado pelos 3 gráficos) ----------

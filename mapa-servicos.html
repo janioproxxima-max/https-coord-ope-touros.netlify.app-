@@ -88,7 +88,7 @@
     </div>
     </div>
     <div style="flex:1"></div>
-    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+    <button class="btn" id="btn-export">⇩ Exportar Excel</button>
   </div>
   <div id="mapa-toolbar-anchor"></div>
 
@@ -1186,7 +1186,7 @@ document.getElementById('btn-export').onclick = () => {
     r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.responsavel || '', r.projeto, r.observacao, r.observacaoTecnico || '',
     r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
   ]);
-  OPS.downloadCSV('mapa-servicos-touros.csv', headers, rows);
+  OPS.downloadXLSX('mapa-servicos-touros.xlsx', headers, rows);
 };
 
 
