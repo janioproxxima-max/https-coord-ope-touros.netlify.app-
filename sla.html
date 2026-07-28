@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLA · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Controle de SLA</p>
+    <h1 class="page-title">Painel de SLA por tipo de serviço</h1>
+    <p class="page-sub">Protocolos em aberto do Mapa de Serviços, agrupados pelo prazo de cada tipo.</p>
+  </div>
+
+  <div class="sla-tabs" id="sla-tabs"></div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field" style="flex:2">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Protocolo, responsável, cidade, bairro...">
+    </div>
+    <div class="field">
+      <label for="f-cidade">Cidade</label>
+      <select id="f-cidade"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+      <label for="f-statussla">Status SLA</label>
+      <select id="f-statussla">
+        <option value="">Todos</option>
+        <option value="hoje">🔴 Atender hoje</option>
+        <option value="espera">Pode esperar</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim);white-space:nowrap">
+      <input type="checkbox" id="f-erro-projeto"> 🚩 Só com erro de projeto
+    </label>
+    <button class="btn" id="btn-export">⇩ Exportar CSV</button>
+  </div>
+
+  <div class="panel" id="table-panel">
+    <div class="table-wrap">
+      <table class="services">
+        <thead>
+          <tr>
+            <th data-sort="protocolo">Protocolo</th>
+            <th data-sort="tituloCompleto">Título serviço</th>
+            <th data-sort="cidade">Cidade</th>
+            <th data-sort="bairro">Bairro</th>
+            <th data-sort="responsavel">Responsável</th>
+            <th data-sort="projeto">Projeto</th>
+            <th data-sort="__tempo">Tempo atual</th>
+            <th>Prazo SLA</th>
+            <th>Status</th>
+            <th>Status SLA</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="glyph">⏱️</div>
+      <h3>Nenhum protocolo nessa categoria</h3>
+      <p>Ajuste os filtros ou importe uma planilha no Mapa de Serviços.</p>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('sla.html', 'SLA');
+
+// -------- mesmas regras de agrupamento/sigla do Mapa de Serviços --------
+const RECOLHIMENTO_TROCA_ENDERECO = 'operacoes - recolhimento/troca de endereco';
+const FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
+function isAlwaysHidden(r){
+  if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
+  if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
+  const nCompleto = OPS.normalize(r.tituloCompleto);
+  if (nCompleto.includes('bot backoffice') || nCompleto.includes('solicitacao inativa')) return true;
+  if (OPS.normalize(r.tipoCurto).includes('bot backoffice') || OPS.normalize(r.tipoCurto).includes('solicitacao inativa')) return true;
+  return false;
+}
+function isDefaultHiddenRecolhimento(r){
+  return r.tipoCurto === 'RECOLHIMENTO' && OPS.normalize(r.tituloCompleto) !== RECOLHIMENTO_TROCA_ENDERECO;
+}
+const SIGLA_BY_TIPO = {
+  'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
+  'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT', 'AÇÕES PREVENTIVAS': 'VT',
+  'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MDE',
+};
+
+const SLA_TABS = [
+  { key: 'VT',  label: 'SLA 24HS (Reparo)',           horas: 24, meta: 90 },
+  { key: 'SA',  label: 'SLA 48HS (Serviços Adicional)', horas: 48, meta: 95 },
+  { key: 'AT',  label: 'SLA 72HS (Ativação)',          horas: 72, meta: 95 },
+  { key: 'MDE', label: 'SLA 72HS (Mudança de Endereço)', horas: 72, meta: 95 },
+];
+let abaAtiva = 'VT';
+
+function classifyStatusAtendimento(raw){
+  const n = OPS.normalize(raw);
+  if (!n) return '';
+  if (n.includes('pausa') || n.includes('interromper')) return 'pausado';
+  if (n.includes('deslocamento')) return 'deslocamento';
+  if (n.includes('iniciado')) return 'iniciado';
+  if (n.includes('aguardando')) return 'aguardando';
+  return 'outro';
+}
+
+// vence até amanhã 9h? (mesma regra do Mapa de Serviços)
+function venceAteAmanha9h(r){
+  const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+  if (elapsed == null || !r.slaHoras) return false;
+  const restante = r.slaHoras - elapsed;
+  const hoje = new Date();
+  const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
+  const horasAteAmanha9h = (amanha9h.getTime() - hoje.getTime()) / 3600000;
+  return restante <= horasAteAmanha9h;
+}
+function getStatusPrazo(r){
+  const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+  if (elapsed == null || !r.slaHoras) return 'sem_sla';
+  return elapsed > r.slaHoras ? 'fora' : 'dentro';
+}
+function getStatusSLA(r){
+  if (getStatusPrazo(r) === 'fora') return 'hoje';
+  if (venceAteAmanha9h(r)) return 'hoje';
+  return 'espera';
+}
+
+let mapaRecords = [];
+let sortKey = '__tempo', sortDir = -1;
+
+const els = {
+  search: document.getElementById('f-search'),
+  cidade: document.getElementById('f-cidade'),
+  statusSla: document.getElementById('f-statussla'),
+  erroProjeto: document.getElementById('f-erro-projeto'),
+  tbody: document.getElementById('tbody'),
+  statRow: document.getElementById('stat-row'),
+  emptyState: document.getElementById('empty-state'),
+};
+
+function baseRecordsDaAba(){
+  return mapaRecords.filter(r => !isAlwaysHidden(r) && !isDefaultHiddenRecolhimento(r) && SIGLA_BY_TIPO[r.tipoCurto] === abaAtiva);
+}
+
+function renderTabs(){
+  document.getElementById('sla-tabs').innerHTML = SLA_TABS.map(t => `
+    <button type="button" class="sla-tab ${abaAtiva === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>
+  `).join('');
+  document.querySelectorAll('.sla-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      abaAtiva = btn.dataset.tab;
+      populateFilterOptions();
+      renderAll();
+    });
+  });
+}
+
+function populateFilterOptions(){
+  const list = baseRecordsDaAba();
+  const cidades = [...new Set(list.map(r => r.cidade).filter(Boolean))].sort();
+  els.cidade.innerHTML = '<option value="">Todas</option>' + cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(els.search.value);
+  const cidade = els.cidade.value;
+  const statusSla = els.statusSla.value;
+  const soErro = els.erroProjeto.checked;
+  return baseRecordsDaAba().filter(r => {
+    if (cidade && r.cidade !== cidade) return false;
+    if (statusSla && getStatusSLA(r) !== statusSla) return false;
+    if (soErro && !OPS.checkProjectError(r)) return false;
+    if (q){
+      const hay = OPS.normalize(r.protocolo + ' ' + (r.responsavel||'') + ' ' + (r.cidade||'') + ' ' + (r.bairro||''));
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats(){
+  const list = getFiltered();
+  const tab = SLA_TABS.find(t => t.key === abaAtiva);
+  const dentro = list.filter(r => getStatusPrazo(r) === 'dentro').length;
+  const fora = list.length - dentro;
+  const pct = list.length ? (dentro / list.length * 100) : 0;
+  const cor = pct >= tab.meta ? 'ok' : 'crit';
+  els.statRow.innerHTML = `
+    <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${list.length}</div></div>
+    <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${dentro}</div></div>
+    <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${fora}</div></div>
+    <div class="stat-card ${cor}"><div class="label">SLA atual (meta ${tab.meta}% em ${tab.horas}h)</div><div class="value">${pct.toFixed(1)}%</div></div>
+  `;
+}
+
+function renderTable(){
+  let list = getFiltered();
+  if (sortKey === '__tempo'){
+    list = [...list].sort((a,b) => {
+      const ea = OPS.elapsedHoursSince(a.criadoEm) ?? -1;
+      const eb = OPS.elapsedHoursSince(b.criadoEm) ?? -1;
+      return (ea - eb) * sortDir;
+    });
+  } else if (sortKey){
+    list = [...list].sort((a,b) => {
+      const av = OPS.normalize(a[sortKey]), bv = OPS.normalize(b[sortKey]);
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+
+  els.emptyState.style.display = list.length === 0 ? 'block' : 'none';
+  document.querySelector('.table-wrap').style.display = list.length === 0 ? 'none' : 'block';
+
+  const statusCor = { iniciado:'ok', deslocamento:'crit', pausado:'warn', aguardando:'', outro:'' };
+  els.tbody.innerHTML = list.map(r => {
+    const prazo = getStatusPrazo(r);
+    const statusSla = getStatusSLA(r);
+    const cat = classifyStatusAtendimento(r.statusAtendimento);
+    const err = OPS.checkProjectError(r);
+    const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+    return `<tr>
+      <td class="proto">${r.protocolo}${err ? ' <span title="Erro de projeto — esperado ' + err.esperado + ', veio ' + err.encontrado + '">🚩</span>' : ''}</td>
+      <td>${r.tituloCompleto || r.tipoCurto || '—'}</td>
+      <td>${r.cidade || '—'}</td>
+      <td>${r.bairro || '—'}</td>
+      <td>${r.responsavel || '—'}</td>
+      <td class="proto" style="font-size:12px">${r.projeto || '—'}</td>
+      <td class="proto">${elapsed != null ? elapsed.toFixed(1) + 'h' : '—'}</td>
+      <td><span class="badge ${prazo === 'dentro' ? 'ok' : 'crit'}"><span class="dot"></span>${prazo === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</span></td>
+      <td style="font-size:12.5px;${statusCor[cat] ? '' : 'color:var(--ink-dim)'}"><span class="badge ${statusCor[cat]}"><span class="dot"></span>${r.statusAtendimento || '—'}</span></td>
+      <td><span class="badge ${statusSla === 'hoje' ? 'crit' : ''}"><span class="dot"></span>${statusSla === 'hoje' ? '🔴 Atender hoje' : 'Pode esperar'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAll(){ renderTabs(); renderStats(); renderTable(); }
+
+[els.search, els.cidade, els.statusSla, els.erroProjeto].forEach(el => {
+  el.addEventListener('input', renderAll);
+  el.addEventListener('change', renderAll);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+
+document.getElementById('btn-export').onclick = () => {
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','RESPONSÁVEL','PROJETO','TEMPO ATUAL','PRAZO SLA','STATUS','STATUS SLA'];
+  const list = getFiltered();
+  const rows = list.map(r => {
+    const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+    return [r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.responsavel, r.projeto,
+      elapsed != null ? elapsed.toFixed(1) : '', getStatusPrazo(r) === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO',
+      r.statusAtendimento || '', getStatusSLA(r) === 'hoje' ? 'ATENDER HOJE' : 'PODE ESPERAR'];
+  });
+  OPS.downloadCSV(`sla-${abaAtiva.toLowerCase()}-touros.csv`, headers, rows);
+};
+
+async function initPage(){
+  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+  const shared = await OPS.syncPull('MapaServicosData');
+  toast.remove();
+  mapaRecords = shared || OPS.load() || [];
+  populateFilterOptions();
+  renderAll();
+  return !!shared;
+}
+window.OPS_ON_REFRESH = initPage;
+initPage();
+</script>
+</body>
+</html>

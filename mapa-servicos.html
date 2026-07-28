@@ -81,9 +81,9 @@
     </div>
     <div style="flex:1"></div>
     <div class="view-toggle" id="view-toggle">
-      <button data-view="split" class="active">Lista + Mapa</button>
+      <button data-view="split">Lista + Mapa</button>
       <button data-view="list">Lista</button>
-      <button data-view="map">Mapa</button>
+      <button data-view="map" class="active">Mapa</button>
     </div>
     <button class="btn primary" id="btn-add">＋ Adicionar</button>
     <button class="btn" id="btn-import">⇪ Importar planilha (Excel/CSV)</button>
@@ -157,6 +157,24 @@
         </div>
         <div id="map-filters-toolbar-slot"></div>
       </div>
+
+      <!-- painel de detalhes flutuante, por cima do mapa -->
+      <div class="modal-backdrop detail-floating" id="detail-modal" style="display:none">
+        <div class="modal">
+          <div class="detail-floating-head">
+            <h3 id="detail-title">Detalhes do protocolo</h3>
+            <div class="detail-floating-actions">
+              <button type="button" class="icon-btn" id="btn-detail-resize" title="Diminuir/Aumentar">–</button>
+              <button type="button" class="icon-btn" id="btn-detail-close-x" title="Fechar">✕</button>
+            </div>
+          </div>
+          <p class="modal-sub" id="detail-sub"></p>
+          <div class="status-list" id="detail-body" style="padding:0"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn ghost" id="btn-detail-close">Fechar</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -205,18 +223,6 @@
         <button type="submit" class="btn primary">Salvar</button>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Modal: detalhes (somente leitura, abre ao clicar na linha) -->
-<div class="modal-backdrop" id="detail-modal" style="display:none">
-  <div class="modal">
-    <h3 id="detail-title">Detalhes do protocolo</h3>
-    <p class="modal-sub" id="detail-sub"></p>
-    <div class="status-list" id="detail-body" style="padding:0"></div>
-    <div class="modal-actions">
-      <button type="button" class="btn ghost" id="btn-detail-close">Fechar</button>
-    </div>
   </div>
 </div>
 
@@ -1019,6 +1025,13 @@ function openDetail(rec){
   detailModal.style.display = 'flex';
 }
 document.getElementById('btn-detail-close').onclick = () => detailModal.style.display = 'none';
+document.getElementById('btn-detail-close-x').onclick = () => detailModal.style.display = 'none';
+document.getElementById('btn-detail-resize').onclick = (e) => {
+  e.stopPropagation();
+  const minimizado = detailModal.classList.toggle('minimized');
+  document.getElementById('btn-detail-resize').textContent = minimizado ? '+' : '–';
+  document.getElementById('btn-detail-resize').title = minimizado ? 'Aumentar' : 'Diminuir';
+};
 detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.style.display = 'none'; });
 
 // ---------- arrastar o painel de detalhes (pra não ficar tampando o mapa) ----------
@@ -1390,18 +1403,20 @@ document.getElementById('btn-clear').onclick = async () => {
 
 // ---------- alternância de visualização (lista/mapa/split) ----------
 const splitView = document.getElementById('split-view');
-document.getElementById('view-toggle').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-view]');
-  if (!btn) return;
-  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const view = btn.dataset.view;
+function setMapaView(view){
+  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('table-panel').style.display = view === 'map' ? 'none' : 'block';
   document.getElementById('map-panel').style.display = view === 'list' ? 'none' : 'flex';
   splitView.classList.toggle('view-list', view === 'list');
   splitView.style.gridTemplateColumns = view === 'split' ? '' : '1fr';
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+}
+document.getElementById('view-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  setMapaView(btn.dataset.view);
 });
+setMapaView('map'); // visão padrão: só o mapa, sem a lista do lado
 
 // ---------- tela cheia do mapa ----------
 function setFullscreen(indo){

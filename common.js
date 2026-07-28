@@ -818,6 +818,7 @@ async function fetchSheetUsers(){
 const OPS_NAV_LINKS = [
   { href: 'index.html',           label: 'Início',            icon: '📊' },
   { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
+  { href: 'sla.html',             label: 'SLA',                icon: '⏱️' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
   { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },
