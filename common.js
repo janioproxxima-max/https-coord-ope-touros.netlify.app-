@@ -69,7 +69,7 @@ const OPS = (() => {
     'senador georgino avelino', 'sao jose de mipibu', 'nisia floresta', 'ares',
     'goianinha', 'canguaretama', 'tibau do sul', 'vila flor', 'nova cruz',
     'logradouro', 'sao goncalo do amarante', 'macaiba', 'taipu', 'poco branco',
-    'parnamirim', 'natal', 'extremoz', 'ceara mirim', 'maxaranguape', 'pureza',
+    'parnamirim', 'natal', 'extremoz', 'ceara-mirim', 'maxaranguape', 'pureza',
     'ielmo marinho',
   ];
   // Registro de unidades — facilita adicionar mais unidades no futuro.
