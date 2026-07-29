@@ -980,18 +980,31 @@ const OPS = (() => {
         const meta = { data: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || 'desconhecido' };
         localStorage.setItem(MAPA_SERVICOS_IMPORT_META_KEY, JSON.stringify(meta));
         tSalvando.remove();
-        await syncPushWithToast('MapaServicosData', finalRecords);
-        await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
+        const syncOk = await syncPushWithToast('MapaServicosData', finalRecords);
+        if (syncOk) await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
 
         const tSucesso = showToast(`✅ Importação concluída! ${finalRecords.length} protocolo(s) no total.`);
         setTimeout(() => tSucesso.remove(), 6000);
 
-        alert(
-          `✅ Planilha importada com sucesso!\n\n` +
-          `${imported.length} registro(s) lido(s) da planilha.\n` +
-          `${mode ? `A base foi substituída — agora tem ${finalRecords.length} protocolo(s) no total.` : `Foram adicionados aos que já existiam — agora tem ${finalRecords.length} protocolo(s) no total.`}\n\n` +
-          `Já sincronizado pra todo mundo ver.`
-        );
+        if (syncOk){
+          alert(
+            `✅ Planilha importada com sucesso!\n\n` +
+            `${imported.length} registro(s) lido(s) da planilha.\n` +
+            `${mode ? `A base foi substituída — agora tem ${finalRecords.length} protocolo(s) no total.` : `Foram adicionados aos que já existiam — agora tem ${finalRecords.length} protocolo(s) no total.`}\n\n` +
+            `✅ Já sincronizado na nuvem — todo mundo já consegue ver.`
+          );
+          const paginasComMapa = ['mapa-servicos.html', 'sla.html', 'indicadores.html'];
+          const paginaAtual = window.location.pathname.split('/').pop();
+          if (!paginasComMapa.includes(paginaAtual) && confirm('Quer ir agora pro Mapa de Serviços pra conferir os dados importados?')){
+            window.location.href = 'mapa-servicos.html';
+          }
+        } else {
+          alert(
+            `⚠️ A planilha foi lida (${imported.length} registro(s)), mas NÃO consegui sincronizar com a nuvem agora.\n\n` +
+            `Os dados ficaram salvos só neste navegador — outras pessoas ainda não vão ver essa atualização.\n\n` +
+            `Isso costuma ser internet instável ou a planilha ser muito grande pra sincronizar de uma vez. Tente clicar em "↻ Atualizar" daqui a pouco pra tentar sincronizar de novo, ou me avise se continuar acontecendo.`
+          );
+        }
 
         if (missingTypes.size){
           alert(
