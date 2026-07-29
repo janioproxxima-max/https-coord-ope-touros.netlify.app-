@@ -37,6 +37,30 @@ const OPS = (() => {
     'macau':                  { name: 'MACAU',                 lat: -5.1189, lng: -36.6272 },
     'alto do rodrigues':      { name: 'ALTO DO RODRIGUES',      lat: -5.4444, lng: -36.8036 },
     'bento fernandes':        { name: 'BENTO FERNANDES',        lat: -5.5942, lng: -35.9083 },
+    'jacana':                 { name: 'JAÇANÃ',                 lat: -6.4394, lng: -35.9917 },
+    'sitio novo':             { name: 'SÍTIO NOVO',              lat: -6.1364, lng: -35.7789 },
+    'santana do serido':      { name: 'SANTANA DO SERIDÓ',       lat: -6.6939, lng: -36.8825 },
+    'sao paulo do potengi':   { name: 'SÃO PAULO DO POTENGI',    lat: -5.9014, lng: -35.6800 },
+    'santa cruz':             { name: 'SANTA CRUZ',              lat: -6.2225, lng: -36.0225 },
+    'sao rafael':             { name: 'SÃO RAFAEL',              lat: -5.8144, lng: -36.8836 },
+    'ipueira':                { name: 'IPUEIRA',                 lat: -6.6797, lng: -37.1522 },
+    'bom jesus':              { name: 'BOM JESUS',               lat: -5.9975, lng: -35.5847 },
+    'jucurutu':               { name: 'JUCURUTU',                lat: -6.0122, lng: -37.0189 },
+    'equador':                { name: 'EQUADOR',                 lat: -6.2044, lng: -36.9553 },
+    'timbauba dos batistas':  { name: 'TIMBAÚBA DOS BATISTAS',   lat: -6.3025, lng: -37.2606 },
+    'lajes pintadas':         { name: 'LAJES PINTADAS',          lat: -6.5544, lng: -36.1478 },
+    'riachuelo':              { name: 'RIACHUELO',               lat: -5.9497, lng: -35.6981 },
+    'cruzeta':                { name: 'CRUZETA',                 lat: -6.4189, lng: -36.7842 },
+    'sao joao do sabugi':     { name: 'SÃO JOÃO DO SABUGI',      lat: -6.5992, lng: -37.1550 },
+    'santa maria':            { name: 'SANTA MARIA',             lat: -5.9142, lng: -35.6858 },
+    'barcelona':              { name: 'BARCELONA',               lat: -5.9186, lng: -35.6600 },
+    'jardim de piranhas':     { name: 'JARDIM DE PIRANHAS',      lat: -6.3489, lng: -37.4306 },
+    'tangara':                { name: 'TANGARÁ',                 lat: -6.0664, lng: -36.0567 },
+    'santa luzia':            { name: 'SANTA LUZIA',             lat: -6.8853, lng: -36.9153 },
+    'sao fernando':           { name: 'SÃO FERNANDO',            lat: -6.7942, lng: -36.9667 },
+    'ouro branco':            { name: 'OURO BRANCO',             lat: -6.7397, lng: -36.7975 },
+    'sao jose do serido':     { name: 'SÃO JOSÉ DO SERIDÓ',      lat: -6.1300, lng: -36.8069 },
+    'coronel ezequiel':       { name: 'CORONEL EZEQUIEL',        lat: -6.1719, lng: -36.1550 },
     'pendencias':             { name: 'PENDÊNCIAS',            lat: -5.2872, lng: -36.9439 },
     'caico':                  { name: 'CAICÓ',                 lat: -6.4650, lng: -37.0958 },
     'serra do mel':           { name: 'SERRA DO MEL',          lat: -5.1667, lng: -37.0500 },
@@ -816,9 +840,12 @@ const OPS = (() => {
   // Devolve a lista final de registros, ou null se cancelado/sem dados.
   async function importMapaServicosFile(file){
     return new Promise((resolve) => {
+      const tLendo = showToast('📖 Lendo a planilha...');
       readSpreadsheetFile(file, async (rows) => {
        try{
+        tLendo.remove();
         if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); resolve(null); return; }
+        const tProcessando = showToast(`⚙️ Processando ${rows.length - 1} linha(s)...`);
 
         function scoreRow(row){
           const mapped = (row || []).map(mapHeaderMapaServicos);
@@ -916,6 +943,7 @@ const OPS = (() => {
           };
         }).filter(Boolean);
 
+        tProcessando.remove();
         if (!imported.length){
           const colunasAchadas = headers.filter(Boolean);
           alert(
@@ -929,24 +957,34 @@ const OPS = (() => {
 
         const cidadesNovas = [...new Set(imported.map(r => r.cidade).filter(Boolean))].filter(c => !cityCenter(c));
         if (cidadesNovas.length){
-          const toast = showToast(`📍 Localizando cidades novas no mapa... (0/${cidadesNovas.length})`);
+          const banner = document.createElement('div');
+          banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--brand);color:#0B1512;padding:14px 20px;font-weight:700;font-size:14px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.4)';
+          banner.innerHTML = `📍 Localizando ${cidadesNovas.length} cidade(s) nova(s) no mapa — isso pode levar até ${Math.ceil(cidadesNovas.length * 1.2 / 60 * 10) / 10} minuto(s). Não feche nem atualize a página...<br><span id="geocode-progress-text" style="font-weight:400"></span>`;
+          document.body.appendChild(banner);
           for (let i = 0; i < cidadesNovas.length; i++){
-            toast.textContent = `📍 Localizando cidades novas no mapa... (${i+1}/${cidadesNovas.length}: ${cidadesNovas[i]})`;
+            const progText = banner.querySelector('#geocode-progress-text');
+            if (progText) progText.textContent = `(${i+1}/${cidadesNovas.length}) ${cidadesNovas[i]}`;
             await ensureCityGeocoded(cidadesNovas[i]);
             if (i < cidadesNovas.length - 1) await new Promise(res => setTimeout(res, 1100));
           }
-          toast.remove();
+          banner.remove();
         }
 
+        tProcessando.remove();
         const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
+        const tSalvando = showToast('💾 Salvando e sincronizando...');
         const atual = (await syncPull('MapaServicosData')) || loadData(STORAGE_KEY) || [];
         const finalRecords = mode ? imported : [...atual, ...imported];
 
         saveData(STORAGE_KEY, finalRecords);
         const meta = { data: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || 'desconhecido' };
         localStorage.setItem(MAPA_SERVICOS_IMPORT_META_KEY, JSON.stringify(meta));
+        tSalvando.remove();
         await syncPushWithToast('MapaServicosData', finalRecords);
         await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
+
+        const tSucesso = showToast(`✅ Importação concluída! ${finalRecords.length} protocolo(s) no total.`);
+        setTimeout(() => tSucesso.remove(), 6000);
 
         alert(
           `✅ Planilha importada com sucesso!\n\n` +
@@ -965,6 +1003,7 @@ const OPS = (() => {
 
         resolve(finalRecords);
        }catch(err){
+         document.querySelectorAll('.ops-toast').forEach(t => t.remove());
          console.error('Falha ao importar planilha', err);
          alert('❌ Deu um erro ao importar a planilha:\n\n' + (err && err.message ? err.message : err) + '\n\nMe avise na conversa com esse texto do erro.');
          resolve(null);
