@@ -88,7 +88,9 @@
     </div>
     </div>
     <div style="flex:1"></div>
+    <button class="btn primary" id="btn-import">⇪ Importar planilha (Excel/CSV)</button>
     <button class="btn" id="btn-export">⇩ Exportar Excel</button>
+    <input type="file" id="file-import-mapa" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
   <div id="mapa-toolbar-anchor"></div>
 
@@ -1177,6 +1179,23 @@ document.getElementById('form-record').addEventListener('submit', e => {
   closeModal();
   if (!OPS.cityCenter(data.cidade)){
     OPS.ensureCityGeocoded(data.cidade).then(() => renderAll());
+  }
+});
+
+document.getElementById('btn-import').onclick = () => document.getElementById('file-import-mapa').click();
+document.getElementById('file-import-mapa').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  console.log('[Mapa de Serviços] Iniciando importação de:', file.name);
+  const resultado = await OPS.importMapaServicosFile(file);
+  e.target.value = '';
+  console.log('[Mapa de Serviços] Resultado da importação:', resultado ? `${resultado.length} registros` : 'cancelado/falhou');
+  if (resultado){
+    records = resultado;
+    populateFilterOptions();
+    renderAll();
+    if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
+    if (typeof window.OPS_STAMP_IMPORT === 'function') window.OPS_STAMP_IMPORT();
   }
 });
 

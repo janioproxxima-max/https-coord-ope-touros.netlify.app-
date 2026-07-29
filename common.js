@@ -844,6 +844,7 @@ const OPS = (() => {
       readSpreadsheetFile(file, async (rows) => {
        try{
         tLendo.remove();
+        console.log('[Importação] Linhas lidas da planilha:', rows ? rows.length : 0);
         if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); resolve(null); return; }
         const tProcessando = showToast(`⚙️ Processando ${rows.length - 1} linha(s)...`);
 
@@ -944,6 +945,7 @@ const OPS = (() => {
         }).filter(Boolean);
 
         tProcessando.remove();
+        console.log('[Importação] headerRowIdx:', headerRowIdx, '| registros válidos encontrados:', imported.length);
         if (!imported.length){
           const colunasAchadas = headers.filter(Boolean);
           alert(
@@ -972,8 +974,10 @@ const OPS = (() => {
 
         tProcessando.remove();
         const mode = confirm(`Foram lidos ${imported.length} registros.\nOK = substituir toda a base atual.\nCancelar = adicionar aos registros existentes.`);
+        console.log('[Importação] Modo escolhido:', mode ? 'substituir' : 'adicionar');
         const tSalvando = showToast('💾 Salvando e sincronizando...');
         const atual = (await syncPull('MapaServicosData')) || loadData(STORAGE_KEY) || [];
+        console.log('[Importação] Registros atuais na nuvem/local antes de salvar:', atual.length);
         const finalRecords = mode ? imported : [...atual, ...imported];
 
         saveData(STORAGE_KEY, finalRecords);
@@ -981,6 +985,7 @@ const OPS = (() => {
         localStorage.setItem(MAPA_SERVICOS_IMPORT_META_KEY, JSON.stringify(meta));
         tSalvando.remove();
         const syncOk = await syncPushWithToast('MapaServicosData', finalRecords);
+        console.log('[Importação] Sincronização com a nuvem deu certo?', syncOk, '| total final:', finalRecords.length);
         if (syncOk) await syncPush(MAPA_SERVICOS_IMPORT_META_SYNC, [meta]);
 
         const tSucesso = showToast(`✅ Importação concluída! ${finalRecords.length} protocolo(s) no total.`);
@@ -1286,9 +1291,15 @@ function initShell(active, pageTitle){
     importFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      console.log('[Barra lateral] Iniciando importação de:', file.name);
       const resultado = await importMapaServicosFile(file);
       e.target.value = '';
-      if (resultado && typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
+      console.log('[Barra lateral] Resultado da importação:', resultado ? `${resultado.length} registros` : 'cancelado/falhou');
+      if (resultado){
+        if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
+        if (typeof stampUltimaImportacao === 'function') stampUltimaImportacao();
+        if (typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
+      }
     });
   }
 
