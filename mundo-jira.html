@@ -712,7 +712,15 @@ async function initPage(){
   toast.remove();
   tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
-  tickets.forEach(t => { t.comentarios = t.comentarios || []; t.historico = t.historico || []; });
+  function normalizarLista(valor){
+    if (Array.isArray(valor)) return valor;
+    if (typeof valor === 'string' && valor.trim()){
+      try { const parsed = JSON.parse(valor); return Array.isArray(parsed) ? parsed : []; }
+      catch(e){ return []; }
+    }
+    return [];
+  }
+  tickets.forEach(t => { t.comentarios = normalizarLista(t.comentarios); t.historico = normalizarLista(t.historico); });
   populateStatusFilter();
   renderAll();
   return !!(sharedTickets || sharedPessoas);
