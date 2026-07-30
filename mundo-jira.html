@@ -123,15 +123,15 @@
         </div>
         <div id="mj-n-bloco-equipamentos-item">
           <div class="field">
-            <label>Item — Equipamentos</label>
+            <label>Item — Equipamento</label>
             <select id="mj-n-equipamentos-item">
-              <option value="Notebook">Notebook</option>
-              <option value="Celular Corporativo">Celular Corporativo</option>
-              <option value="Rádio Comunicador">Rádio Comunicador</option>
-              <option value="GPS">GPS</option>
-              <option value="Modem/ONU">Modem/ONU</option>
+              <option value="ONT/ONU">ONT/ONU</option>
               <option value="Roteador">Roteador</option>
-              <option value="Outro Item">Outro Item</option>
+              <option value="Conector">Conector</option>
+              <option value="Esticador">Esticador</option>
+              <option value="Fixa Cabo">Fixa Cabo</option>
+              <option value="Cabo LAN">Cabo LAN</option>
+              <option value="Outros">Outros</option>
             </select>
           </div>
         </div>
@@ -139,14 +139,25 @@
           <div class="field">
             <label>Item — Ferramental</label>
             <select id="mj-n-ferramental-item">
-              <option value="Fusionadora">Fusionadora</option>
-              <option value="Alicate de Fusão">Alicate de Fusão</option>
-              <option value="Power Meter (Medidor de Potência)">Power Meter (Medidor de Potência)</option>
-              <option value="Escada">Escada</option>
-              <option value="Furadeira">Furadeira</option>
-              <option value="Multímetro">Multímetro</option>
-              <option value="Kit de Ferramentas Básico">Kit de Ferramentas Básico</option>
-              <option value="Outro Item">Outro Item</option>
+              <option value="Alicate de Corte">Alicate de Corte</option>
+              <option value="Alicate Decapador S211">Alicate Decapador S211</option>
+              <option value="Bolsa KIT Fibra">Bolsa KIT Fibra</option>
+              <option value="Caneta Laser">Caneta Laser</option>
+              <option value="Clivador">Clivador</option>
+              <option value="Decapador de Cabo Drop">Decapador de Cabo Drop</option>
+              <option value="Escada Interna">Escada Interna</option>
+              <option value="Película para Celular">Película para Celular</option>
+              <option value="Power Meter">Power Meter</option>
+              <option value="Extensão Cabo PP">Extensão Cabo PP</option>
+              <option value="Plug Fêmea">Plug Fêmea</option>
+              <option value="Plug Macho">Plug Macho</option>
+              <option value="Tubo para Álcool">Tubo para Álcool</option>
+              <option value="Broca 6 SDS">Broca 6 SDS</option>
+              <option value="Broca 8 Normal">Broca 8 Normal</option>
+              <option value="Broca 8 SDS">Broca 8 SDS</option>
+              <option value="Capa para Celular">Capa para Celular</option>
+              <option value="Celular">Celular</option>
+              <option value="Outros">Outros</option>
             </select>
           </div>
         </div>
@@ -270,7 +281,12 @@ function colaboradorAtual(){
   if (porLogin) return porLogin;
   // respaldo: usuário tipo "joel.tavares" ou "joel_tavares" casando com o nome "Joel Tavares"
   const usuarioComoNome = OPS.normalize(usuarioAtual).replace(/[._]/g, ' ');
-  return pessoas.find(p => OPS.normalize(p.nome) === usuarioComoNome) || null;
+  const porNomeComEspaco = pessoas.find(p => OPS.normalize(p.nome) === usuarioComoNome);
+  if (porNomeComEspaco) return porNomeComEspaco;
+  // respaldo mais flexível ainda: usuário tipo "pedrolucas" (sem separador nenhum)
+  // casando com o nome "Pedro Lucas" — compara os dois lados sem espaço/pontuação
+  const usuarioSemSeparador = OPS.normalize(usuarioAtual).replace(/[^a-z0-9]/g, '');
+  return pessoas.find(p => OPS.normalize(p.nome).replace(/[^a-z0-9]/g, '') === usuarioSemSeparador) || null;
 }
 function papelAtual(){
   const access = getCurrentAccess();
@@ -419,7 +435,7 @@ function atualizarCamposCategoria(){
 }
 function atualizarCampoOutroItem(){
   const selectAtivo = document.getElementById(itemSelectAtivoId());
-  const ehOutro = selectAtivo && selectAtivo.value === 'Outro Item';
+  const ehOutro = selectAtivo && ['Outro Item','Outros'].includes(selectAtivo.value);
   document.getElementById('mj-n-bloco-outro-item').style.display = ehOutro ? 'grid' : 'none';
   document.getElementById('mj-n-bloco-tamanho-normal').style.display = ehOutro ? 'none' : 'block';
 }
@@ -441,9 +457,9 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   const colab = colaboradorAtual();
   const categoria = document.getElementById('mj-n-categoria').value;
   const selectAtivo = document.getElementById(itemSelectAtivoId());
-  const ehOutro = selectAtivo && selectAtivo.value === 'Outro Item';
+  const ehOutro = selectAtivo && ['Outro Item','Outros'].includes(selectAtivo.value);
   const itemDigitado = document.getElementById('mj-n-item').value.trim();
-  const itemFinal = ehOutro ? (itemDigitado || 'Outro Item') : (selectAtivo ? selectAtivo.value : '');
+  const itemFinal = ehOutro ? (itemDigitado || 'Outros') : (selectAtivo ? selectAtivo.value : '');
   const tamanhoFinal = ehOutro
     ? document.getElementById('mj-n-tamanho').value.trim()
     : document.getElementById('mj-n-tamanho-normal').value.trim();
