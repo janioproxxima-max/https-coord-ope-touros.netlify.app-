@@ -231,6 +231,7 @@
 <script src="seed-data.js"></script>
 <script>
 requireAuthThenInit('mapa-servicos.html', 'Mapa de Serviços');
+OPS.loadMunicipioPolygons().then(ok => { if (ok) renderAll(); }); // recalcula quando a malha terminar de carregar
 
 const STORAGE_KEY = OPS.STORAGE_KEY;
 let records = OPS.load();

@@ -126,6 +126,10 @@
         <div class="field"><label>Centro de custo</label><input class="input" id="rec-cc" required placeholder="Ex: CC-TOUROS-OPS"></div>
       </div>
       <div class="grid2">
+        <div class="field"><label>Matrícula</label><input class="input" id="rec-matricula" placeholder="Se existir"></div>
+        <div class="field"><label>Usuário do sistema (login)</label><input class="input" id="rec-usuario-login" placeholder="Ex: joel.tavares — pra ligar ao Mundo Jira"></div>
+      </div>
+      <div class="grid2">
         <div class="field"><label>Setor / Unidade</label><input class="input" id="rec-setor" value="Unidade Touros"></div>
         <div class="field"><label>Cidade</label><input class="input" id="rec-cidade"></div>
       </div>
@@ -440,6 +444,8 @@ function openModal(rec){
   document.getElementById('rec-email').value = rec ? (rec.email||'') : '';
   document.getElementById('rec-veiculo').value = rec ? (rec.veiculo||'') : '';
   document.getElementById('rec-inspetor').value = rec ? (rec.inspetor||'') : '';
+  document.getElementById('rec-matricula').value = rec ? (rec.matricula||'') : '';
+  document.getElementById('rec-usuario-login').value = rec ? (rec.usuarioLogin||'') : '';
   document.getElementById('rec-gestor').value = rec ? rec.gestor : '';
   document.getElementById('rec-admissao').value = rec ? OPS.toDateInputValue(rec.admissao) : '';
   document.getElementById('rec-folga-fixa').value = rec ? (rec.folgaFixaSemana||'') : '';
@@ -466,6 +472,8 @@ document.getElementById('form-record').addEventListener('submit', async e => {
     email: document.getElementById('rec-email').value.trim(),
     veiculo: document.getElementById('rec-veiculo').value.trim(),
     inspetor: document.getElementById('rec-inspetor').value.trim(),
+    matricula: document.getElementById('rec-matricula').value.trim(),
+    usuarioLogin: document.getElementById('rec-usuario-login').value.trim(),
     gestor: document.getElementById('rec-gestor').value.trim(),
     admissao: document.getElementById('rec-admissao').value,
     folgaFixaSemana: document.getElementById('rec-folga-fixa').value,

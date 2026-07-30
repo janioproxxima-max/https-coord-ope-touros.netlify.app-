@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mundo Jira · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Chamados internos</p>
+    <h1 class="page-title" id="mj-titulo-boas-vindas">Bem-vindo ao painel de solicitações da Unidade Touros</h1>
+    <p class="page-sub">Material, Frotas e Reclamações — com fluxo de aprovação, chat e histórico completo.</p>
+    <p id="mj-papel-banner" class="mj-papel-banner"></p>
+  </div>
+
+  <div id="mj-dashboard" class="stat-row" style="display:none"></div>
+
+  <div class="panel toolbar">
+    <div class="field" style="flex:2">
+      <label for="mj-search">Buscar</label>
+      <input class="input" id="mj-search" placeholder="Número, item, colaborador, descrição...">
+    </div>
+    <div class="field">
+      <label for="mj-f-modulo">Módulo</label>
+      <select id="mj-f-modulo">
+        <option value="">Todos</option>
+        <option value="material">Material</option>
+        <option value="frotas">Frotas</option>
+        <option value="reclamacao">Reclamação</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="mj-f-status">Status</label>
+      <select id="mj-f-status"><option value="">Todos</option></select>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn primary" id="mj-btn-novo">＋ Novo chamado</button>
+  </div>
+
+  <div class="panel" id="mj-table-panel">
+    <div class="table-wrap">
+      <table class="services">
+        <thead>
+          <tr>
+            <th>Nº</th>
+            <th>Módulo</th>
+            <th>Item / Assunto</th>
+            <th>Colaborador</th>
+            <th>Responsável atual</th>
+            <th>Aberto em</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mj-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="mj-empty-state" style="display:none">
+      <div class="glyph">🎫</div>
+      <h3>Nenhum chamado por aqui</h3>
+      <p>Clique em "＋ Novo chamado" pra abrir o primeiro.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: novo chamado -->
+<div class="modal-backdrop" id="mj-modal-novo" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <h3>Novo chamado</h3>
+    <p class="modal-sub">As informações do colaborador são preenchidas automaticamente pelo seu cadastro em Gestão de Pessoas.</p>
+    <form id="mj-form-novo">
+      <div class="field">
+        <label>Módulo</label>
+        <select id="mj-n-modulo" required>
+          <option value="material">Material</option>
+          <option value="frotas">Frotas</option>
+          <option value="reclamacao">Reclamação</option>
+        </select>
+      </div>
+
+      <div id="mj-n-bloco-material">
+        <div class="field">
+          <label>Categoria</label>
+          <select id="mj-n-categoria">
+            <option value="equipamentos">Equipamentos</option>
+            <option value="ferramental">Ferramental</option>
+            <option value="sesmt">SESMT</option>
+          </select>
+        </div>
+        <div id="mj-n-bloco-sesmt-item" style="display:none">
+          <div class="field">
+            <label>Item SESMT</label>
+            <select id="mj-n-sesmt-item">
+              <option value="Fardamento">Fardamento</option>
+              <option value="Bota">Bota</option>
+              <option value="Outro Item">Outro Item</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Item solicitado</label><input class="input" id="mj-n-item" placeholder="Ex: Camisa, Bota de segurança, Furadeira..."></div>
+          <div class="field"><label>Tamanho (se aplicável)</label><input class="input" id="mj-n-tamanho" placeholder="Ex: G, 42..."></div>
+        </div>
+        <div class="field"><label>Quantidade</label><input class="input" type="number" min="1" value="1" id="mj-n-quantidade"></div>
+      </div>
+
+      <div id="mj-n-bloco-frotas" style="display:none">
+        <div class="field"><label>Veículo / placa (se souber)</label><input class="input" id="mj-n-veiculo"></div>
+      </div>
+
+      <div class="field">
+        <label id="mj-n-descricao-label">Descrição da necessidade</label>
+        <textarea class="input" id="mj-n-descricao" rows="3" required></textarea>
+      </div>
+      <p id="mj-n-confidencial-aviso" style="display:none;font-size:12.5px;color:var(--warn)">
+        🔒 Reclamações são confidenciais — só você e o Coordenador vão poder ver esse chamado.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="mj-btn-cancelar-novo">Cancelar</button>
+        <button type="submit" class="btn primary">Abrir chamado</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: detalhe do chamado -->
+<div class="modal-backdrop" id="mj-modal-detalhe" style="display:none">
+  <div class="modal" style="max-width:640px">
+    <h3 id="mj-d-titulo">Chamado</h3>
+    <p class="modal-sub" id="mj-d-subtitulo"></p>
+    <div class="status-list" id="mj-d-info" style="padding:0"></div>
+
+    <div id="mj-d-acoes" style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0"></div>
+
+    <div class="mj-chat-box">
+      <div class="mj-chat-title">💬 Conversa</div>
+      <div id="mj-d-chat" class="mj-chat-list"></div>
+      <div class="mj-chat-input-row">
+        <input class="input" id="mj-d-novo-comentario" placeholder="Escreva uma mensagem...">
+        <button class="btn primary" id="mj-btn-enviar-comentario">Enviar</button>
+      </div>
+    </div>
+
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:var(--ink-dim);font-size:13px">📜 Histórico completo</summary>
+      <div id="mj-d-historico" style="margin-top:8px"></div>
+    </details>
+
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="mj-btn-fechar-detalhe">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('mundo-jira.html', 'Mundo Jira');
+
+// ---------- catálogo de status e módulos ----------
+const MJ_STATUS = [
+  { key: 'aberto', label: 'Aberto', cor: 'neutral' },
+  { key: 'em_analise', label: 'Em Análise', cor: '' },
+  { key: 'aguardando_informacoes', label: 'Aguardando Informações', cor: 'warn' },
+  { key: 'aguardando_setor', label: 'Aguardando Setor', cor: 'warn' },
+  { key: 'em_atendimento', label: 'Em Atendimento', cor: '' },
+  { key: 'rejeitado', label: 'Rejeitado', cor: 'crit' },
+  { key: 'resolvido', label: 'Resolvido', cor: 'ok' },
+  { key: 'cancelado', label: 'Cancelado', cor: 'neutral' },
+];
+const MJ_STATUS_LABEL = Object.fromEntries(MJ_STATUS.map(s => [s.key, s.label]));
+const MJ_STATUS_COR = Object.fromEntries(MJ_STATUS.map(s => [s.key, s.cor]));
+const MJ_TRANSICOES = {
+  aberto: ['em_analise', 'cancelado'],
+  em_analise: ['aguardando_informacoes', 'aguardando_setor', 'em_atendimento', 'rejeitado', 'cancelado'],
+  aguardando_informacoes: ['em_analise', 'cancelado'],
+  aguardando_setor: ['em_atendimento', 'cancelado'],
+  em_atendimento: ['resolvido', 'cancelado'],
+  rejeitado: [],
+  resolvido: [],
+  cancelado: [],
+};
+const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'Reclamação' };
+const MJ_CATEGORIA_LABEL = { equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT' };
+const MJ_SLA_DIAS = 3;
+
+const SYNC_COLLECTION = 'MundoJiraTickets';
+const STORAGE_KEY = 'ops_touros_mundo_jira_v1';
+let tickets = OPS.loadData(STORAGE_KEY) || [];
+let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
+
+// ---------- descobre quem está logado e qual o papel dele ----------
+const usuarioAtual = sessionStorage.getItem('ops_user') || '';
+function colaboradorAtual(){
+  return pessoas.find(p => OPS.normalize(p.usuarioLogin) === OPS.normalize(usuarioAtual)) || null;
+}
+function papelAtual(){
+  const access = getCurrentAccess();
+  if (access === 'TOTAL') return 'coordenador';
+  const colab = colaboradorAtual();
+  const cargo = OPS.normalize(colab ? colab.cargo : '');
+  if (cargo.includes('coordenador')) return 'coordenador';
+  if (cargo.includes('supervisor')) return 'supervisor';
+  if (cargo.includes('inspetor')) return 'inspetor';
+  return 'tecnico';
+}
+const PAPEL_LABEL = { tecnico: 'Técnico', inspetor: 'Inspetor', supervisor: 'Supervisor', coordenador: 'Coordenador' };
+
+function ticketVisivelPara(t, papel, colab){
+  if (papel === 'coordenador') return true;
+  if (t.modulo === 'reclamacao'){
+    return t.criadoPor === usuarioAtual;
+  }
+  if (papel === 'tecnico') return t.criadoPor === usuarioAtual;
+  if (papel === 'inspetor') return colab && t.inspetor && OPS.normalize(t.inspetor) === OPS.normalize(colab.nome);
+  if (papel === 'supervisor') return colab && t.supervisor && OPS.normalize(t.supervisor) === OPS.normalize(colab.nome);
+  return t.criadoPor === usuarioAtual;
+}
+
+function ticketsVisiveis(){
+  const papel = papelAtual();
+  const colab = colaboradorAtual();
+  return tickets.filter(t => ticketVisivelPara(t, papel, colab));
+}
+
+function slaVencido(t){
+  if (['resolvido','cancelado','rejeitado'].includes(t.status)) return false;
+  const dias = (Date.now() - new Date(t.criadoEm).getTime()) / 86400000;
+  return dias > MJ_SLA_DIAS && (t.historico || []).filter(h => h.tipo !== 'criacao').length === 0;
+}
+
+// ---------- renderização ----------
+function renderPapelBanner(){
+  const papel = papelAtual();
+  const colab = colaboradorAtual();
+  document.getElementById('mj-papel-banner').innerHTML =
+    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome}` : ' (cadastro não vinculado — vendo só seus próprios chamados)'}`;
+}
+
+function renderDashboard(){
+  const papel = papelAtual();
+  const dash = document.getElementById('mj-dashboard');
+  if (papel !== 'coordenador'){ dash.style.display = 'none'; return; }
+  dash.style.display = 'grid';
+  const total = tickets.length;
+  const porStatus = {};
+  MJ_STATUS.forEach(s => porStatus[s.key] = tickets.filter(t => t.status === s.key).length);
+  const vencidos = tickets.filter(slaVencido).length;
+  const material = tickets.filter(t => t.modulo === 'material').length;
+  const frotas = tickets.filter(t => t.modulo === 'frotas').length;
+  const reclamacoes = tickets.filter(t => t.modulo === 'reclamacao').length;
+  dash.innerHTML = `
+    <div class="stat-card brand"><div class="label">Total de chamados</div><div class="value">${total}</div></div>
+    <div class="stat-card"><div class="label">Em andamento</div><div class="value">${porStatus.em_analise + porStatus.aguardando_informacoes + porStatus.aguardando_setor + porStatus.em_atendimento}</div></div>
+    <div class="stat-card ok"><div class="label">Resolvidos</div><div class="value">${porStatus.resolvido}</div></div>
+    <div class="stat-card crit"><div class="label">SLA vencido (${MJ_SLA_DIAS}d sem 1ª resposta)</div><div class="value">${vencidos}</div></div>
+    <div class="stat-card"><div class="label">Material</div><div class="value">${material}</div></div>
+    <div class="stat-card"><div class="label">Frotas</div><div class="value">${frotas}</div></div>
+    <div class="stat-card ${reclamacoes ? 'warn' : ''}"><div class="label">Reclamações</div><div class="value">${reclamacoes}</div></div>
+  `;
+}
+
+function populateStatusFilter(){
+  const sel = document.getElementById('mj-f-status');
+  sel.innerHTML = '<option value="">Todos</option>' + MJ_STATUS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+}
+
+function getFiltered(){
+  const q = OPS.normalize(document.getElementById('mj-search').value);
+  const modulo = document.getElementById('mj-f-modulo').value;
+  const status = document.getElementById('mj-f-status').value;
+  return ticketsVisiveis().filter(t => {
+    if (modulo && t.modulo !== modulo) return false;
+    if (status && t.status !== status) return false;
+    if (q){
+      const hay = OPS.normalize(`${t.numero} ${t.item||''} ${t.descricao||''} ${t.colaboradorNome||''}`);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b) => new Date(b.criadoEm) - new Date(a.criadoEm));
+}
+
+function renderTable(){
+  const list = getFiltered();
+  document.getElementById('mj-empty-state').style.display = list.length ? 'none' : 'block';
+  document.querySelector('#mj-table-panel .table-wrap').style.display = list.length ? 'block' : 'none';
+  document.getElementById('mj-tbody').innerHTML = list.map(t => {
+    const vencido = slaVencido(t);
+    return `<tr class="mj-row" data-id="${t.id}" style="${vencido ? 'background:var(--crit-wash)' : ''}">
+      <td class="proto">#${t.numero}</td>
+      <td>${MJ_MODULO_LABEL[t.modulo]}${t.modulo === 'reclamacao' ? ' 🔒' : ''}</td>
+      <td>${t.item || t.descricao.slice(0,40)}</td>
+      <td>${t.colaboradorNome || '—'}</td>
+      <td>${t.responsavelAtualNome || '<span style="color:var(--ink-faint)">— ninguém ainda</span>'}</td>
+      <td class="proto">${OPS.formatDateBR(t.criadoEm)}</td>
+      <td><span class="badge ${MJ_STATUS_COR[t.status]}"><span class="dot"></span>${MJ_STATUS_LABEL[t.status]}</span>${vencido ? ' 🚨' : ''}</td>
+      <td><button type="button" class="icon-btn mj-btn-abrir" data-id="${t.id}" title="Abrir">👁</button></td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('.mj-btn-abrir, .mj-row').forEach(el => {
+    el.addEventListener('click', () => abrirDetalhe(el.dataset.id));
+  });
+}
+
+function renderAll(){
+  renderPapelBanner();
+  renderDashboard();
+  renderTable();
+}
+
+// ---------- criar chamado ----------
+const modalNovo = document.getElementById('mj-modal-novo');
+document.getElementById('mj-btn-novo').onclick = () => {
+  document.getElementById('mj-form-novo').reset();
+  atualizarCamposModulo();
+  modalNovo.style.display = 'flex';
+};
+document.getElementById('mj-btn-cancelar-novo').onclick = () => modalNovo.style.display = 'none';
+modalNovo.addEventListener('click', e => { if (e.target === modalNovo) modalNovo.style.display = 'none'; });
+
+function atualizarCamposModulo(){
+  const modulo = document.getElementById('mj-n-modulo').value;
+  document.getElementById('mj-n-bloco-material').style.display = modulo === 'material' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-frotas').style.display = modulo === 'frotas' ? 'block' : 'none';
+  document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
+  document.getElementById('mj-n-descricao-label').textContent = modulo === 'reclamacao' ? 'Descreva a reclamação' : 'Descrição da necessidade';
+  atualizarCamposSesmt();
+}
+document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
+function atualizarCamposSesmt(){
+  const categoria = document.getElementById('mj-n-categoria').value;
+  document.getElementById('mj-n-bloco-sesmt-item').style.display = categoria === 'sesmt' ? 'block' : 'none';
+}
+document.getElementById('mj-n-categoria').addEventListener('change', atualizarCamposSesmt);
+
+let mjSeq = Number(localStorage.getItem('ops_touros_mundo_jira_seq') || '1000');
+function proximoNumero(){
+  mjSeq += 1;
+  localStorage.setItem('ops_touros_mundo_jira_seq', String(mjSeq));
+  return mjSeq;
+}
+
+document.getElementById('mj-form-novo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const modulo = document.getElementById('mj-n-modulo').value;
+  const colab = colaboradorAtual();
+  const categoria = document.getElementById('mj-n-categoria').value;
+  const sesmtItem = document.getElementById('mj-n-sesmt-item').value;
+  const itemDigitado = document.getElementById('mj-n-item').value.trim();
+
+  const agora = new Date().toISOString();
+  const ticket = {
+    id: OPS.uid ? OPS.uid() : ('t' + Date.now() + Math.random().toString(36).slice(2)),
+    numero: proximoNumero(),
+    modulo,
+    categoria: modulo === 'material' ? categoria : null,
+    item: modulo === 'material' ? (categoria === 'sesmt' ? `${sesmtItem}${itemDigitado ? ' — ' + itemDigitado : ''}` : itemDigitado) : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
+    tamanho: document.getElementById('mj-n-tamanho').value.trim(),
+    quantidade: document.getElementById('mj-n-quantidade').value || 1,
+    descricao: document.getElementById('mj-n-descricao').value.trim(),
+    colaboradorNome: colab ? colab.nome : usuarioAtual,
+    matricula: colab ? (colab.matricula || '') : '',
+    inspetor: colab ? (colab.inspetor || '') : '',
+    supervisor: colab ? (colab.gestor || '') : '',
+    coordenador: 'Jânio Dantas',
+    criadoPor: usuarioAtual,
+    criadoEm: agora,
+    status: 'aberto',
+    responsavelAtual: null,
+    responsavelAtualNome: null,
+    dataApropriacao: null,
+    comentarios: [],
+    historico: [{ tipo: 'criacao', data: agora, usuario: usuarioAtual, detalhe: `Chamado aberto (${MJ_MODULO_LABEL[modulo]})` }],
+  };
+  tickets.push(ticket);
+  OPS.saveData(STORAGE_KEY, tickets);
+  await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
+  modalNovo.style.display = 'none';
+  renderAll();
+});
+
+// ---------- detalhe / ações ----------
+const modalDetalhe = document.getElementById('mj-modal-detalhe');
+let ticketAbertoId = null;
+
+function abrirDetalhe(id){
+  ticketAbertoId = id;
+  renderDetalhe();
+  modalDetalhe.style.display = 'flex';
+}
+document.getElementById('mj-btn-fechar-detalhe').onclick = () => modalDetalhe.style.display = 'none';
+modalDetalhe.addEventListener('click', e => { if (e.target === modalDetalhe) modalDetalhe.style.display = 'none'; });
+
+function renderDetalhe(){
+  const t = tickets.find(x => x.id === ticketAbertoId);
+  if (!t) return;
+  document.getElementById('mj-d-titulo').textContent = `#${t.numero} · ${MJ_MODULO_LABEL[t.modulo]}${t.modulo === 'reclamacao' ? ' 🔒 confidencial' : ''}`;
+  document.getElementById('mj-d-subtitulo').textContent = t.item || t.descricao.slice(0, 60);
+
+  document.getElementById('mj-d-info').innerHTML = `
+    <div class="status-row"><span class="status-name">Colaborador</span><span class="status-val">${t.colaboradorNome || '—'}</span></div>
+    ${t.matricula ? `<div class="status-row"><span class="status-name">Matrícula</span><span class="status-val">${t.matricula}</span></div>` : ''}
+    ${t.categoria ? `<div class="status-row"><span class="status-name">Categoria</span><span class="status-val">${MJ_CATEGORIA_LABEL[t.categoria]}</span></div>` : ''}
+    ${t.tamanho ? `<div class="status-row"><span class="status-name">Tamanho</span><span class="status-val">${t.tamanho}</span></div>` : ''}
+    ${t.quantidade ? `<div class="status-row"><span class="status-name">Quantidade</span><span class="status-val">${t.quantidade}</span></div>` : ''}
+    <div class="status-row"><span class="status-name">Descrição</span><span class="status-val" style="font-weight:400;text-align:left;max-width:60%">${t.descricao}</span></div>
+    <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val">${OPS.formatDateTimeBR(t.criadoEm)}</span></div>
+    <div class="status-row"><span class="status-name">Responsável atual</span><span class="status-val">${t.responsavelAtualNome || 'Ninguém ainda'}</span></div>
+    <div class="status-row"><span class="status-name">Status</span><span class="badge ${MJ_STATUS_COR[t.status]}"><span class="dot"></span>${MJ_STATUS_LABEL[t.status]}</span></div>
+  `;
+
+  const papel = papelAtual();
+  const acoes = [];
+  if (!t.responsavelAtual && papel !== 'tecnico' && !['resolvido','cancelado','rejeitado'].includes(t.status)){
+    acoes.push(`<button type="button" class="btn primary" id="mj-btn-apropriar">🙋 Apropriar-se da solicitação</button>`);
+  }
+  (MJ_TRANSICOES[t.status] || []).forEach(prox => {
+    if (papel === 'tecnico' && prox !== 'cancelado') return;
+    acoes.push(`<button type="button" class="btn ghost mj-btn-transicao" data-status="${prox}">→ ${MJ_STATUS_LABEL[prox]}</button>`);
+  });
+  document.getElementById('mj-d-acoes').innerHTML = acoes.join('') || '<span style="color:var(--ink-faint);font-size:13px">Sem ações disponíveis nesse status.</span>';
+
+  const btnApropriar = document.getElementById('mj-btn-apropriar');
+  if (btnApropriar) btnApropriar.onclick = () => apropriarSe(t.id);
+  document.querySelectorAll('.mj-btn-transicao').forEach(btn => {
+    btn.onclick = () => mudarStatus(t.id, btn.dataset.status);
+  });
+
+  document.getElementById('mj-d-chat').innerHTML = (t.comentarios || []).length
+    ? t.comentarios.map(c => `
+      <div class="mj-chat-msg">
+        <div class="mj-chat-msg-head"><b>${c.usuario}</b><span>${OPS.formatDateTimeBR(c.data)}</span></div>
+        <div class="mj-chat-msg-body">${c.mensagem}</div>
+      </div>
+    `).join('')
+    : '<p style="color:var(--ink-faint);font-size:13px">Nenhuma mensagem ainda.</p>';
+
+  document.getElementById('mj-d-historico').innerHTML = (t.historico || []).map(h => `
+    <div style="font-size:12px;color:var(--ink-dim);padding:4px 0;border-bottom:1px solid var(--line-soft)">
+      <b>${OPS.formatDateTimeBR(h.data)}</b> — ${h.usuario}: ${h.detalhe}
+    </div>
+  `).join('');
+}
+
+async function salvarTickets(){
+  OPS.saveData(STORAGE_KEY, tickets);
+  await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
+}
+
+async function apropriarSe(id){
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  const colab = colaboradorAtual();
+  t.responsavelAtual = usuarioAtual;
+  t.responsavelAtualNome = colab ? colab.nome : usuarioAtual;
+  t.dataApropriacao = new Date().toISOString();
+  t.historico.push({ tipo: 'apropriacao', data: t.dataApropriacao, usuario: usuarioAtual, detalhe: `${t.responsavelAtualNome} se apropriou da solicitação` });
+  if (t.status === 'aberto') t.status = 'em_analise';
+  await salvarTickets();
+  renderDetalhe();
+  renderAll();
+}
+
+async function mudarStatus(id, novoStatus){
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  const antigo = t.status;
+  t.status = novoStatus;
+  t.historico.push({ tipo: 'status', data: new Date().toISOString(), usuario: usuarioAtual, detalhe: `Status alterado de "${MJ_STATUS_LABEL[antigo]}" para "${MJ_STATUS_LABEL[novoStatus]}"` });
+  await salvarTickets();
+  renderDetalhe();
+  renderAll();
+}
+
+document.getElementById('mj-btn-enviar-comentario').onclick = async () => {
+  const input = document.getElementById('mj-d-novo-comentario');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const t = tickets.find(x => x.id === ticketAbertoId);
+  if (!t) return;
+  const agora = new Date().toISOString();
+  t.comentarios.push({ usuario: usuarioAtual, data: agora, mensagem: msg });
+  t.historico.push({ tipo: 'comentario', data: agora, usuario: usuarioAtual, detalhe: 'Nova mensagem no chat' });
+  input.value = '';
+  await salvarTickets();
+  renderDetalhe();
+};
+document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('mj-btn-enviar-comentario').click();
+});
+
+['mj-search','mj-f-modulo','mj-f-status'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTable);
+  document.getElementById(id).addEventListener('change', renderTable);
+});
+
+async function initPage(){
+  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+  const [sharedTickets, sharedPessoas] = await Promise.all([
+    OPS.syncPull(SYNC_COLLECTION),
+    OPS.syncPull('PessoasData'),
+  ]);
+  toast.remove();
+  tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
+  pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
+  tickets.forEach(t => { t.comentarios = t.comentarios || []; t.historico = t.historico || []; });
+  populateStatusFilter();
+  renderAll();
+  return !!(sharedTickets || sharedPessoas);
+}
+window.OPS_ON_REFRESH = initPage;
+initPage();
+</script>
+</body>
+</html>

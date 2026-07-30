@@ -269,6 +269,65 @@ const OPS = (() => {
   // Retorna { lat, lng, approx, reason } — approx=true quando usamos o ponto
   // central da cidade. reason: 'missing' (sem coordenada própria) ou
   // 'out_of_area' (coordenada informada cai fora da área da cidade).
+  // -------- limite real do município (malha do IBGE) --------
+  // Carrega uma vez (assíncrono) o contorno oficial dos municípios do RN.
+  // Enquanto não carrega, ou se a cidade não estiver na malha, cai no método
+  // antigo (distância até um ponto de referência) como respaldo.
+  let municipioPolygons = null;
+  let municipioPolygonsLoading = null;
+  function loadMunicipioPolygons(){
+    if (municipioPolygons) return Promise.resolve(municipioPolygons);
+    if (municipioPolygonsLoading) return municipioPolygonsLoading;
+    municipioPolygonsLoading = fetch('rn-municipios.json')
+      .then(r => r.json())
+      .then(geo => {
+        const map = {};
+        geo.features.forEach(f => {
+          const nome = normalize(f.properties.name);
+          const geom = f.geometry;
+          let polygons = [];
+          if (geom.type === 'Polygon') polygons = [geom.coordinates];
+          else if (geom.type === 'MultiPolygon') polygons = geom.coordinates;
+          map[nome] = polygons;
+        });
+        municipioPolygons = map;
+        return map;
+      })
+      .catch(err => { console.warn('Não consegui carregar o limite municipal do IBGE (usando método de raio como respaldo):', err); return null; });
+    return municipioPolygonsLoading;
+  }
+  function pointInRing(lng, lat, ring){
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > lat) !== (yj > lat)) &&
+        (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon(lng, lat, polygon){
+    if (!pointInRing(lng, lat, polygon[0])) return false;
+    for (let k = 1; k < polygon.length; k++){
+      if (pointInRing(lng, lat, polygon[k])) return false; // dentro de um "buraco"
+    }
+    return true;
+  }
+  // Devolve true/false se souber, ou null se ainda não carregou a malha ou
+  // não achou essa cidade nela.
+  function isPointInMunicipio(lat, lng, cidadeNome){
+    if (!municipioPolygons) return null;
+    const polygons = municipioPolygons[normalize(cidadeNome)];
+    if (!polygons || !polygons.length) return null;
+    return polygons.some(poly => pointInPolygon(lng, lat, poly));
+  }
+
+  // Resolve a coordenada de exibição de um registro: usa a própria lat/long
+  // se ela realmente cair dentro do limite do município informado (checagem
+  // real, via malha do IBGE, quando disponível); caso contrário, cai no
+  // central da cidade. reason: 'missing' (sem coordenada própria) ou
+  // 'out_of_area' (coordenada informada cai fora da área da cidade).
   function resolveCoords(record){
     const center = cityCenter(record.cidade) || DEFAULT_CENTER;
     const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
@@ -277,6 +336,16 @@ const OPS = (() => {
     if (!hasOwn){
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'missing' };
     }
+
+    const dentro = isPointInMunicipio(record.lat, record.lng, record.cidade);
+    if (dentro === true){
+      return { lat: record.lat, lng: record.lng, approx: false, reason: null };
+    }
+    if (dentro === false){
+      return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
+    }
+    // dentro === null: malha ainda não carregou, ou cidade não está nela —
+    // respaldo pelo método antigo (raio de distância)
     const dist = haversineKm(center, { lat: record.lat, lng: record.lng });
     if (dist > MAX_CITY_RADIUS_KM){
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
@@ -1041,6 +1110,7 @@ const OPS = (() => {
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
+    loadMunicipioPolygons, isPointInMunicipio,
     SUPERVISOR_BY_CITY, supervisorForCity,
     syncPull, syncPush, syncPushWithToast, showToast, importMapaServicosFile,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
@@ -1100,6 +1170,7 @@ const OPS_NAV_LINKS = [
   { href: 'index.html',           label: 'Início',            icon: '📊' },
   { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
   { href: 'sla.html',             label: 'SLA',                icon: '⏱️' },
+  { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
   { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },

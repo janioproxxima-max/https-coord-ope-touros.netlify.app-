@@ -608,6 +608,22 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .sla-tab:hover{ border-color:var(--brand); color:var(--ink); }
 .sla-tab.active{ background:var(--brand); border-color:var(--brand); color:#0B1512; }
 
+/* ---------------- Mundo Jira ---------------- */
+.mj-papel-banner{
+  margin-top:8px; font-size:13px; color:var(--ink-dim);
+  background:var(--bg-raised); display:inline-block; padding:6px 12px; border-radius:99px;
+}
+.mj-row{ cursor:pointer; }
+.mj-row:hover{ background:var(--bg-raised); }
+.mj-chat-box{ margin-top:16px; border:1px solid var(--line); border-radius:var(--radius); padding:12px; }
+.mj-chat-title{ font-size:12.5px; font-weight:700; color:var(--ink-dim); margin-bottom:8px; }
+.mj-chat-list{ max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+.mj-chat-msg{ background:var(--bg-raised); border-radius:8px; padding:8px 10px; }
+.mj-chat-msg-head{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint); margin-bottom:3px; }
+.mj-chat-msg-body{ font-size:13px; color:var(--ink); }
+.mj-chat-input-row{ display:flex; gap:8px; }
+.mj-chat-input-row .input{ flex:1; }
+
 /* ---------------- gráficos com altura consistente ---------------- */
 .chart-box{ position:relative; height:280px; padding:16px; }
 .chart-box.tall{ height:340px; }
