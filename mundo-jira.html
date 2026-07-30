@@ -755,25 +755,50 @@ async function initPage(){
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   populateVeiculosSelect();
-  let dadosCorrompidosDetectados = false;
+  const problemasEncontrados = [];
+  // tenta recuperar o máximo possível de um JSON cortado no meio (quando o
+  // texto foi truncado por estourar o limite de caracteres de uma célula do
+  // Google Sheets) — vai cortando do fim até achar um pedaço que é uma lista
+  // válida, em vez de simplesmente jogar tudo fora.
+  function tentarRecuperarLista(texto){
+    for (let fim = texto.lastIndexOf('},'); fim > 0; fim = texto.lastIndexOf('},', fim - 1)){
+      const tentativa = texto.slice(0, fim + 1) + ']';
+      try {
+        const parsed = JSON.parse(tentativa);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      } catch(e){ /* continua tentando um corte mais curto */ }
+    }
+    return null;
+  }
   function normalizarLista(valor, contexto){
     if (Array.isArray(valor)) return valor;
     if (typeof valor === 'string' && valor.trim()){
-      try { const parsed = JSON.parse(valor); return Array.isArray(parsed) ? parsed : []; }
-      catch(e){
+      try {
+        const parsed = JSON.parse(valor);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch(e){
+        const recuperado = tentarRecuperarLista(valor);
         console.error(`Não consegui decodificar "${contexto}" — texto recebido:`, valor);
-        dadosCorrompidosDetectados = true;
+        if (recuperado){
+          problemasEncontrados.push(`${contexto}: recuperei ${recuperado.length} item(ns) mais antigos, mas o(s) mais recente(s) foi(ram) perdido(s) por ultrapassar o limite de tamanho do Google Sheets`);
+          return recuperado;
+        }
+        problemasEncontrados.push(`${contexto}: não deu pra recuperar nada — ficou vazio`);
         return [];
       }
     }
     return [];
   }
   tickets.forEach(t => {
-    t.comentarios = normalizarLista(t.comentarios, `comentários do chamado #${t.numero}`);
-    t.historico = normalizarLista(t.historico, `histórico do chamado #${t.numero}`);
+    t.comentarios = normalizarLista(t.comentarios, `Comentários do chamado #${t.numero}`);
+    t.historico = normalizarLista(t.historico, `Histórico do chamado #${t.numero}`);
   });
-  if (dadosCorrompidosDetectados){
-    alert('⚠️ Alguns comentários ou históricos vieram corrompidos da sincronização (provavelmente uma foto grande demais estourou o limite do Google Sheets) e precisaram ser descartados. Abra o Console (F12) e me manda o print — ali mostra exatamente qual chamado foi afetado.');
+  if (problemasEncontrados.length){
+    alert(
+      `⚠️ Alguns dados vieram corrompidos da sincronização (provavelmente por causa de uma foto grande demais, estourando o limite de caracteres do Google Sheets):\n\n` +
+      problemasEncontrados.map(p => '• ' + p).join('\n') +
+      `\n\nPra evitar de novo: prefira mensagens de texto e fotos bem simples nesses chamados específicos. Se quiser, me manda o número do chamado que aparece aí que eu oriento o que fazer.`
+    );
   }
   populateStatusFilter();
   renderAll();
