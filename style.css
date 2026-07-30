@@ -624,6 +624,28 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .mj-chat-input-row{ display:flex; gap:8px; }
 .mj-chat-input-row .input{ flex:1; }
 
+/* ---------------- Mundo Jira: portal de cartões ---------------- */
+.mj-portal-hero{
+  background:linear-gradient(120deg, var(--brand-dim), var(--brand));
+  border-radius:var(--radius); padding:32px 28px; margin-bottom:24px;
+}
+.mj-portal-hero h1{ color:#04241a; font-size:24px; margin:0 0 16px; }
+.mj-portal-search{
+  background:#fff; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:10px;
+  max-width:520px; box-shadow:0 4px 14px rgba(0,0,0,.15);
+}
+.mj-portal-search input{ border:none; outline:none; flex:1; font-size:14px; background:transparent; }
+.mj-portal-section-title{ font-size:13px; font-weight:700; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; }
+.mj-portal-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+.mj-portal-card{
+  background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:18px; display:flex; gap:14px; align-items:flex-start; cursor:pointer;
+}
+.mj-portal-card:hover{ border-color:var(--brand); box-shadow:0 4px 16px rgba(0,0,0,.25); }
+.mj-portal-card-ico{ font-size:26px; }
+.mj-portal-card h3{ margin:0 0 4px; font-size:15px; }
+.mj-portal-card p{ margin:0; font-size:12.5px; color:var(--ink-dim); }
+
 /* ---------------- gráficos com altura consistente ---------------- */
 .chart-box{ position:relative; height:280px; padding:16px; }
 .chart-box.tall{ height:340px; }

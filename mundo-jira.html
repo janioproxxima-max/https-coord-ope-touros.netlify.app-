@@ -10,10 +10,39 @@
 </head>
 <body>
 
-<div class="page">
+<div class="page" id="mj-view-portal">
+  <div class="mj-portal-hero">
+    <h1>Bem-vindo ao painel de solicitações da Unidade Touros</h1>
+    <div class="mj-portal-search">
+      <span>🔍</span>
+      <input id="mj-portal-search" placeholder="Pesquisar informações">
+    </div>
+  </div>
+
+  <p class="mj-portal-section-title">Portais</p>
+  <div class="mj-portal-grid">
+    <div class="mj-portal-card" id="mj-card-solicitacoes">
+      <div class="mj-portal-card-ico">🎫</div>
+      <div>
+        <h3>Solicitações</h3>
+        <p>Abra e acompanhe chamados de Material, Frotas e Reclamações.</p>
+      </div>
+    </div>
+    <div class="mj-portal-card" id="mj-card-colaborador">
+      <div class="mj-portal-card-ico">🧑‍💼</div>
+      <div>
+        <h3>Painel do Colaborador</h3>
+        <p>Em construção — em breve.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="mj-view-solicitacoes" style="display:none">
+  <button type="button" class="btn ghost" id="mj-btn-voltar-portal" style="margin-bottom:14px">← Voltar aos portais</button>
   <div class="page-head">
     <p class="eyebrow">Chamados internos</p>
-    <h1 class="page-title" id="mj-titulo-boas-vindas">Bem-vindo ao painel de solicitações da Unidade Touros</h1>
+    <h1 class="page-title" id="mj-titulo-boas-vindas">Solicitações</h1>
     <p class="page-sub">Material, Frotas e Reclamações — com fluxo de aprovação, chat e histórico completo.</p>
     <p id="mj-papel-banner" class="mj-papel-banner"></p>
   </div>
@@ -607,6 +636,29 @@ document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e =>
 ['mj-search','mj-f-modulo','mj-f-status'].forEach(id => {
   document.getElementById(id).addEventListener('input', renderTable);
   document.getElementById(id).addEventListener('change', renderTable);
+});
+
+// ---------- navegação entre o portal (cartões) e a tela de solicitações ----------
+function mostrarPortal(){
+  document.getElementById('mj-view-portal').style.display = 'block';
+  document.getElementById('mj-view-solicitacoes').style.display = 'none';
+}
+function mostrarSolicitacoes(){
+  document.getElementById('mj-view-portal').style.display = 'none';
+  document.getElementById('mj-view-solicitacoes').style.display = 'block';
+  renderAll();
+}
+document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
+document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
+document.getElementById('mj-card-colaborador').addEventListener('click', () => {
+  alert('O Painel do Colaborador ainda está em construção — em breve tem novidade aqui.');
+});
+document.getElementById('mj-portal-search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){
+    mostrarSolicitacoes();
+    document.getElementById('mj-search').value = e.target.value;
+    renderTable();
+  }
 });
 
 async function initPage(){
