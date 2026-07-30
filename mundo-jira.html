@@ -275,9 +275,33 @@ const MJ_SLA_DIAS = 3;
 
 const SYNC_COLLECTION = 'MundoJiraTickets';
 const STORAGE_KEY = 'ops_touros_mundo_jira_v1';
+const SYNC_COMENTARIOS = 'MundoJiraComentarios';
+const STORAGE_KEY_COMENTARIOS = 'ops_touros_mundo_jira_comentarios_v1';
+const SYNC_HISTORICO = 'MundoJiraHistorico';
+const STORAGE_KEY_HISTORICO = 'ops_touros_mundo_jira_historico_v1';
 let tickets = OPS.loadData(STORAGE_KEY) || [];
+let comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
+let historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
 let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
+
+function comentariosDoTicket(ticketId){
+  return comentarios.filter(c => c.ticketId === ticketId).sort((a,b) => new Date(a.data) - new Date(b.data));
+}
+function historicoDoTicket(ticketId){
+  return historicos.filter(h => h.ticketId === ticketId).sort((a,b) => new Date(a.data) - new Date(b.data));
+}
+async function salvarComentarios(){
+  OPS.saveData(STORAGE_KEY_COMENTARIOS, comentarios);
+  await OPS.syncPushWithToast(SYNC_COMENTARIOS, comentarios);
+}
+async function salvarHistoricos(){
+  OPS.saveData(STORAGE_KEY_HISTORICO, historicos);
+  await OPS.syncPush(SYNC_HISTORICO, historicos);
+}
+function adicionarHistorico(ticketId, tipo, detalhe){
+  historicos.push({ id: OPS.uid(), ticketId, tipo, data: new Date().toISOString(), usuario: usuarioAtual, detalhe });
+}
 
 function populateVeiculosSelect(){
   const sel = document.getElementById('mj-n-veiculo');
@@ -337,7 +361,7 @@ function ticketsVisiveis(){
 function slaVencido(t){
   if (['resolvido','cancelado','rejeitado'].includes(t.status)) return false;
   const dias = (Date.now() - new Date(t.criadoEm).getTime()) / 86400000;
-  return dias > MJ_SLA_DIAS && (t.historico || []).filter(h => h.tipo !== 'criacao').length === 0;
+  return dias > MJ_SLA_DIAS && historicoDoTicket(t.id).filter(h => h.tipo !== 'criacao').length === 0;
 }
 
 // ---------- renderização ----------
@@ -523,12 +547,12 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     responsavelAtual: null,
     responsavelAtualNome: null,
     dataApropriacao: null,
-    comentarios: [],
-    historico: [{ tipo: 'criacao', data: agora, usuario: usuarioAtual, detalhe: `Chamado aberto (${MJ_MODULO_LABEL[modulo]})` }],
   };
   tickets.push(ticket);
+  adicionarHistorico(ticket.id, 'criacao', `Chamado aberto (${MJ_MODULO_LABEL[modulo]})`);
   OPS.saveData(STORAGE_KEY, tickets);
   await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
+  await salvarHistoricos();
   modalNovo.style.display = 'none';
   renderAll();
 });
@@ -593,8 +617,9 @@ function renderDetalhe(){
     btn.onclick = () => mudarStatus(t.id, btn.dataset.status);
   });
 
-  document.getElementById('mj-d-chat').innerHTML = (t.comentarios || []).length
-    ? t.comentarios.map(c => `
+  const comentariosDoT = comentariosDoTicket(t.id);
+  document.getElementById('mj-d-chat').innerHTML = comentariosDoT.length
+    ? comentariosDoT.map(c => `
       <div class="mj-chat-msg">
         <div class="mj-chat-msg-head"><b>${c.usuario}</b><span>${OPS.formatDateTimeBR(c.data)}</span></div>
         ${c.mensagem ? `<div class="mj-chat-msg-body">${c.mensagem}</div>` : ''}
@@ -603,7 +628,7 @@ function renderDetalhe(){
     `).join('')
     : '<p style="color:var(--ink-faint);font-size:13px">Nenhuma mensagem ainda.</p>';
 
-  document.getElementById('mj-d-historico').innerHTML = (t.historico || []).map(h => `
+  document.getElementById('mj-d-historico').innerHTML = historicoDoTicket(t.id).map(h => `
     <div style="font-size:12px;color:var(--ink-dim);padding:4px 0;border-bottom:1px solid var(--line-soft)">
       <b>${OPS.formatDateTimeBR(h.data)}</b> — ${h.usuario}: ${h.detalhe}
     </div>
@@ -621,8 +646,12 @@ async function excluirTicket(id){
   if (papelAtual() !== 'coordenador' || t.status !== 'aberto') return; // proteção extra
   if (!confirm(`Excluir de vez o chamado #${t.numero}? Essa ação não pode ser desfeita.`)) return;
   tickets = tickets.filter(x => x.id !== id);
+  comentarios = comentarios.filter(c => c.ticketId !== id);
+  historicos = historicos.filter(h => h.ticketId !== id);
   modalDetalhe.style.display = 'none';
   await salvarTickets();
+  await salvarComentarios();
+  await salvarHistoricos();
   renderAll();
 }
 
@@ -633,9 +662,10 @@ async function apropriarSe(id){
   t.responsavelAtual = usuarioAtual;
   t.responsavelAtualNome = colab ? colab.nome : usuarioAtual;
   t.dataApropriacao = new Date().toISOString();
-  t.historico.push({ tipo: 'apropriacao', data: t.dataApropriacao, usuario: usuarioAtual, detalhe: `${t.responsavelAtualNome} se apropriou da solicitação` });
+  adicionarHistorico(t.id, 'apropriacao', `${t.responsavelAtualNome} se apropriou da solicitação`);
   if (t.status === 'aberto') t.status = 'em_analise';
   await salvarTickets();
+  await salvarHistoricos();
   renderDetalhe();
   renderAll();
 }
@@ -645,8 +675,9 @@ async function mudarStatus(id, novoStatus){
   if (!t) return;
   const antigo = t.status;
   t.status = novoStatus;
-  t.historico.push({ tipo: 'status', data: new Date().toISOString(), usuario: usuarioAtual, detalhe: `Status alterado de "${MJ_STATUS_LABEL[antigo]}" para "${MJ_STATUS_LABEL[novoStatus]}"` });
+  adicionarHistorico(t.id, 'status', `Status alterado de "${MJ_STATUS_LABEL[antigo]}" para "${MJ_STATUS_LABEL[novoStatus]}"`);
   await salvarTickets();
+  await salvarHistoricos();
   renderDetalhe();
   renderAll();
 }
@@ -710,12 +741,13 @@ document.getElementById('mj-btn-enviar-comentario').onclick = async () => {
   const t = tickets.find(x => x.id === ticketAbertoId);
   if (!t) return;
   const agora = new Date().toISOString();
-  t.comentarios.push({ usuario: usuarioAtual, data: agora, mensagem: msg, foto: fotoAnexadaBase64 || null });
-  t.historico.push({ tipo: 'comentario', data: agora, usuario: usuarioAtual, detalhe: fotoAnexadaBase64 ? 'Nova mensagem com foto no chat' : 'Nova mensagem no chat' });
+  comentarios.push({ id: OPS.uid(), ticketId: t.id, usuario: usuarioAtual, data: agora, mensagem: msg, foto: fotoAnexadaBase64 || null });
+  adicionarHistorico(t.id, 'comentario', fotoAnexadaBase64 ? 'Nova mensagem com foto no chat' : 'Nova mensagem no chat');
   input.value = '';
   fotoAnexadaBase64 = null;
   document.getElementById('mj-d-foto-preview').style.display = 'none';
-  await salvarTickets();
+  await salvarComentarios();
+  await salvarHistoricos();
   renderDetalhe();
 };
 document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e => {
@@ -745,61 +777,20 @@ document.getElementById('mj-card-colaborador').addEventListener('click', () => {
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedTickets, sharedPessoas, sharedFrotas] = await Promise.all([
+  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
+    OPS.syncPull(SYNC_COMENTARIOS),
+    OPS.syncPull(SYNC_HISTORICO),
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
   ]);
   toast.remove();
   tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
+  comentarios = sharedComentarios || OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
+  historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   populateVeiculosSelect();
-  const problemasEncontrados = [];
-  // tenta recuperar o máximo possível de um JSON cortado no meio (quando o
-  // texto foi truncado por estourar o limite de caracteres de uma célula do
-  // Google Sheets) — vai cortando do fim até achar um pedaço que é uma lista
-  // válida, em vez de simplesmente jogar tudo fora.
-  function tentarRecuperarLista(texto){
-    for (let fim = texto.lastIndexOf('},'); fim > 0; fim = texto.lastIndexOf('},', fim - 1)){
-      const tentativa = texto.slice(0, fim + 1) + ']';
-      try {
-        const parsed = JSON.parse(tentativa);
-        if (Array.isArray(parsed) && parsed.length) return parsed;
-      } catch(e){ /* continua tentando um corte mais curto */ }
-    }
-    return null;
-  }
-  function normalizarLista(valor, contexto){
-    if (Array.isArray(valor)) return valor;
-    if (typeof valor === 'string' && valor.trim()){
-      try {
-        const parsed = JSON.parse(valor);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch(e){
-        const recuperado = tentarRecuperarLista(valor);
-        console.error(`Não consegui decodificar "${contexto}" — texto recebido:`, valor);
-        if (recuperado){
-          problemasEncontrados.push(`${contexto}: recuperei ${recuperado.length} item(ns) mais antigos, mas o(s) mais recente(s) foi(ram) perdido(s) por ultrapassar o limite de tamanho do Google Sheets`);
-          return recuperado;
-        }
-        problemasEncontrados.push(`${contexto}: não deu pra recuperar nada — ficou vazio`);
-        return [];
-      }
-    }
-    return [];
-  }
-  tickets.forEach(t => {
-    t.comentarios = normalizarLista(t.comentarios, `Comentários do chamado #${t.numero}`);
-    t.historico = normalizarLista(t.historico, `Histórico do chamado #${t.numero}`);
-  });
-  if (problemasEncontrados.length){
-    alert(
-      `⚠️ Alguns dados vieram corrompidos da sincronização (provavelmente por causa de uma foto grande demais, estourando o limite de caracteres do Google Sheets):\n\n` +
-      problemasEncontrados.map(p => '• ' + p).join('\n') +
-      `\n\nPra evitar de novo: prefira mensagens de texto e fotos bem simples nesses chamados específicos. Se quiser, me manda o número do chamado que aparece aí que eu oriento o que fazer.`
-    );
-  }
   populateStatusFilter();
   renderAll();
   return !!(sharedTickets || sharedPessoas);
