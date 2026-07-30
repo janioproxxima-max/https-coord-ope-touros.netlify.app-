@@ -12,11 +12,8 @@
 
 <div class="page" id="mj-view-portal">
   <div class="mj-portal-hero">
+    <img src="mundo-jira-logo.png" alt="Mundo Jira · OPE Touros" class="mj-portal-logo">
     <h1>Bem-vindo ao painel de solicitações da Unidade Touros</h1>
-    <div class="mj-portal-search">
-      <span>🔍</span>
-      <input id="mj-portal-search" placeholder="Pesquisar informações">
-    </div>
   </div>
 
   <p class="mj-portal-section-title">Portais</p>
@@ -420,6 +417,11 @@ function renderAll(){
   renderPapelBanner();
   renderDashboard();
   renderTable();
+  // se o modal de detalhe estiver aberto, atualiza ele também (ex: nova
+  // mensagem de outra pessoa aparece sem precisar fechar e abrir de novo)
+  if (ticketAbertoId && modalDetalhe.style.display !== 'none'){
+    try{ renderDetalhe(); }catch(err){ console.error('Erro ao atualizar detalhe aberto', err); }
+  }
 }
 
 // ---------- criar chamado ----------
@@ -560,10 +562,15 @@ function renderDetalhe(){
     if (papel === 'tecnico' && prox !== 'cancelado') return;
     acoes.push(`<button type="button" class="btn ghost mj-btn-transicao" data-status="${prox}">→ ${MJ_STATUS_LABEL[prox]}</button>`);
   });
+  if (papel === 'coordenador' && t.status === 'aberto'){
+    acoes.push(`<button type="button" class="btn ghost danger" id="mj-btn-excluir">🗑 Excluir solicitação</button>`);
+  }
   document.getElementById('mj-d-acoes').innerHTML = acoes.join('') || '<span style="color:var(--ink-faint);font-size:13px">Sem ações disponíveis nesse status.</span>';
 
   const btnApropriar = document.getElementById('mj-btn-apropriar');
   if (btnApropriar) btnApropriar.onclick = () => apropriarSe(t.id);
+  const btnExcluir = document.getElementById('mj-btn-excluir');
+  if (btnExcluir) btnExcluir.onclick = () => excluirTicket(t.id);
   document.querySelectorAll('.mj-btn-transicao').forEach(btn => {
     btn.onclick = () => mudarStatus(t.id, btn.dataset.status);
   });
@@ -588,6 +595,17 @@ function renderDetalhe(){
 async function salvarTickets(){
   OPS.saveData(STORAGE_KEY, tickets);
   await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
+}
+
+async function excluirTicket(id){
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  if (papelAtual() !== 'coordenador' || t.status !== 'aberto') return; // proteção extra
+  if (!confirm(`Excluir de vez o chamado #${t.numero}? Essa ação não pode ser desfeita.`)) return;
+  tickets = tickets.filter(x => x.id !== id);
+  modalDetalhe.style.display = 'none';
+  await salvarTickets();
+  renderAll();
 }
 
 async function apropriarSe(id){
@@ -694,13 +712,6 @@ document.getElementById('mj-card-solicitacoes').addEventListener('click', mostra
 document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
 document.getElementById('mj-card-colaborador').addEventListener('click', () => {
   alert('O Painel do Colaborador ainda está em construção — em breve tem novidade aqui.');
-});
-document.getElementById('mj-portal-search').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter'){
-    mostrarSolicitacoes();
-    document.getElementById('mj-search').value = e.target.value;
-    renderTable();
-  }
 });
 
 async function initPage(){

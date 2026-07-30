@@ -627,14 +627,11 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 /* ---------------- Mundo Jira: portal de cartões ---------------- */
 .mj-portal-hero{
   background:linear-gradient(120deg, var(--brand-dim), var(--brand));
-  border-radius:var(--radius); padding:32px 28px; margin-bottom:24px;
+  border-radius:var(--radius); padding:28px; margin-bottom:24px;
+  display:flex; align-items:center; gap:20px; flex-wrap:wrap;
 }
-.mj-portal-hero h1{ color:#04241a; font-size:24px; margin:0 0 16px; }
-.mj-portal-search{
-  background:#fff; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:10px;
-  max-width:520px; box-shadow:0 4px 14px rgba(0,0,0,.15);
-}
-.mj-portal-search input{ border:none; outline:none; flex:1; font-size:14px; background:transparent; }
+.mj-portal-logo{ width:72px; height:72px; border-radius:14px; object-fit:cover; flex-shrink:0; }
+.mj-portal-hero h1{ color:#04241a; font-size:22px; margin:0; }
 .mj-portal-section-title{ font-size:13px; font-weight:700; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; }
 .mj-portal-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
 .mj-portal-card{
