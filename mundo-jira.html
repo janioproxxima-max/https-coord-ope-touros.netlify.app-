@@ -92,7 +92,7 @@
     <div class="empty-state" id="mj-empty-state" style="display:none">
       <div class="glyph">🎫</div>
       <h3>Nenhum chamado por aqui</h3>
-      <p>Clique em "＋ Novo chamado" pra abrir o primeiro.</p>
+      <p id="mj-empty-state-texto">Clique em "＋ Novo chamado" pra abrir o primeiro.</p>
     </div>
   </div>
 </div>
@@ -300,14 +300,19 @@ function papelAtual(){
 }
 const PAPEL_LABEL = { tecnico: 'Técnico', inspetor: 'Inspetor', supervisor: 'Supervisor', coordenador: 'Coordenador' };
 
+function nomesEquivalentes(a, b){
+  if (!a || !b) return false;
+  const limpa = (s) => OPS.normalize(s).replace(/[^a-z0-9]/g, '');
+  return limpa(a) === limpa(b);
+}
 function ticketVisivelPara(t, papel, colab){
   if (papel === 'coordenador') return true;
   if (t.modulo === 'reclamacao'){
     return t.criadoPor === usuarioAtual;
   }
   if (papel === 'tecnico') return t.criadoPor === usuarioAtual;
-  if (papel === 'inspetor') return colab && t.inspetor && OPS.normalize(t.inspetor) === OPS.normalize(colab.nome);
-  if (papel === 'supervisor') return colab && t.supervisor && OPS.normalize(t.supervisor) === OPS.normalize(colab.nome);
+  if (papel === 'inspetor') return colab && nomesEquivalentes(t.inspetor, colab.nome);
+  if (papel === 'supervisor') return colab && nomesEquivalentes(t.supervisor, colab.nome);
   return t.criadoPor === usuarioAtual;
 }
 
@@ -378,6 +383,21 @@ function renderTable(){
   const list = getFiltered();
   document.getElementById('mj-empty-state').style.display = list.length ? 'none' : 'block';
   document.querySelector('#mj-table-panel .table-wrap').style.display = list.length ? 'block' : 'none';
+  if (!list.length){
+    const papel = papelAtual();
+    const colab = colaboradorAtual();
+    const totalNoSistema = tickets.length;
+    const textoEl = document.getElementById('mj-empty-state-texto');
+    if (totalNoSistema === 0){
+      textoEl.textContent = 'Clique em "＋ Novo chamado" pra abrir o primeiro.';
+    } else if ((papel === 'inspetor' || papel === 'supervisor') && colab){
+      textoEl.innerHTML = `Existem ${totalNoSistema} chamado(s) no sistema, mas nenhum está vinculado a você como <b>${PAPEL_LABEL[papel]} "${colab.nome}"</b>.<br>Confira se, em <b>Gestão de Pessoas</b>, os técnicos têm exatamente "${colab.nome}" preenchido no campo ${papel === 'inspetor' ? '"Inspetor"' : '"Gestor / Liderança direta"'}.`;
+    } else if (!colab && papel !== 'coordenador'){
+      textoEl.innerHTML = `Existem ${totalNoSistema} chamado(s) no sistema, mas seu login "${usuarioAtual}" ainda não está vinculado a nenhum cadastro em Gestão de Pessoas — por isso você só veria chamados abertos por você mesmo.`;
+    } else {
+      textoEl.textContent = 'Nenhum chamado corresponde aos filtros aplicados, ou ainda não há chamados aqui.';
+    }
+  }
   document.getElementById('mj-tbody').innerHTML = list.map(t => {
     const vencido = slaVencido(t);
     return `<tr class="mj-row" data-id="${t.id}" style="${vencido ? 'background:var(--crit-wash)' : ''}">
