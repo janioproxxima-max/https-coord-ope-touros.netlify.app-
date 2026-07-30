@@ -92,9 +92,38 @@
             <option value="sesmt">SESMT</option>
           </select>
         </div>
+        <div id="mj-n-bloco-equipamentos-item">
+          <div class="field">
+            <label>Item — Equipamentos</label>
+            <select id="mj-n-equipamentos-item">
+              <option value="Notebook">Notebook</option>
+              <option value="Celular Corporativo">Celular Corporativo</option>
+              <option value="Rádio Comunicador">Rádio Comunicador</option>
+              <option value="GPS">GPS</option>
+              <option value="Modem/ONU">Modem/ONU</option>
+              <option value="Roteador">Roteador</option>
+              <option value="Outro Item">Outro Item</option>
+            </select>
+          </div>
+        </div>
+        <div id="mj-n-bloco-ferramental-item" style="display:none">
+          <div class="field">
+            <label>Item — Ferramental</label>
+            <select id="mj-n-ferramental-item">
+              <option value="Fusionadora">Fusionadora</option>
+              <option value="Alicate de Fusão">Alicate de Fusão</option>
+              <option value="Power Meter (Medidor de Potência)">Power Meter (Medidor de Potência)</option>
+              <option value="Escada">Escada</option>
+              <option value="Furadeira">Furadeira</option>
+              <option value="Multímetro">Multímetro</option>
+              <option value="Kit de Ferramentas Básico">Kit de Ferramentas Básico</option>
+              <option value="Outro Item">Outro Item</option>
+            </select>
+          </div>
+        </div>
         <div id="mj-n-bloco-sesmt-item" style="display:none">
           <div class="field">
-            <label>Item SESMT</label>
+            <label>Item — SESMT</label>
             <select id="mj-n-sesmt-item">
               <option value="Fardamento">Fardamento</option>
               <option value="Bota">Bota</option>
@@ -102,9 +131,12 @@
             </select>
           </div>
         </div>
-        <div class="grid2">
-          <div class="field"><label>Item solicitado</label><input class="input" id="mj-n-item" placeholder="Ex: Camisa, Bota de segurança, Furadeira..."></div>
+        <div class="grid2" id="mj-n-bloco-outro-item" style="display:none">
+          <div class="field"><label>Qual item?</label><input class="input" id="mj-n-item" placeholder="Descreva o item"></div>
           <div class="field"><label>Tamanho (se aplicável)</label><input class="input" id="mj-n-tamanho" placeholder="Ex: G, 42..."></div>
+        </div>
+        <div class="field" id="mj-n-bloco-tamanho-normal">
+          <label>Tamanho (se aplicável)</label><input class="input" id="mj-n-tamanho-normal" placeholder="Ex: G, 42...">
         </div>
         <div class="field"><label>Quantidade</label><input class="input" type="number" min="1" value="1" id="mj-n-quantidade"></div>
       </div>
@@ -140,10 +172,19 @@
     <div class="mj-chat-box">
       <div class="mj-chat-title">💬 Conversa</div>
       <div id="mj-d-chat" class="mj-chat-list"></div>
+      <div id="mj-d-foto-preview" style="display:none;margin-bottom:8px">
+        <img id="mj-d-foto-preview-img" style="max-height:80px;border-radius:6px;display:block">
+        <button type="button" class="btn ghost" id="mj-btn-remover-foto" style="margin-top:4px;font-size:11px;padding:3px 8px">✕ Remover foto</button>
+      </div>
       <div class="mj-chat-input-row">
+        <button type="button" class="icon-btn" id="mj-btn-anexar-foto" title="Anexar foto">📷</button>
+        <input type="file" id="mj-input-foto" accept="image/*" style="display:none">
         <input class="input" id="mj-d-novo-comentario" placeholder="Escreva uma mensagem...">
         <button class="btn primary" id="mj-btn-enviar-comentario">Enviar</button>
       </div>
+      <p style="font-size:11px;color:var(--ink-faint);margin:6px 0 0">
+        📷 Fotos são anexadas direto. Vídeos ainda não — cole um link (Google Drive, WhatsApp etc) na mensagem.
+      </p>
     </div>
 
     <details style="margin-top:14px">
@@ -196,7 +237,11 @@ let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 // ---------- descobre quem está logado e qual o papel dele ----------
 const usuarioAtual = sessionStorage.getItem('ops_user') || '';
 function colaboradorAtual(){
-  return pessoas.find(p => OPS.normalize(p.usuarioLogin) === OPS.normalize(usuarioAtual)) || null;
+  const porLogin = pessoas.find(p => p.usuarioLogin && OPS.normalize(p.usuarioLogin) === OPS.normalize(usuarioAtual));
+  if (porLogin) return porLogin;
+  // respaldo: usuário tipo "joel.tavares" ou "joel_tavares" casando com o nome "Joel Tavares"
+  const usuarioComoNome = OPS.normalize(usuarioAtual).replace(/[._]/g, ' ');
+  return pessoas.find(p => OPS.normalize(p.nome) === usuarioComoNome) || null;
 }
 function papelAtual(){
   const access = getCurrentAccess();
@@ -238,7 +283,7 @@ function renderPapelBanner(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
   document.getElementById('mj-papel-banner').innerHTML =
-    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome}` : ' (cadastro não vinculado — vendo só seus próprios chamados)'}`;
+    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome} (cargo cadastrado: "${colab.cargo || '—'}")` : ' (cadastro não vinculado — vendo só seus próprios chamados. Preencha "Usuário do sistema" em Gestão de Pessoas)'}`;
 }
 
 function renderDashboard(){
@@ -328,14 +373,31 @@ function atualizarCamposModulo(){
   document.getElementById('mj-n-bloco-frotas').style.display = modulo === 'frotas' ? 'block' : 'none';
   document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
   document.getElementById('mj-n-descricao-label').textContent = modulo === 'reclamacao' ? 'Descreva a reclamação' : 'Descrição da necessidade';
-  atualizarCamposSesmt();
+  atualizarCamposCategoria();
 }
 document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
-function atualizarCamposSesmt(){
+
+function itemSelectAtivoId(){
   const categoria = document.getElementById('mj-n-categoria').value;
-  document.getElementById('mj-n-bloco-sesmt-item').style.display = categoria === 'sesmt' ? 'block' : 'none';
+  return { equipamentos: 'mj-n-equipamentos-item', ferramental: 'mj-n-ferramental-item', sesmt: 'mj-n-sesmt-item' }[categoria];
 }
-document.getElementById('mj-n-categoria').addEventListener('change', atualizarCamposSesmt);
+function atualizarCamposCategoria(){
+  const categoria = document.getElementById('mj-n-categoria').value;
+  document.getElementById('mj-n-bloco-equipamentos-item').style.display = categoria === 'equipamentos' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-ferramental-item').style.display = categoria === 'ferramental' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-sesmt-item').style.display = categoria === 'sesmt' ? 'block' : 'none';
+  atualizarCampoOutroItem();
+}
+function atualizarCampoOutroItem(){
+  const selectAtivo = document.getElementById(itemSelectAtivoId());
+  const ehOutro = selectAtivo && selectAtivo.value === 'Outro Item';
+  document.getElementById('mj-n-bloco-outro-item').style.display = ehOutro ? 'grid' : 'none';
+  document.getElementById('mj-n-bloco-tamanho-normal').style.display = ehOutro ? 'none' : 'block';
+}
+document.getElementById('mj-n-categoria').addEventListener('change', atualizarCamposCategoria);
+['mj-n-equipamentos-item','mj-n-ferramental-item','mj-n-sesmt-item'].forEach(id => {
+  document.getElementById(id).addEventListener('change', atualizarCampoOutroItem);
+});
 
 let mjSeq = Number(localStorage.getItem('ops_touros_mundo_jira_seq') || '1000');
 function proximoNumero(){
@@ -349,8 +411,13 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   const modulo = document.getElementById('mj-n-modulo').value;
   const colab = colaboradorAtual();
   const categoria = document.getElementById('mj-n-categoria').value;
-  const sesmtItem = document.getElementById('mj-n-sesmt-item').value;
+  const selectAtivo = document.getElementById(itemSelectAtivoId());
+  const ehOutro = selectAtivo && selectAtivo.value === 'Outro Item';
   const itemDigitado = document.getElementById('mj-n-item').value.trim();
+  const itemFinal = ehOutro ? (itemDigitado || 'Outro Item') : (selectAtivo ? selectAtivo.value : '');
+  const tamanhoFinal = ehOutro
+    ? document.getElementById('mj-n-tamanho').value.trim()
+    : document.getElementById('mj-n-tamanho-normal').value.trim();
 
   const agora = new Date().toISOString();
   const ticket = {
@@ -358,8 +425,8 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     numero: proximoNumero(),
     modulo,
     categoria: modulo === 'material' ? categoria : null,
-    item: modulo === 'material' ? (categoria === 'sesmt' ? `${sesmtItem}${itemDigitado ? ' — ' + itemDigitado : ''}` : itemDigitado) : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
-    tamanho: document.getElementById('mj-n-tamanho').value.trim(),
+    item: modulo === 'material' ? itemFinal : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
+    tamanho: tamanhoFinal,
     quantidade: document.getElementById('mj-n-quantidade').value || 1,
     descricao: document.getElementById('mj-n-descricao').value.trim(),
     colaboradorNome: colab ? colab.nome : usuarioAtual,
@@ -434,7 +501,8 @@ function renderDetalhe(){
     ? t.comentarios.map(c => `
       <div class="mj-chat-msg">
         <div class="mj-chat-msg-head"><b>${c.usuario}</b><span>${OPS.formatDateTimeBR(c.data)}</span></div>
-        <div class="mj-chat-msg-body">${c.mensagem}</div>
+        ${c.mensagem ? `<div class="mj-chat-msg-body">${c.mensagem}</div>` : ''}
+        ${c.foto ? `<img src="${c.foto}" style="max-width:100%;border-radius:6px;margin-top:6px;cursor:pointer" onclick="window.open(this.src)">` : ''}
       </div>
     `).join('')
     : '<p style="color:var(--ink-faint);font-size:13px">Nenhuma mensagem ainda.</p>';
@@ -476,16 +544,59 @@ async function mudarStatus(id, novoStatus){
   renderAll();
 }
 
+let fotoAnexadaBase64 = null;
+
+function comprimirImagem(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const maxLado = 700;
+      let { width, height } = img;
+      if (width > height && width > maxLado){ height = height * (maxLado / width); width = maxLado; }
+      else if (height > maxLado){ width = width * (maxLado / height); height = maxLado; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('mj-btn-anexar-foto').onclick = () => document.getElementById('mj-input-foto').click();
+document.getElementById('mj-input-foto').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try{
+    fotoAnexadaBase64 = await comprimirImagem(file);
+    document.getElementById('mj-d-foto-preview-img').src = fotoAnexadaBase64;
+    document.getElementById('mj-d-foto-preview').style.display = 'block';
+  }catch(err){
+    alert('Não consegui processar essa imagem. Tenta outra foto.');
+  }
+  e.target.value = '';
+});
+document.getElementById('mj-btn-remover-foto').onclick = () => {
+  fotoAnexadaBase64 = null;
+  document.getElementById('mj-d-foto-preview').style.display = 'none';
+};
+
 document.getElementById('mj-btn-enviar-comentario').onclick = async () => {
   const input = document.getElementById('mj-d-novo-comentario');
   const msg = input.value.trim();
-  if (!msg) return;
+  if (!msg && !fotoAnexadaBase64) return;
   const t = tickets.find(x => x.id === ticketAbertoId);
   if (!t) return;
   const agora = new Date().toISOString();
-  t.comentarios.push({ usuario: usuarioAtual, data: agora, mensagem: msg });
-  t.historico.push({ tipo: 'comentario', data: agora, usuario: usuarioAtual, detalhe: 'Nova mensagem no chat' });
+  t.comentarios.push({ usuario: usuarioAtual, data: agora, mensagem: msg, foto: fotoAnexadaBase64 || null });
+  t.historico.push({ tipo: 'comentario', data: agora, usuario: usuarioAtual, detalhe: fotoAnexadaBase64 ? 'Nova mensagem com foto no chat' : 'Nova mensagem no chat' });
   input.value = '';
+  fotoAnexadaBase64 = null;
+  document.getElementById('mj-d-foto-preview').style.display = 'none';
   await salvarTickets();
   renderDetalhe();
 };
