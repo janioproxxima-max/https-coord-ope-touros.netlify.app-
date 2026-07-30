@@ -183,7 +183,7 @@ const OPS = (() => {
 
   // raio (km) além do qual consideramos a coordenada informada
   // "fora da cidade" e usamos o ponto central no lugar dela.
-  const MAX_CITY_RADIUS_KM = 40;
+  const MAX_CITY_RADIUS_KM = 70;
 
   function normalize(str){
     return (str || '')
