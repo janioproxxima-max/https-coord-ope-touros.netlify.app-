@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mundo Jira · OPE Touros</title>
+<link rel="manifest" href="manifest-mundo-jira.json">
+<meta name="theme-color" content="#00d4ff">
+<link rel="icon" href="icon-mundo-jira-192.png">
+<link rel="apple-touch-icon" href="icon-mundo-jira-192.png">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -797,6 +801,12 @@ async function initPage(){
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
+
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw-mundo-jira.js').catch(err => console.warn('Service worker não registrado:', err));
+  });
+}
 </script>
 </body>
 </html>
