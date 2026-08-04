@@ -33,7 +33,7 @@
       <div class="mj-portal-card-ico">🧑‍💼</div>
       <div>
         <h3>Painel do Colaborador</h3>
-        <p>Em construção — em breve.</p>
+        <p>Histórico de produtividade — média, quartil e tendência.</p>
       </div>
     </div>
   </div>
@@ -96,6 +96,24 @@
       <p id="mj-empty-state-texto">Clique em "＋ Novo chamado" pra abrir o primeiro.</p>
     </div>
   </div>
+</div>
+
+<div class="page" id="mj-view-colaborador" style="display:none">
+  <button type="button" class="btn ghost" id="mj-btn-voltar-portal-2" style="margin-bottom:14px">← Voltar aos portais</button>
+  <div class="page-head">
+    <p class="eyebrow">Painel do Colaborador</p>
+    <h1 class="page-title">Histórico de Produtividade</h1>
+    <p class="page-sub">Média de pontos por mês (pontos ÷ dias trabalhados), quartil e tendência.</p>
+    <p id="mj-prod-papel-banner" class="mj-papel-banner"></p>
+  </div>
+
+  <div class="panel toolbar">
+    <div style="flex:1"></div>
+    <button class="btn primary" id="mj-btn-importar-produtividade">⇪ Importar planilha de produtividade</button>
+    <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
+  </div>
+
+  <div id="mj-prod-conteudo"></div>
 </div>
 
 <!-- Modal: novo chamado -->
@@ -288,6 +306,10 @@ let comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
 let historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
 let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
+
+const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
+const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
+let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
 
 function comentariosDoTicket(ticketId){
   return comentarios.filter(c => c.ticketId === ticketId).sort((a,b) => new Date(a.data) - new Date(b.data));
@@ -763,30 +785,218 @@ document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e =>
   document.getElementById(id).addEventListener('change', renderTable);
 });
 
-// ---------- navegação entre o portal (cartões) e a tela de solicitações ----------
+// ---------- navegação entre o portal (cartões) e as demais telas ----------
 function mostrarPortal(){
   document.getElementById('mj-view-portal').style.display = 'block';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
+  document.getElementById('mj-view-colaborador').style.display = 'none';
 }
 function mostrarSolicitacoes(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'block';
+  document.getElementById('mj-view-colaborador').style.display = 'none';
   renderAll();
+}
+function mostrarColaborador(){
+  document.getElementById('mj-view-portal').style.display = 'none';
+  document.getElementById('mj-view-solicitacoes').style.display = 'none';
+  document.getElementById('mj-view-colaborador').style.display = 'block';
+  renderPainelColaborador();
 }
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
 document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
-document.getElementById('mj-card-colaborador').addEventListener('click', () => {
-  alert('O Painel do Colaborador ainda está em construção — em breve tem novidade aqui.');
+document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', mostrarPortal);
+document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
+
+// ---------- Painel do Colaborador: Histórico de Produtividade ----------
+function importarProdutividade(file){
+  return new Promise((resolve) => {
+    OPS.readSpreadsheetFile(file, (rows) => {
+      let headerRowIdx = -1;
+      for (let i = 0; i < Math.min(rows.length, 10); i++){
+        if (rows[i].some(c => OPS.normalize(c) === 'tecnico')) { headerRowIdx = i; break; }
+      }
+      if (headerRowIdx === -1){ alert('Não achei a linha de cabeçalho (procurando a coluna "Técnico"). Confere se essa é a planilha certa.'); resolve(null); return; }
+
+      const headerRow = rows[headerRowIdx];
+      const mesRow = rows[headerRowIdx - 1] || [];
+      const mesesPorColuna = [];
+      let mesAtual = '';
+      mesRow.forEach((v, idx) => {
+        if (v && v.toString().trim()) mesAtual = v.toString().trim();
+        mesesPorColuna[idx] = mesAtual;
+      });
+
+      const idxStatus = headerRow.findIndex(h => OPS.normalize(h) === 'status');
+      const idxTecnico = headerRow.findIndex(h => OPS.normalize(h) === 'tecnico');
+      const idxSupervisor = headerRow.findIndex(h => OPS.normalize(h) === 'supervisor');
+      const idxCoordenador = headerRow.findIndex(h => OPS.normalize(h) === 'coordenador');
+      const idxMesesAtivo = headerRow.findIndex(h => OPS.normalize(h).includes('meses') && OPS.normalize(h).includes('ativo'));
+      const idxPpcMedio = headerRow.findIndex(h => OPS.normalize(h).includes('ppc'));
+      const idxEficiencia = headerRow.findIndex(h => OPS.normalize(h).includes('eficiencia'));
+      const idxTendencia = headerRow.findIndex(h => OPS.normalize(h).includes('tendencia'));
+
+      const blocosMensais = [];
+      headerRow.forEach((h, idx) => {
+        if (OPS.normalize(h).includes('media') && OPS.normalize(h).includes('pontos')){
+          blocosMensais.push({ mes: mesesPorColuna[idx], idxMedia: idx, idxQuartil: idx + 1, idxDias: idx + 2 });
+        }
+      });
+      if (!blocosMensais.length){ alert('Não achei nenhuma coluna "Média de Pontos". Confere se essa é a planilha certa.'); resolve(null); return; }
+
+      const registros = [];
+      for (let i = headerRowIdx + 1; i < rows.length; i++){
+        const row = rows[i];
+        const tecnico = (row[idxTecnico] || '').toString().trim();
+        if (!tecnico) continue;
+        const historicoMensal = blocosMensais.map(b => ({
+          mes: b.mes,
+          media: parseFloat((row[b.idxMedia] || '').toString().replace(',', '.')) || null,
+          quartil: (row[b.idxQuartil] || '').toString().trim() || null,
+          diasTrabalhados: parseInt(row[b.idxDias], 10) || 0,
+        })).filter(h => h.media !== null || h.diasTrabalhados > 0);
+
+        registros.push({
+          id: OPS.uid(),
+          status: (row[idxStatus] || '').toString().trim(),
+          tecnico,
+          supervisor: (row[idxSupervisor] || '').toString().trim(),
+          coordenador: (row[idxCoordenador] || '').toString().trim(),
+          mesesAtivo: idxMesesAtivo >= 0 ? parseInt(row[idxMesesAtivo], 10) || 0 : 0,
+          ppcMedio: idxPpcMedio >= 0 ? parseFloat((row[idxPpcMedio] || '').toString().replace(',', '.')) || 0 : 0,
+          eficiencia: idxEficiencia >= 0 ? (row[idxEficiencia] || '').toString().trim() : '',
+          tendencia: idxTendencia >= 0 ? (row[idxTendencia] || '').toString().trim() : '',
+          historicoMensal,
+        });
+      }
+      if (!registros.length){ alert('Li a planilha mas não achei nenhum técnico com dado. Confere se a linha de cabeçalho está certa.'); resolve(null); return; }
+      resolve(registros);
+    });
+  });
+}
+
+document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
+document.getElementById('mj-input-produtividade').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const registros = await importarProdutividade(file);
+  e.target.value = '';
+  if (registros){
+    produtividade = registros;
+    OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
+    await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
+    alert(`✅ Importado! ${registros.length} técnico(s) atualizados.`);
+    renderPainelColaborador();
+  }
 });
+
+function tendenciaIcone(t){
+  const n = OPS.normalize(t);
+  if (n === 'melhorando') return '📈';
+  if (n === 'piorando') return '📉';
+  return '➖';
+}
+function quartilBadgeClasse(q){
+  const n = OPS.normalize(q);
+  if (n.includes('1')) return 'ok';
+  if (n.includes('2')) return '';
+  if (n.includes('3')) return 'warn';
+  if (n.includes('4')) return 'crit';
+  return 'neutral';
+}
+
+function mediaSimples(lista){
+  const validos = lista.filter(v => typeof v === 'number' && !isNaN(v));
+  if (!validos.length) return null;
+  return validos.reduce((a, b) => a + b, 0) / validos.length;
+}
+
+function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
+  return `
+    <div class="panel" style="margin-bottom:12px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <b style="font-size:14px">${nome}</b>
+        <span style="font-size:13px;color:var(--ink-dim)">PPC Médio: <b style="color:var(--ink)">${ppcMedio ? ppcMedio.toFixed(2) : '—'}</b> ${tendenciaIcone(tendencia)} ${tendencia || ''}</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${(historicoMensal || []).map(h => `
+          <div style="background:var(--bg-raised);border-radius:8px;padding:8px 12px;min-width:90px;text-align:center">
+            <div style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase">${h.mes || '—'}</div>
+            <div style="font-size:16px;font-weight:700;margin:2px 0">${h.media != null ? h.media.toFixed(2) : '—'}</div>
+            ${h.quartil ? `<span class="badge ${quartilBadgeClasse(h.quartil)}" style="font-size:10px"><span class="dot"></span>${h.quartil}</span>` : ''}
+            <div style="font-size:10px;color:var(--ink-faint);margin-top:3px">${h.diasTrabalhados || 0}d trabalhados</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderPainelColaborador(){
+  const papel = papelAtual();
+  const colab = colaboradorAtual();
+  document.getElementById('mj-prod-papel-banner').innerHTML =
+    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome}` : ''}`;
+
+  const conteudo = document.getElementById('mj-prod-conteudo');
+
+  if (!produtividade.length){
+    conteudo.innerHTML = `<div class="empty-state"><div class="glyph">📊</div><h3>Nenhum dado de produtividade importado ainda</h3><p>Clique em "⇪ Importar planilha de produtividade" pra trazer os dados da aba TEC.</p></div>`;
+    return;
+  }
+
+  if (papel === 'tecnico'){
+    const meu = colab ? produtividade.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
+    if (!meu){
+      conteudo.innerHTML = `<p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${colab ? colab.nome : usuarioAtual}") na última planilha de produtividade importada. Confira com seu supervisor.</p>`;
+      return;
+    }
+    conteudo.innerHTML = linhaHistoricoHTML(meu.tecnico, meu.historicoMensal, meu.ppcMedio, meu.tendencia);
+    return;
+  }
+
+  if (papel === 'inspetor' || papel === 'supervisor' || papel === 'coordenador'){
+    let visiveis = produtividade;
+    if (papel === 'supervisor' && colab) visiveis = produtividade.filter(p => nomesEquivalentes(p.supervisor, colab.nome));
+    if (papel === 'inspetor' && colab) visiveis = produtividade.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
+
+    let html = '';
+
+    // médias agregadas por supervisor (só faz sentido pro coordenador ver todo mundo)
+    if (papel === 'coordenador'){
+      const porSupervisor = {};
+      produtividade.forEach(p => {
+        const sup = p.supervisor || '(sem supervisor)';
+        (porSupervisor[sup] = porSupervisor[sup] || []).push(p.ppcMedio);
+      });
+      const mediaGeral = mediaSimples(produtividade.map(p => p.ppcMedio));
+      html += `<div class="stat-row" style="margin-bottom:16px">`;
+      html += `<div class="stat-card brand"><div class="label">Média geral da Coordenação</div><div class="value">${mediaGeral != null ? mediaGeral.toFixed(2) : '—'}</div></div>`;
+      Object.entries(porSupervisor).forEach(([sup, lista]) => {
+        const m = mediaSimples(lista);
+        html += `<div class="stat-card"><div class="label">${sup}</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div>`;
+      });
+      html += `</div>`;
+    } else if ((papel === 'supervisor' || papel === 'inspetor') && colab){
+      const m = mediaSimples(visiveis.map(p => p.ppcMedio));
+      html += `<div class="stat-row" style="margin-bottom:16px"><div class="stat-card brand"><div class="label">Média do seu time</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div></div>`;
+    }
+
+    html += visiveis.map(p => linhaHistoricoHTML(`${p.tecnico} <span style="font-weight:400;color:var(--ink-faint);font-size:12px">— ${p.supervisor}</span>`, p.historicoMensal, p.ppcMedio, p.tendencia)).join('');
+    conteudo.innerHTML = html || '<p style="color:var(--ink-dim);font-size:13px">Nenhum técnico encontrado pro seu time nessa planilha.</p>';
+  }
+}
+
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas] = await Promise.all([
+  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas, sharedProdutividade] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COMENTARIOS),
     OPS.syncPull(SYNC_HISTORICO),
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
+    OPS.syncPull(SYNC_PRODUTIVIDADE),
   ]);
   toast.remove();
   tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
@@ -794,6 +1004,7 @@ async function initPage(){
   historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
+  produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
   populateVeiculosSelect();
   populateStatusFilter();
   renderAll();
