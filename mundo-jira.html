@@ -1292,6 +1292,20 @@ function motivoExclusaoProdutividade(nomeTecnico){
 let mesProdutividadeSelecionado = null;
 
 function renderPainelColaborador(){
+  try{
+    renderPainelColaboradorImpl();
+  }catch(err){
+    // se algo quebrar no meio da montagem do painel, os cards do fim da
+    // função (com os cliques) nunca chegavam a ser criados — e parecia que
+    // "clicar não faz nada". Agora aparece um aviso em vez de travar em
+    // silêncio.
+    console.error('Erro ao montar o Painel do Colaborador:', err);
+    const conteudo = document.getElementById('mj-prod-conteudo');
+    if (conteudo) conteudo.innerHTML = `<p style="color:var(--crit,#ff4d6d);font-size:13px">Deu um erro ao montar o painel. Abra o console do navegador (F12) e envie a mensagem de erro. Detalhe técnico: ${(err && err.message) ? err.message : err}</p>`;
+  }
+}
+
+function renderPainelColaboradorImpl(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
   document.getElementById('mj-prod-papel-banner').innerHTML =
@@ -1389,15 +1403,23 @@ let mjChartTipo = null;
 let mjGraficoAtual = { tecnico: null, mesKey: null, metrica: 'produtividade' };
 
 function abrirGraficoTipo(tecnico, mesKey){
-  const registro = produtividade.find(p => p.tecnico === tecnico);
-  const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
-  if (!mesDados){ alert('Não achei os dados desse mês pra esse técnico.'); return; }
-  mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
-  document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
-  document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
-  document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.metrica === 'produtividade'));
-  renderGraficoTipo();
-  document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
+  try{
+    const registro = produtividade.find(p => p.tecnico === tecnico);
+    const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
+    if (!mesDados){ alert('Não achei os dados desse mês pra esse técnico.'); return; }
+    mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
+    document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
+    document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
+    document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.metrica === 'produtividade'));
+    renderGraficoTipo();
+    document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
+  }catch(err){
+    // antes, um erro aqui não dava nenhum retorno visível pro usuário — o
+    // clique parecia simplesmente não fazer nada. Agora aparece na tela e
+    // no console (F12), pra dar pra identificar a causa real.
+    console.error('Erro ao abrir o gráfico por tipo de serviço:', err);
+    alert('Deu um erro ao tentar abrir o gráfico desse mês. Abra o console do navegador (F12) e me manda a mensagem de erro que aparecer — assim consigo corrigir.\n\nDetalhe técnico: ' + (err && err.message ? err.message : err));
+  }
 }
 
 const plugRotulosSempreVisiveis = {
