@@ -348,8 +348,14 @@ let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
 let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
-// detalhe linha a linha da última importação — só em memória (não sincroniza
-// entre usuários; existe pra alimentar os cliques de detalhamento nos gráficos)
+const SYNC_PRODUTIVIDADE_TIPO = 'ProdutividadeDetalhePorTipo';
+const STORAGE_KEY_PRODUTIVIDADE_TIPO = 'ops_touros_produtividade_tipo_v1';
+// uma linha por (técnico, mês, tipo de serviço) — sincronizado de verdade,
+// pra alimentar os gráficos sem sobrecarregar o registro principal do técnico
+let produtividadeDetalhePorTipo = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+// detalhe linha a linha (protocolo por protocolo) da última importação — esse
+// sim só em memória (não sincroniza; é grande demais pra planilha do Google);
+// alimenta a lista de protocolos ao clicar numa barra do gráfico
 let detalhesRegistrosProdutividade = [];
 let paresRecorrenciaProdutividade = [];
 
@@ -1082,6 +1088,7 @@ function mesclarProdutividade(resultado){
   }
 
   Object.entries(agregado).forEach(([tecnico, porMes]) => {
+    if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
@@ -1106,17 +1113,26 @@ function mesclarProdutividade(resultado){
         recorrencias: dados.recorrencias,
         recorrenciaPct: dados.produtivos ? (dados.recorrencias / dados.produtivos) * 100 : null,
         tempoMedioAtendimento: dados.temposAtendimento.length ? mediaSimples(dados.temposAtendimento) : null,
-        porTipo: Object.fromEntries(Object.entries(dados.porTipo || {}).map(([tipo, dt]) => [tipo, {
-          produtivos: dt.produtivos,
-          improdutivos: dt.improdutivos,
-          pontos: dt.pontos,
-          recorrencias: dt.recorrencias,
-          tempoMedioAtendimento: dt.temposAtendimento.length ? mediaSimples(dt.temposAtendimento) : null,
-        }])),
       };
       const iExistente = registro.historicoMensal.findIndex(h => h.mesKey === mesKey);
       if (iExistente >= 0) registro.historicoMensal[iExistente] = novoMes;
       else registro.historicoMensal.push(novoMes);
+
+      // detalhamento por tipo vai pra coleção própria (uma linha por
+      // técnico+mês+tipo — evita inchar o registro principal do técnico)
+      Object.entries(dados.porTipo || {}).forEach(([tipo, dt]) => {
+        const chaveTipo = `${tecnico}|${mesKey}|${tipo}`;
+        let regTipo = produtividadeDetalhePorTipo.find(r => `${r.tecnico}|${r.mesKey}|${r.tipo}` === chaveTipo);
+        if (!regTipo){
+          regTipo = { id: OPS.uid(), tecnico, mesKey, tipo };
+          produtividadeDetalhePorTipo.push(regTipo);
+        }
+        regTipo.produtivos = dt.produtivos;
+        regTipo.improdutivos = dt.improdutivos;
+        regTipo.pontos = dt.pontos;
+        regTipo.recorrencias = dt.recorrencias;
+        regTipo.tempoMedioAtendimento = dt.temposAtendimento.length ? mediaSimples(dt.temposAtendimento) : null;
+      });
     });
     registro.historicoMensal.sort((a, b) => a.mesKey.localeCompare(b.mesKey));
     registro.ppcMedio = mediaSimples(registro.historicoMensal.map(h => h.media));
@@ -1140,8 +1156,10 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
     detalhesRegistrosProdutividade = resultado.detalhesRegistros;
     paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
+    OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
     await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nO detalhamento (clicar nos gráficos) só fica disponível nesta sessão, até você sair da página — quem quiser ver o detalhe precisa ter importado a planilha também.`);
+    await OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
     populateFiltroTipoProdutividade();
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
@@ -1338,11 +1356,20 @@ const plugRotulosSempreVisiveis = {
   },
 };
 
+function porTipoDoMes(tecnico, mesKey){
+  const linhas = produtividadeDetalhePorTipo.filter(r => r.tecnico === tecnico && r.mesKey === mesKey);
+  const porTipo = {};
+  linhas.forEach(r => {
+    porTipo[r.tipo] = { produtivos: r.produtivos, improdutivos: r.improdutivos, pontos: r.pontos, recorrencias: r.recorrencias, tempoMedioAtendimento: r.tempoMedioAtendimento };
+  });
+  return porTipo;
+}
+
 function renderGraficoTipo(){
   const registro = produtividade.find(p => p.tecnico === mjGraficoAtual.tecnico);
   const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mjGraficoAtual.mesKey) : null;
   if (!mesDados) return;
-  const porTipo = mesDados.porTipo || {};
+  const porTipo = porTipoDoMes(mjGraficoAtual.tecnico, mjGraficoAtual.mesKey);
   const filtroTipo = document.getElementById('mj-prod-f-tipo') ? document.getElementById('mj-prod-f-tipo').value : '';
   let tipos = Object.keys(porTipo);
   if (filtroTipo) tipos = tipos.filter(t => t === filtroTipo);
@@ -1455,7 +1482,7 @@ document.getElementById('mj-prod-f-tipo').addEventListener('change', () => {
 function populateFiltroTipoProdutividade(){
   const sel = document.getElementById('mj-prod-f-tipo');
   const valorAtual = sel.value;
-  const tipos = [...new Set(produtividade.flatMap(p => (p.historicoMensal || []).flatMap(h => Object.keys(h.porTipo || {}))))].sort();
+  const tipos = [...new Set(produtividadeDetalhePorTipo.map(r => r.tipo))].sort();
   sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
   if (tipos.includes(valorAtual)) sel.value = valorAtual;
 }
@@ -1473,13 +1500,14 @@ function populateFiltroTecnicoProdutividade(){
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas, sharedProdutividade] = await Promise.all([
+  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas, sharedProdutividade, sharedProdutividadeTipo] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COMENTARIOS),
     OPS.syncPull(SYNC_HISTORICO),
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
     OPS.syncPull(SYNC_PRODUTIVIDADE),
+    OPS.syncPull(SYNC_PRODUTIVIDADE_TIPO),
   ]);
   toast.remove();
   tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
@@ -1488,6 +1516,7 @@ async function initPage(){
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+  produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
   populateVeiculosSelect();
   populateStatusFilter();
   populateFiltroTipoProdutividade();
