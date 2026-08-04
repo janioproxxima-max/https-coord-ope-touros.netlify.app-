@@ -46,7 +46,7 @@
         <div class="multi-select-panel" id="f-responsavel-panel" style="display:none"></div>
       </div>
     </div>
-    <div class="field">
+    <div class="field" style="display:none">
       <label for="f-prazo">Status</label>
       <select id="f-prazo">
         <option value="">Todos</option>
@@ -56,18 +56,18 @@
         <option value="sem_sla">Sem SLA definido</option>
       </select>
     </div>
-    <div class="field">
+    <div class="field" style="display:none">
       <label for="f-projeto">Projeto</label>
       <select id="f-projeto">
         <option value="">Todos</option>
         <option value="erro">🚩 Só com erro de projeto</option>
       </select>
     </div>
-    <div class="field">
+    <div class="field" style="display:none">
       <label for="f-sigla">Sigla</label>
       <select id="f-sigla"><option value="">Todas</option></select>
     </div>
-    <div class="field">
+    <div class="field" style="display:none">
       <label for="f-status-atend">Status atendimento</label>
       <select id="f-status-atend">
         <option value="">Todos</option>
@@ -138,6 +138,9 @@
       </div>
       <div id="map"></div>
       <div id="map-filters-drawer" class="map-filters-drawer" style="display:none">
+        <div class="qf-block">
+          <button type="button" class="btn primary" id="qf-btn-importar" style="width:100%">⇪ Importar planilha (Excel/CSV)</button>
+        </div>
         <div class="qf-block">
           <div class="qf-label" style="display:flex;justify-content:space-between">
             <span>Status dos chamados</span>
@@ -1184,6 +1187,7 @@ document.getElementById('form-record').addEventListener('submit', e => {
 });
 
 document.getElementById('btn-import').onclick = () => document.getElementById('file-import-mapa').click();
+document.getElementById('qf-btn-importar').onclick = () => document.getElementById('file-import-mapa').click();
 document.getElementById('file-import-mapa').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1348,6 +1352,11 @@ async function initPage(){
   if (!shared && records.length){
     const warn = showToast('⚠️ Não consegui buscar os dados compartilhados agora — mostrando a última cópia salva neste navegador.');
     setTimeout(() => warn.remove(), 4000);
+  }
+  // ao abrir o mapa, já vem filtrado pela Unidade Touros por padrão
+  if (selectedCities.size === 0){
+    const todasAsCidades = [...new Set(records.map(r => r.cidade).filter(Boolean))];
+    selectedCities = new Set(todasAsCidades.filter(c => OPS.isUnitCity(c, 'TOUROS')));
   }
   populateFilterOptions();
   renderAll();

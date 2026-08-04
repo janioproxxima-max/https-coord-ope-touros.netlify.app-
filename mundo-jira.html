@@ -809,83 +809,138 @@ document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', most
 document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
 
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
-function importarProdutividade(file){
+const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function formatarMes(mesKey){ // '2026-07' -> 'jul/26'
+  const [ano, mes] = mesKey.split('-');
+  return `${MES_NOMES[Number(mes) - 1]}/${ano.slice(2)}`;
+}
+
+function calcularQuartis(itens){ // itens: [{ref, media}] — devolve com .quartil preenchido
+  const ordenado = [...itens].sort((a, b) => b.media - a.media); // maior média = melhor
+  const n = ordenado.length;
+  ordenado.forEach((item, idx) => {
+    const percentil = idx / n;
+    item.quartil = percentil < 0.25 ? '1º quartil' : percentil < 0.50 ? '2º quartil' : percentil < 0.75 ? '3º quartil' : '4º quartil';
+  });
+  return ordenado;
+}
+
+function importarProdutividadeBruta(file){
   return new Promise((resolve) => {
     OPS.readSpreadsheetFile(file, (rows) => {
       let headerRowIdx = -1;
-      for (let i = 0; i < Math.min(rows.length, 10); i++){
-        if (rows[i].some(c => OPS.normalize(c) === 'tecnico')) { headerRowIdx = i; break; }
+      for (let i = 0; i < Math.min(rows.length, 5); i++){
+        if (rows[i].some(c => OPS.normalize(c) === 'responsavel')) { headerRowIdx = i; break; }
       }
-      if (headerRowIdx === -1){ alert('Não achei a linha de cabeçalho (procurando a coluna "Técnico"). Confere se essa é a planilha certa.'); resolve(null); return; }
+      if (headerRowIdx === -1){ alert('Não achei a coluna "Responsável" nas primeiras linhas. Confere se essa é a planilha certa (o mesmo modelo do Mapa de Serviços).'); resolve(null); return; }
 
-      const headerRow = rows[headerRowIdx];
-      const mesRow = rows[headerRowIdx - 1] || [];
-      const mesesPorColuna = [];
-      let mesAtual = '';
-      mesRow.forEach((v, idx) => {
-        if (v && v.toString().trim()) mesAtual = v.toString().trim();
-        mesesPorColuna[idx] = mesAtual;
-      });
+      const headers = rows[headerRowIdx];
+      const idx = (nome) => headers.findIndex(h => OPS.normalize(h) === OPS.normalize(nome));
+      const idxResponsavel = idx('Responsável');
+      const idxTipoServico = idx('Tipo de Serviço');
+      const idxDescricao = idx('Descrição do Encerramento');
+      const idxPlano = idx('Plano/Produto');
+      const idxDataFim = idx('Data/Hora Fim do Atendimento');
+      const idxSupervisor = idx('Supervisor');
+      if (idxResponsavel === -1 || idxDescricao === -1){
+        alert('Faltou alguma coluna esperada (Responsável / Descrição do Encerramento). Confere se essa é a planilha certa.');
+        resolve(null);
+        return;
+      }
 
-      const idxStatus = headerRow.findIndex(h => OPS.normalize(h) === 'status');
-      const idxTecnico = headerRow.findIndex(h => OPS.normalize(h) === 'tecnico');
-      const idxSupervisor = headerRow.findIndex(h => OPS.normalize(h) === 'supervisor');
-      const idxCoordenador = headerRow.findIndex(h => OPS.normalize(h) === 'coordenador');
-      const idxMesesAtivo = headerRow.findIndex(h => OPS.normalize(h).includes('meses') && OPS.normalize(h).includes('ativo'));
-      const idxPpcMedio = headerRow.findIndex(h => OPS.normalize(h).includes('ppc'));
-      const idxEficiencia = headerRow.findIndex(h => OPS.normalize(h).includes('eficiencia'));
-      const idxTendencia = headerRow.findIndex(h => OPS.normalize(h).includes('tendencia'));
-
-      const blocosMensais = [];
-      headerRow.forEach((h, idx) => {
-        if (OPS.normalize(h).includes('media') && OPS.normalize(h).includes('pontos')){
-          blocosMensais.push({ mes: mesesPorColuna[idx], idxMedia: idx, idxQuartil: idx + 1, idxDias: idx + 2 });
-        }
-      });
-      if (!blocosMensais.length){ alert('Não achei nenhuma coluna "Média de Pontos". Confere se essa é a planilha certa.'); resolve(null); return; }
-
-      const registros = [];
+      // tecnico -> mesKey -> { pontos, dias:Set, supervisor }
+      const agregado = {};
       for (let i = headerRowIdx + 1; i < rows.length; i++){
         const row = rows[i];
-        const tecnico = (row[idxTecnico] || '').toString().trim();
+        const tecnico = (row[idxResponsavel] || '').toString().trim();
         if (!tecnico) continue;
-        const historicoMensal = blocosMensais.map(b => ({
-          mes: b.mes,
-          media: parseFloat((row[b.idxMedia] || '').toString().replace(',', '.')) || null,
-          quartil: (row[b.idxQuartil] || '').toString().trim() || null,
-          diasTrabalhados: parseInt(row[b.idxDias], 10) || 0,
-        })).filter(h => h.media !== null || h.diasTrabalhados > 0);
+        const svc = OPS.lookupService(row[idxTipoServico] || '');
+        const prod = OPS.lookupProdutividade(row[idxDescricao] || '', svc.tipoCurto, row[idxPlano] || '');
+        if (!prod.produtivo || !prod.pontos) continue;
 
-        registros.push({
-          id: OPS.uid(),
-          status: (row[idxStatus] || '').toString().trim(),
-          tecnico,
-          supervisor: (row[idxSupervisor] || '').toString().trim(),
-          coordenador: (row[idxCoordenador] || '').toString().trim(),
-          mesesAtivo: idxMesesAtivo >= 0 ? parseInt(row[idxMesesAtivo], 10) || 0 : 0,
-          ppcMedio: idxPpcMedio >= 0 ? parseFloat((row[idxPpcMedio] || '').toString().replace(',', '.')) || 0 : 0,
-          eficiencia: idxEficiencia >= 0 ? (row[idxEficiencia] || '').toString().trim() : '',
-          tendencia: idxTendencia >= 0 ? (row[idxTendencia] || '').toString().trim() : '',
-          historicoMensal,
-        });
+        const dt = OPS.parseBRDateTime(row[idxDataFim] || '');
+        if (!dt) continue;
+        const mesKey = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        const diaKey = dt.toISOString().slice(0, 10);
+
+        agregado[tecnico] = agregado[tecnico] || {};
+        agregado[tecnico][mesKey] = agregado[tecnico][mesKey] || { pontos: 0, dias: new Set(), supervisor: '' };
+        agregado[tecnico][mesKey].pontos += prod.pontos;
+        agregado[tecnico][mesKey].dias.add(diaKey);
+        if (idxSupervisor >= 0 && row[idxSupervisor]) agregado[tecnico][mesKey].supervisor = row[idxSupervisor].toString().trim();
       }
-      if (!registros.length){ alert('Li a planilha mas não achei nenhum técnico com dado. Confere se a linha de cabeçalho está certa.'); resolve(null); return; }
-      resolve(registros);
+
+      if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); resolve(null); return; }
+
+      // calcula quartil comparando todo mundo dentro de cada mês
+      const mesesEncontrados = new Set();
+      Object.values(agregado).forEach(porMes => Object.keys(porMes).forEach(m => mesesEncontrados.add(m)));
+      const quartilPorTecnicoMes = {}; // "tecnico|mesKey" -> quartil
+      mesesEncontrados.forEach(mesKey => {
+        const itens = [];
+        Object.entries(agregado).forEach(([tecnico, porMes]) => {
+          if (porMes[mesKey]) itens.push({ tecnico, media: porMes[mesKey].pontos / porMes[mesKey].dias.size });
+        });
+        calcularQuartis(itens).forEach(item => { quartilPorTecnicoMes[`${item.tecnico}|${mesKey}`] = item.quartil; });
+      });
+
+      resolve({ agregado, quartilPorTecnicoMes });
     });
   });
+}
+
+function mediaSimples(lista){
+  const validos = lista.filter(v => typeof v === 'number' && !isNaN(v));
+  if (!validos.length) return null;
+  return validos.reduce((a, b) => a + b, 0) / validos.length;
+}
+
+function mesclarProdutividade(resultado){
+  const { agregado, quartilPorTecnicoMes } = resultado;
+  let mesesAtualizados = new Set();
+
+  Object.entries(agregado).forEach(([tecnico, porMes]) => {
+    let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
+    if (!registro){
+      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
+      produtividade.push(registro);
+    }
+    Object.entries(porMes).forEach(([mesKey, dados]) => {
+      mesesAtualizados.add(mesKey);
+      if (dados.supervisor) registro.supervisor = dados.supervisor;
+      const novoMes = {
+        mesKey,
+        mes: formatarMes(mesKey),
+        media: dados.pontos / dados.dias.size,
+        diasTrabalhados: dados.dias.size,
+        quartil: quartilPorTecnicoMes[`${tecnico}|${mesKey}`] || null,
+      };
+      const iExistente = registro.historicoMensal.findIndex(h => h.mesKey === mesKey);
+      if (iExistente >= 0) registro.historicoMensal[iExistente] = novoMes;
+      else registro.historicoMensal.push(novoMes);
+    });
+    registro.historicoMensal.sort((a, b) => a.mesKey.localeCompare(b.mesKey));
+    registro.ppcMedio = mediaSimples(registro.historicoMensal.map(h => h.media));
+    if (registro.historicoMensal.length >= 2){
+      const ultimo = registro.historicoMensal[registro.historicoMensal.length - 1].media;
+      const penultimo = registro.historicoMensal[registro.historicoMensal.length - 2].media;
+      registro.tendencia = ultimo > penultimo ? 'Melhorando' : (ultimo < penultimo ? 'Piorando' : 'Estável');
+    }
+  });
+  return [...mesesAtualizados].sort();
 }
 
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
 document.getElementById('mj-input-produtividade').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const registros = await importarProdutividade(file);
+  const resultado = await importarProdutividadeBruta(file);
   e.target.value = '';
-  if (registros){
-    produtividade = registros;
+  if (resultado){
+    const meses = mesclarProdutividade(resultado);
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    alert(`✅ Importado! ${registros.length} técnico(s) atualizados.`);
+    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).`);
     renderPainelColaborador();
   }
 });
@@ -903,12 +958,6 @@ function quartilBadgeClasse(q){
   if (n.includes('3')) return 'warn';
   if (n.includes('4')) return 'crit';
   return 'neutral';
-}
-
-function mediaSimples(lista){
-  const validos = lista.filter(v => typeof v === 'number' && !isNaN(v));
-  if (!validos.length) return null;
-  return validos.reduce((a, b) => a + b, 0) / validos.length;
 }
 
 function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
@@ -932,6 +981,12 @@ function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
   `;
 }
 
+function ehInstaladorReparador(nomeTecnico){
+  const colabEncontrado = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
+  if (!colabEncontrado) return false;
+  return OPS.normalize(colabEncontrado.cargo).includes('instalador') && OPS.normalize(colabEncontrado.cargo).includes('reparador');
+}
+
 function renderPainelColaborador(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
@@ -939,16 +994,17 @@ function renderPainelColaborador(){
     `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome}` : ''}`;
 
   const conteudo = document.getElementById('mj-prod-conteudo');
+  const produtividadeValida = produtividade.filter(p => ehInstaladorReparador(p.tecnico));
 
-  if (!produtividade.length){
-    conteudo.innerHTML = `<div class="empty-state"><div class="glyph">📊</div><h3>Nenhum dado de produtividade importado ainda</h3><p>Clique em "⇪ Importar planilha de produtividade" pra trazer os dados da aba TEC.</p></div>`;
+  if (!produtividadeValida.length){
+    conteudo.innerHTML = `<div class="empty-state"><div class="glyph">📊</div><h3>Nenhum dado de produtividade importado ainda</h3><p>Clique em "⇪ Importar planilha de produtividade" pra trazer os dados. Só aparecem aqui colaboradores cadastrados em Gestão de Pessoas com o cargo "Instalador e Reparador de Operações".</p></div>`;
     return;
   }
 
   if (papel === 'tecnico'){
-    const meu = colab ? produtividade.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
+    const meu = colab ? produtividadeValida.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
     if (!meu){
-      conteudo.innerHTML = `<p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${colab ? colab.nome : usuarioAtual}") na última planilha de produtividade importada. Confira com seu supervisor.</p>`;
+      conteudo.innerHTML = `<p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${colab ? colab.nome : usuarioAtual}") na última planilha de produtividade importada, ou seu cargo cadastrado não é "Instalador e Reparador de Operações". Confira com seu supervisor.</p>`;
       return;
     }
     conteudo.innerHTML = linhaHistoricoHTML(meu.tecnico, meu.historicoMensal, meu.ppcMedio, meu.tendencia);
@@ -956,20 +1012,20 @@ function renderPainelColaborador(){
   }
 
   if (papel === 'inspetor' || papel === 'supervisor' || papel === 'coordenador'){
-    let visiveis = produtividade;
-    if (papel === 'supervisor' && colab) visiveis = produtividade.filter(p => nomesEquivalentes(p.supervisor, colab.nome));
-    if (papel === 'inspetor' && colab) visiveis = produtividade.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
+    let visiveis = produtividadeValida;
+    if (papel === 'supervisor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome));
+    if (papel === 'inspetor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
 
     let html = '';
 
     // médias agregadas por supervisor (só faz sentido pro coordenador ver todo mundo)
     if (papel === 'coordenador'){
       const porSupervisor = {};
-      produtividade.forEach(p => {
+      produtividadeValida.forEach(p => {
         const sup = p.supervisor || '(sem supervisor)';
         (porSupervisor[sup] = porSupervisor[sup] || []).push(p.ppcMedio);
       });
-      const mediaGeral = mediaSimples(produtividade.map(p => p.ppcMedio));
+      const mediaGeral = mediaSimples(produtividadeValida.map(p => p.ppcMedio));
       html += `<div class="stat-row" style="margin-bottom:16px">`;
       html += `<div class="stat-card brand"><div class="label">Média geral da Coordenação</div><div class="value">${mediaGeral != null ? mediaGeral.toFixed(2) : '—'}</div></div>`;
       Object.entries(porSupervisor).forEach(([sup, lista]) => {

@@ -1359,12 +1359,13 @@ function initShell(active, pageTitle){
   const importFileInput = sidebar.querySelector('#sb-file-import');
   if (importBox && importFileInput){
     importBox.addEventListener('click', () => {
-      // se a própria página já tem seu input de importação (Mapa de Serviços),
-      // usa exatamente esse — evita qualquer diferença de comportamento entre
-      // os dois botões na mesma página.
+      // usa sempre o mesmo mecanismo que já funciona dentro do Mapa de
+      // Serviços — se não estiver nessa página, manda pra lá primeiro.
       const pageFileInput = document.getElementById('file-import-mapa');
       if (pageFileInput){ pageFileInput.click(); return; }
-      importFileInput.click();
+      if (confirm('Pra importar, precisa estar na página do Mapa de Serviços. Ir pra lá agora?')){
+        window.location.href = 'mapa-servicos.html';
+      }
     });
     importFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
