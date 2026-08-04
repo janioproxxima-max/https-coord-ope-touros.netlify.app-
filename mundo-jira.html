@@ -130,6 +130,8 @@
     <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
 
+  <div id="mj-prod-import-report"></div>
+
   <div id="mj-prod-conteudo"></div>
 </div>
 
@@ -1081,6 +1083,8 @@ function mediaPonderada(listaTecnicos, mesKey){
 function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
   let mesesAtualizados = new Set();
+  const aceitos = [];
+  const descartados = []; // { tecnico, motivo }
 
   function supervisorReal(nomeTecnico){
     const colab = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
@@ -1088,7 +1092,9 @@ function mesclarProdutividade(resultado){
   }
 
   Object.entries(agregado).forEach(([tecnico, porMes]) => {
-    if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
+    const motivo = motivoExclusaoProdutividade(tecnico);
+    if (motivo){ descartados.push({ tecnico, motivo }); return; } // não polui a base com gente de outro cargo
+    aceitos.push(tecnico);
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
@@ -1142,7 +1148,28 @@ function mesclarProdutividade(resultado){
       registro.tendencia = ultimo > penultimo ? 'Melhorando' : (ultimo < penultimo ? 'Piorando' : 'Estável');
     }
   });
-  return [...mesesAtualizados].sort();
+  return { meses: [...mesesAtualizados].sort(), aceitos, descartados };
+}
+
+// Mostra, de forma persistente (não some ao fechar o alert), quem entrou
+// e quem foi descartado na última importação — e por quê. É a resposta
+// direta pro problema de "importei e não apareceu nada": antes esse
+// descarte acontecia em silêncio.
+function renderRelatorioImportacaoProdutividade(aceitos, descartados, meses){
+  const el = document.getElementById('mj-prod-import-report');
+  if (!aceitos.length && !descartados.length){ el.innerHTML = ''; return; }
+
+  let html = `<div class="panel" style="margin-bottom:14px;padding:14px 16px;border-left:3px solid ${descartados.length ? 'var(--warn, #ffb020)' : 'var(--ok, #22c55e)'}">`;
+  html += `<div style="font-weight:600;margin-bottom:8px">Última importação (${meses.map(formatarMes).join(', ') || 'sem mês identificado'})</div>`;
+  html += `<div style="font-size:13px;color:var(--ink-dim);margin-bottom:${descartados.length ? '10px' : '0'}">✅ ${aceitos.length} técnico(s) entraram no painel${aceitos.length ? ': ' + aceitos.join(', ') : ''}</div>`;
+  if (descartados.length){
+    html += `<div style="font-size:13px;color:var(--ink-dim);margin-bottom:6px">⚠️ ${descartados.length} nome(s) da planilha foram ignorados:</div>`;
+    html += `<ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-dim)">`;
+    html += descartados.map(d => `<li><b style="color:var(--ink)">${d.tecnico}</b> — ${d.motivo}</li>`).join('');
+    html += `</ul>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
 }
 
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
@@ -1152,14 +1179,21 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
   const resultado = await importarProdutividadeBruta(file);
   e.target.value = '';
   if (resultado){
-    const meses = mesclarProdutividade(resultado);
+    const { meses, aceitos, descartados } = mesclarProdutividade(resultado);
     detalhesRegistrosProdutividade = resultado.detalhesRegistros;
     paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
     await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
     await OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
-    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+
+    renderRelatorioImportacaoProdutividade(aceitos, descartados, meses);
+
+    if (!aceitos.length){
+      alert(`⚠️ A planilha foi lida, mas nenhum dos ${descartados.length} nome(s) encontrados entrou no Painel do Colaborador — veja a lista de motivos logo acima do painel, embaixo do botão de importar.`);
+    } else {
+      alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${aceitos.length} técnico(s) recalculados.${descartados.length ? `\n${descartados.length} nome(s) da planilha foram ignorados — veja os motivos na tela, embaixo do botão de importar.` : ''}\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+    }
     populateFiltroTipoProdutividade();
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
@@ -1219,6 +1253,20 @@ function ehInstaladorReparador(nomeTecnico){
   const colabEncontrado = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
   if (!colabEncontrado) return false;
   return OPS.normalize(colabEncontrado.cargo).includes('instalador') && OPS.normalize(colabEncontrado.cargo).includes('reparador');
+}
+
+// Explica por que um nome vindo da planilha não vai entrar no Painel do
+// Colaborador — devolve null se ele deveria entrar normalmente. Usada só
+// pra dar feedback visível na importação (ehInstaladorReparador() continua
+// sendo a checagem "oficial" usada no resto da tela).
+function motivoExclusaoProdutividade(nomeTecnico){
+  const colabEncontrado = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
+  if (!colabEncontrado) return 'nome não encontrado em Gestão de Pessoas (confira se está cadastrado com o nome exatamente igual ao da planilha)';
+  const cargoNorm = OPS.normalize(colabEncontrado.cargo);
+  if (!(cargoNorm.includes('instalador') && cargoNorm.includes('reparador'))){
+    return `cargo cadastrado em Gestão de Pessoas ("${colabEncontrado.cargo || '(vazio)'}") precisa conter "Instalador" e "Reparador"`;
+  }
+  return null;
 }
 
 let mesProdutividadeSelecionado = null;
@@ -1323,7 +1371,7 @@ let mjGraficoAtual = { tecnico: null, mesKey: null, metrica: 'produtividade' };
 function abrirGraficoTipo(tecnico, mesKey){
   const registro = produtividade.find(p => p.tecnico === tecnico);
   const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
-  if (!mesDados || !mesDados.porTipo){ alert('Não achei o detalhamento por tipo de serviço desse mês.'); return; }
+  if (!mesDados){ alert('Não achei os dados desse mês pra esse técnico.'); return; }
   mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
   document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
   document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
