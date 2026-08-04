@@ -348,8 +348,32 @@ let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
+// O Google Sheets (planilha de sincronização) às vezes não preserva uma
+// lista aninhada de objetos como array de verdade — pode voltar como uma
+// string JSON, ou como um objeto tipo {"0":{...},"1":{...}} em vez de
+// [{...},{...}]. Sem isso, qualquer .map()/.find() no historicoMensal
+// quebra o painel inteiro sem avisar por quê. Essa função sempre devolve
+// um array de verdade, não importa o formato que chegou.
+function normalizarHistoricoMensal(h){
+  if (Array.isArray(h)) return h;
+  if (h == null || h === '') return [];
+  if (typeof h === 'string'){
+    try{
+      const parsed = JSON.parse(h);
+      return Array.isArray(parsed) ? parsed : normalizarHistoricoMensal(parsed);
+    }catch(e){ return []; }
+  }
+  if (typeof h === 'object'){
+    return Object.values(h).filter(v => v && typeof v === 'object');
+  }
+  return [];
+}
+function normalizarProdutividade(lista){
+  return (lista || []).map(p => ({ ...p, historicoMensal: normalizarHistoricoMensal(p.historicoMensal) }));
+}
+
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
-let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+let produtividade = normalizarProdutividade(OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || []);
 // true enquanto o envio da produtividade pra planilha do site ainda não
 // terminou — evita que um refresh nesse meio-tempo puxe a versão antiga do
 // servidor e apague por cima a importação que acabou de acontecer aqui.
@@ -1610,7 +1634,7 @@ async function initPage(){
   // importação. Assim que o envio terminar, a próxima atualização já traz
   // a versão certa de qualquer lugar.
   if (!produtividadeSyncPendente){
-    produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+    produtividade = normalizarProdutividade(sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || []);
     produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
   }
   populateVeiculosSelect();
