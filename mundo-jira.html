@@ -350,6 +350,10 @@ let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
 let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+// true enquanto o envio da produtividade pra planilha do site ainda não
+// terminou — evita que um refresh nesse meio-tempo puxe a versão antiga do
+// servidor e apague por cima a importação que acabou de acontecer aqui.
+let produtividadeSyncPendente = false;
 const SYNC_PRODUTIVIDADE_TIPO = 'ProdutividadeDetalhePorTipo';
 const STORAGE_KEY_PRODUTIVIDADE_TIPO = 'ops_touros_produtividade_tipo_v1';
 // uma linha por (técnico, mês, tipo de serviço) — sincronizado de verdade,
@@ -1195,8 +1199,11 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
 
-    OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+    produtividadeSyncPendente = true;
+    Promise.all([
+      OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade),
+      OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
+    ]).finally(() => { produtividadeSyncPendente = false; });
 
     // O alert() é uma caixa de diálogo síncrona: se ele disparar logo depois
     // de mexer no DOM, o navegador às vezes trava a aba antes de chegar a
@@ -1576,13 +1583,26 @@ async function initPage(){
   historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
-  produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
-  produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+  // se ainda tem um envio de produtividade em andamento (import recente),
+  // não sobrescreve com o que voltou do servidor — ele ainda não tem essa
+  // importação. Assim que o envio terminar, a próxima atualização já traz
+  // a versão certa de qualquer lugar.
+  if (!produtividadeSyncPendente){
+    produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+    produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+  }
   populateVeiculosSelect();
   populateStatusFilter();
   populateFiltroTipoProdutividade();
   populateFiltroTecnicoProdutividade();
   renderAll();
+  // se o Painel do Colaborador estiver aberto, redesenha ele também — senão
+  // ele fica com os cartões/mês de antes do refresh enquanto os dados por
+  // baixo já mudaram, e clicar num mês pra ver o analítico passa a falhar.
+  const viewColaborador = document.getElementById('mj-view-colaborador');
+  if (viewColaborador && viewColaborador.style.display !== 'none'){
+    try{ renderPainelColaborador(); }catch(err){ console.error('Erro ao atualizar Painel do Colaborador', err); }
+  }
   return !!(sharedTickets || sharedPessoas);
 }
 window.OPS_ON_REFRESH = initPage;
