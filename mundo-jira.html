@@ -1184,19 +1184,32 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
     paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
-    await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    await OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
 
+    // Atualiza a tela JÁ, com os dados calculados localmente — sem esperar
+    // a ida e volta até a planilha do site, que pode levar vários
+    // segundos. A sincronização roda em segundo plano (o toast "☁️
+    // Sincronizando..." avisa quando terminar ou falhar), mas o painel do
+    // colaborador não fica mais preso esperando ela.
     renderRelatorioImportacaoProdutividade(aceitos, descartados, meses);
-
-    if (!aceitos.length){
-      alert(`⚠️ A planilha foi lida, mas nenhum dos ${descartados.length} nome(s) encontrados entrou no Painel do Colaborador — veja a lista de motivos logo acima do painel, embaixo do botão de importar.`);
-    } else {
-      alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${aceitos.length} técnico(s) recalculados.${descartados.length ? `\n${descartados.length} nome(s) da planilha foram ignorados — veja os motivos na tela, embaixo do botão de importar.` : ''}\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
-    }
     populateFiltroTipoProdutividade();
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
+
+    OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
+    OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+
+    // O alert() é uma caixa de diálogo síncrona: se ele disparar logo depois
+    // de mexer no DOM, o navegador às vezes trava a aba antes de chegar a
+    // pintar as mudanças na tela (só aparecendo depois, quando algo força um
+    // redesenho, como trocar de aba e voltar). O setTimeout(0) dá um respiro
+    // pro navegador desenhar o painel primeiro, e só então mostra o aviso.
+    setTimeout(() => {
+      if (!aceitos.length){
+        alert(`⚠️ A planilha foi lida, mas nenhum dos ${descartados.length} nome(s) encontrados entrou no Painel do Colaborador — veja a lista de motivos logo acima do painel, embaixo do botão de importar.`);
+      } else {
+        alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${aceitos.length} técnico(s) recalculados.${descartados.length ? `\n${descartados.length} nome(s) da planilha foram ignorados — veja os motivos na tela, embaixo do botão de importar.` : ''}\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso ☁️ no canto da tela). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+      }
+    }, 0);
   }
 });
 
