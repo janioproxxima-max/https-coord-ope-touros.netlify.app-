@@ -523,7 +523,7 @@ const OPS = (() => {
   // Aplica também a regra do plano 2R/3R/4R (ativação ou troca de endereço
   // com esses planos vale 2,40 pontos, sobrescrevendo o valor da tabela).
   function lookupProdutividade(descricaoEncerramento, tipoCurto, planoProduto){
-    const n = normalize(descricaoEncerramento);
+    const n = normalize(descricaoEncerramento).replace(/\.+$/, ''); // ignora ponto final
     const found = PRODUTIVIDADE_CATALOG.find(c => c.norm === n);
     let pontos = found ? found.pontos : null;
     const produtivo = found ? found.produtivo : null;

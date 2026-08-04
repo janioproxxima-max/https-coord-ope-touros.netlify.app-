@@ -825,6 +825,16 @@ function calcularQuartis(itens){ // itens: [{ref, media}] — devolve com .quart
   return ordenado;
 }
 
+const TIPOS_REPARO_VT = ['SEM ACESSO', 'CABO BAIXO', 'PROBLEMA RECORRENTE', 'DIFICULDADE DE ACESSO', 'RETENÇÃO CLIENTE CRITICO', 'AÇÕES PREVENTIVAS'];
+
+function segundaDaSemana(dt){ // devolve a data (só dia) da segunda-feira daquela semana
+  const d = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const diaSemana = d.getDay(); // 0=domingo
+  const deslocamento = diaSemana === 0 ? 6 : diaSemana - 1; // quantos dias voltar até a segunda
+  d.setDate(d.getDate() - deslocamento);
+  return d;
+}
+
 function importarProdutividadeBruta(file){
   return new Promise((resolve) => {
     OPS.readSpreadsheetFile(file, (rows) => {
@@ -841,6 +851,8 @@ function importarProdutividadeBruta(file){
       const idxDescricao = idx('Descrição do Encerramento');
       const idxPlano = idx('Plano/Produto');
       const idxDataFim = idx('Data/Hora Fim do Atendimento');
+      const idxDataDeslocamento = idx('Data/Hora Deslocamento');
+      const idxNumeroCliente = idx('Nº Cliente');
       const idxSupervisor = idx('Supervisor');
       if (idxResponsavel === -1 || idxDescricao === -1){
         alert('Faltou alguma coluna esperada (Responsável / Descrição do Encerramento). Confere se essa é a planilha certa.');
@@ -848,15 +860,18 @@ function importarProdutividadeBruta(file){
         return;
       }
 
-      // tecnico -> mesKey -> { pontos, dias:Set, supervisor }
+      // tecnico -> mesKey -> { pontos, dias:Set, produtivos, improdutivos, temposAtendimento:[], supervisor }
       const agregado = {};
+      // "tecnico|clienteId" -> [{ data, mesKey }] — só reparo produtivo, pra detectar recorrência
+      const ocorrenciasReparo = {};
+
       for (let i = headerRowIdx + 1; i < rows.length; i++){
         const row = rows[i];
         const tecnico = (row[idxResponsavel] || '').toString().trim();
         if (!tecnico) continue;
         const svc = OPS.lookupService(row[idxTipoServico] || '');
         const prod = OPS.lookupProdutividade(row[idxDescricao] || '', svc.tipoCurto, row[idxPlano] || '');
-        if (!prod.produtivo || !prod.pontos) continue;
+        if (prod.produtivo == null) continue; // descrição não catalogada — não conta nem como produtivo nem improdutivo
 
         const dt = OPS.parseBRDateTime(row[idxDataFim] || '');
         if (!dt) continue;
@@ -864,13 +879,51 @@ function importarProdutividadeBruta(file){
         const diaKey = dt.toISOString().slice(0, 10);
 
         agregado[tecnico] = agregado[tecnico] || {};
-        agregado[tecnico][mesKey] = agregado[tecnico][mesKey] || { pontos: 0, dias: new Set(), supervisor: '' };
-        agregado[tecnico][mesKey].pontos += prod.pontos;
-        agregado[tecnico][mesKey].dias.add(diaKey);
-        if (idxSupervisor >= 0 && row[idxSupervisor]) agregado[tecnico][mesKey].supervisor = row[idxSupervisor].toString().trim();
+        agregado[tecnico][mesKey] = agregado[tecnico][mesKey] || {
+          pontos: 0, dias: new Set(), produtivos: 0, improdutivos: 0, temposAtendimento: [], recorrencias: 0, supervisor: '',
+        };
+        const bucket = agregado[tecnico][mesKey];
+
+        if (prod.produtivo){
+          bucket.produtivos += 1;
+          bucket.pontos += prod.pontos || 0;
+          bucket.dias.add(diaKey);
+        } else {
+          bucket.improdutivos += 1;
+        }
+        if (idxSupervisor >= 0 && row[idxSupervisor]) bucket.supervisor = row[idxSupervisor].toString().trim();
+
+        // tempo de atendimento: do início do deslocamento até o fechamento
+        if (idxDataDeslocamento >= 0){
+          const dtDeslocamento = OPS.parseBRDateTime(row[idxDataDeslocamento] || '');
+          if (dtDeslocamento && dt > dtDeslocamento){
+            bucket.temposAtendimento.push((dt - dtDeslocamento) / 3600000); // em horas
+          }
+        }
+
+        // reparo produtivo com cliente identificado — candidato a recorrência
+        if (prod.produtivo && TIPOS_REPARO_VT.includes(svc.tipoCurto) && idxNumeroCliente >= 0){
+          const clienteId = (row[idxNumeroCliente] || '').toString().trim();
+          if (clienteId){
+            const chave = tecnico + '|' + clienteId;
+            (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({ data: dt, mesKey });
+          }
+        }
       }
 
       if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); resolve(null); return; }
+
+      // detecta recorrência: mesmo técnico + mesmo cliente + outro reparo em até 30 dias
+      Object.entries(ocorrenciasReparo).forEach(([chave, lista]) => {
+        const tecnico = chave.split('|')[0];
+        lista.sort((a, b) => a.data - b.data);
+        for (let i = 1; i < lista.length; i++){
+          const diffDias = (lista[i].data - lista[i - 1].data) / 86400000;
+          if (diffDias <= 30 && agregado[tecnico] && agregado[tecnico][lista[i].mesKey]){
+            agregado[tecnico][lista[i].mesKey].recorrencias += 1;
+          }
+        }
+      });
 
       // calcula quartil comparando todo mundo dentro de cada mês
       const mesesEncontrados = new Set();
@@ -879,7 +932,7 @@ function importarProdutividadeBruta(file){
       mesesEncontrados.forEach(mesKey => {
         const itens = [];
         Object.entries(agregado).forEach(([tecnico, porMes]) => {
-          if (porMes[mesKey]) itens.push({ tecnico, media: porMes[mesKey].pontos / porMes[mesKey].dias.size });
+          if (porMes[mesKey] && porMes[mesKey].dias.size) itens.push({ tecnico, media: porMes[mesKey].pontos / porMes[mesKey].dias.size });
         });
         calcularQuartis(itens).forEach(item => { quartilPorTecnicoMes[`${item.tecnico}|${mesKey}`] = item.quartil; });
       });
@@ -895,6 +948,26 @@ function mediaSimples(lista){
   return validos.reduce((a, b) => a + b, 0) / validos.length;
 }
 
+// média ponderada por dias trabalhados — soma de todos os pontos do grupo
+// dividido pela soma de todos os dias trabalhados do grupo. Evita que um
+// técnico com pouquíssimos dias registrados (ou um supervisor/coordenador
+// que aparece esporadicamente como responsável de algum chamado avulso)
+// puxe a média do grupo pra baixo com o mesmo peso de quem trabalhou o mês
+// inteiro.
+function mediaPonderada(listaTecnicos, mesKey){
+  let pontosTotal = 0, diasTotal = 0;
+  listaTecnicos.forEach(p => {
+    (p.historicoMensal || []).forEach(h => {
+      if (mesKey && h.mesKey !== mesKey) return;
+      if (h.media != null && h.diasTrabalhados){
+        pontosTotal += h.media * h.diasTrabalhados;
+        diasTotal += h.diasTrabalhados;
+      }
+    });
+  });
+  return diasTotal > 0 ? pontosTotal / diasTotal : null;
+}
+
 function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
   let mesesAtualizados = new Set();
@@ -908,12 +981,19 @@ function mesclarProdutividade(resultado){
     Object.entries(porMes).forEach(([mesKey, dados]) => {
       mesesAtualizados.add(mesKey);
       if (dados.supervisor) registro.supervisor = dados.supervisor;
+      const totalOS = dados.produtivos + dados.improdutivos;
       const novoMes = {
         mesKey,
         mes: formatarMes(mesKey),
-        media: dados.pontos / dados.dias.size,
+        media: dados.dias.size ? dados.pontos / dados.dias.size : null,
         diasTrabalhados: dados.dias.size,
         quartil: quartilPorTecnicoMes[`${tecnico}|${mesKey}`] || null,
+        produtivos: dados.produtivos,
+        improdutivos: dados.improdutivos,
+        improdutividadePct: totalOS ? (dados.improdutivos / totalOS) * 100 : null,
+        recorrencias: dados.recorrencias,
+        recorrenciaPct: dados.produtivos ? (dados.recorrencias / dados.produtivos) * 100 : null,
+        tempoMedioAtendimento: dados.temposAtendimento.length ? mediaSimples(dados.temposAtendimento) : null,
       };
       const iExistente = registro.historicoMensal.findIndex(h => h.mesKey === mesKey);
       if (iExistente >= 0) registro.historicoMensal[iExistente] = novoMes;
@@ -960,6 +1040,13 @@ function quartilBadgeClasse(q){
   return 'neutral';
 }
 
+function formatarHoras(h){
+  if (h == null) return '—';
+  const horas = Math.floor(h);
+  const minutos = Math.round((h - horas) * 60);
+  return `${horas}h${String(minutos).padStart(2, '0')}`;
+}
+
 function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
   return `
     <div class="panel" style="margin-bottom:12px;padding:14px 16px">
@@ -969,11 +1056,16 @@ function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${(historicoMensal || []).map(h => `
-          <div style="background:var(--bg-raised);border-radius:8px;padding:8px 12px;min-width:90px;text-align:center">
+          <div style="background:var(--bg-raised);border-radius:8px;padding:8px 12px;min-width:120px;text-align:center">
             <div style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase">${h.mes || '—'}</div>
             <div style="font-size:16px;font-weight:700;margin:2px 0">${h.media != null ? h.media.toFixed(2) : '—'}</div>
             ${h.quartil ? `<span class="badge ${quartilBadgeClasse(h.quartil)}" style="font-size:10px"><span class="dot"></span>${h.quartil}</span>` : ''}
             <div style="font-size:10px;color:var(--ink-faint);margin-top:3px">${h.diasTrabalhados || 0}d trabalhados</div>
+            <div style="border-top:1px solid var(--line-soft);margin-top:6px;padding-top:6px;font-size:10px;text-align:left;color:var(--ink-dim)">
+              <div>📉 Improdutividade: <b style="color:${h.improdutividadePct > 5 ? 'var(--crit)' : 'var(--ink)'}">${h.improdutividadePct != null ? h.improdutividadePct.toFixed(1) + '%' : '—'}</b></div>
+              <div>🔁 Recorrência: <b style="color:${h.recorrenciaPct > 5 ? 'var(--crit)' : 'var(--ink)'}">${h.recorrenciaPct != null ? h.recorrenciaPct.toFixed(1) + '%' : '—'}</b>${h.recorrencias ? ` (${h.recorrencias})` : ''}</div>
+              <div>⏱ Tempo médio: <b>${formatarHoras(h.tempoMedioAtendimento)}</b></div>
+            </div>
           </div>
         `).join('')}
       </div>
@@ -986,6 +1078,8 @@ function ehInstaladorReparador(nomeTecnico){
   if (!colabEncontrado) return false;
   return OPS.normalize(colabEncontrado.cargo).includes('instalador') && OPS.normalize(colabEncontrado.cargo).includes('reparador');
 }
+
+let mesProdutividadeSelecionado = null;
 
 function renderPainelColaborador(){
   const papel = papelAtual();
@@ -1000,6 +1094,10 @@ function renderPainelColaborador(){
     conteudo.innerHTML = `<div class="empty-state"><div class="glyph">📊</div><h3>Nenhum dado de produtividade importado ainda</h3><p>Clique em "⇪ Importar planilha de produtividade" pra trazer os dados. Só aparecem aqui colaboradores cadastrados em Gestão de Pessoas com o cargo "Instalador e Reparador de Operações".</p></div>`;
     return;
   }
+
+  // meses disponíveis, do mais recente pro mais antigo
+  const todosMeses = [...new Set(produtividadeValida.flatMap(p => (p.historicoMensal || []).map(h => h.mesKey)))].sort().reverse();
+  if (!mesProdutividadeSelecionado || !todosMeses.includes(mesProdutividadeSelecionado)) mesProdutividadeSelecionado = todosMeses[0];
 
   if (papel === 'tecnico'){
     const meu = colab ? produtividadeValida.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
@@ -1016,30 +1114,43 @@ function renderPainelColaborador(){
     if (papel === 'supervisor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome));
     if (papel === 'inspetor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
 
-    let html = '';
+    let html = `
+      <div class="field" style="max-width:220px;margin-bottom:14px">
+        <label for="mj-prod-mes-select">Mês de referência das médias abaixo</label>
+        <select id="mj-prod-mes-select">
+          ${todosMeses.map(m => `<option value="${m}" ${m === mesProdutividadeSelecionado ? 'selected' : ''}>${formatarMes(m)}</option>`).join('')}
+        </select>
+      </div>
+    `;
 
     // médias agregadas por supervisor (só faz sentido pro coordenador ver todo mundo)
     if (papel === 'coordenador'){
       const porSupervisor = {};
       produtividadeValida.forEach(p => {
         const sup = p.supervisor || '(sem supervisor)';
-        (porSupervisor[sup] = porSupervisor[sup] || []).push(p.ppcMedio);
+        (porSupervisor[sup] = porSupervisor[sup] || []).push(p);
       });
-      const mediaGeral = mediaSimples(produtividadeValida.map(p => p.ppcMedio));
+      const mediaGeral = mediaPonderada(produtividadeValida, mesProdutividadeSelecionado);
       html += `<div class="stat-row" style="margin-bottom:16px">`;
-      html += `<div class="stat-card brand"><div class="label">Média geral da Coordenação</div><div class="value">${mediaGeral != null ? mediaGeral.toFixed(2) : '—'}</div></div>`;
+      html += `<div class="stat-card brand"><div class="label">Média da Coordenação em ${formatarMes(mesProdutividadeSelecionado)} (${produtividadeValida.length} colaborador(es))</div><div class="value">${mediaGeral != null ? mediaGeral.toFixed(2) : '—'}</div></div>`;
       Object.entries(porSupervisor).forEach(([sup, lista]) => {
-        const m = mediaSimples(lista);
-        html += `<div class="stat-card"><div class="label">${sup}</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div>`;
+        const m = mediaPonderada(lista, mesProdutividadeSelecionado);
+        html += `<div class="stat-card"><div class="label">${sup} (${lista.length})</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div>`;
       });
       html += `</div>`;
     } else if ((papel === 'supervisor' || papel === 'inspetor') && colab){
-      const m = mediaSimples(visiveis.map(p => p.ppcMedio));
-      html += `<div class="stat-row" style="margin-bottom:16px"><div class="stat-card brand"><div class="label">Média do seu time</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div></div>`;
+      const m = mediaPonderada(visiveis, mesProdutividadeSelecionado);
+      html += `<div class="stat-row" style="margin-bottom:16px"><div class="stat-card brand"><div class="label">Média do seu time em ${formatarMes(mesProdutividadeSelecionado)} (${visiveis.length} colaborador(es))</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div></div>`;
     }
 
     html += visiveis.map(p => linhaHistoricoHTML(`${p.tecnico} <span style="font-weight:400;color:var(--ink-faint);font-size:12px">— ${p.supervisor}</span>`, p.historicoMensal, p.ppcMedio, p.tendencia)).join('');
     conteudo.innerHTML = html || '<p style="color:var(--ink-dim);font-size:13px">Nenhum técnico encontrado pro seu time nessa planilha.</p>';
+
+    const seletorMes = document.getElementById('mj-prod-mes-select');
+    if (seletorMes) seletorMes.addEventListener('change', (e) => {
+      mesProdutividadeSelecionado = e.target.value;
+      renderPainelColaborador();
+    });
   }
 }
 
