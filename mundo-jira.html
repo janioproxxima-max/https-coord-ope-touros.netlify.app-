@@ -113,9 +113,13 @@
       <label for="mj-prod-f-supervisor">Supervisor</label>
       <select id="mj-prod-f-supervisor">
         <option value="">Todos</option>
-        <option value="JOEL TAVARES">Joel Tavares</option>
-        <option value="MARCELLO ROCHA">Marcello Rocha</option>
+        <option value="JOEL DIAS TAVARES">Joel Tavares</option>
+        <option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="mj-prod-f-tecnico">Técnico</label>
+      <select id="mj-prod-f-tecnico"><option value="">Todos</option></select>
     </div>
     <div class="field">
       <label for="mj-prod-f-tipo">Tipo de serviço (gráficos)</label>
@@ -131,7 +135,7 @@
 
 <!-- Modal: gráfico por tipo de serviço (abre ao clicar num mês) -->
 <div class="modal-backdrop" id="mj-modal-grafico-tipo" style="display:none">
-  <div class="modal" style="max-width:620px">
+  <div class="modal" style="max-width:680px">
     <h3 id="mj-grafico-titulo">Detalhamento por tipo de serviço</h3>
     <p class="modal-sub" id="mj-grafico-subtitulo"></p>
     <div class="qf-tiles" id="mj-grafico-metricas" style="margin-bottom:14px">
@@ -140,7 +144,10 @@
       <button type="button" class="qf-tile" data-metrica="improdutividade">📉 Improdutividade</button>
       <button type="button" class="qf-tile" data-metrica="tma">⏱ TMA</button>
     </div>
-    <div style="position:relative;height:300px"><canvas id="mj-grafico-canvas"></canvas></div>
+    <div style="position:relative;height:260px"><canvas id="mj-grafico-canvas"></canvas></div>
+    <div id="mj-grafico-detalhe" style="margin-top:14px;max-height:220px;overflow-y:auto">
+      <p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver o detalhamento.</p>
+    </div>
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="mj-btn-fechar-grafico">Fechar</button>
     </div>
@@ -341,6 +348,10 @@ let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
 let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+// detalhe linha a linha da última importação — só em memória (não sincroniza
+// entre usuários; existe pra alimentar os cliques de detalhamento nos gráficos)
+let detalhesRegistrosProdutividade = [];
+let paresRecorrenciaProdutividade = [];
 
 function comentariosDoTicket(ticketId){
   return comentarios.filter(c => c.ticketId === ticketId).sort((a,b) => new Date(a.data) - new Date(b.data));
@@ -885,6 +896,10 @@ function importarProdutividadeBruta(file){
       const idxDataDeslocamento = idx('Data/Hora Deslocamento');
       const idxNumeroCliente = idx('Nº Cliente');
       const idxSupervisor = idx('Supervisor');
+      const idxTecnicoAuxiliar = idx('Técnico Auxiliar');
+      const idxProtocolo = idx('Nº. Ordem Serviço');
+      const idxArea = idx('Área');
+      const idxLocalidade = idx('Localidade');
       if (idxResponsavel === -1 || idxDescricao === -1){
         alert('Faltou alguma coluna esperada (Responsável / Descrição do Encerramento). Confere se essa é a planilha certa.');
         resolve(null);
@@ -895,26 +910,17 @@ function importarProdutividadeBruta(file){
       const agregado = {};
       // "tecnico|clienteId" -> [{ data, mesKey }] — só reparo produtivo, pra detectar recorrência
       const ocorrenciasReparo = {};
+      // detalhe linha a linha, por técnico+mês+tipo — usado só pra mostrar ao clicar (não é sincronizado)
+      const detalhesRegistros = [];
 
-      for (let i = headerRowIdx + 1; i < rows.length; i++){
-        const row = rows[i];
-        const tecnico = (row[idxResponsavel] || '').toString().trim();
-        if (!tecnico) continue;
-        const svc = OPS.lookupService(row[idxTipoServico] || '');
-        const prod = OPS.lookupProdutividade(row[idxDescricao] || '', svc.tipoCurto, row[idxPlano] || '');
-        if (prod.produtivo == null) continue; // descrição não catalogada — não conta nem como produtivo nem improdutivo
-
-        const dt = OPS.parseBRDateTime(row[idxDataFim] || '');
-        if (!dt) continue;
-        const mesKey = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-        const diaKey = dt.toISOString().slice(0, 10);
-
+      // credita um registro pra um técnico (usado tanto pro Responsável quanto
+      // pro Técnico Auxiliar — os dois ganham crédito cheio do mesmo serviço)
+      function creditarTecnico(tecnico, svc, prod, dt, mesKey, diaKey, tipo){
         agregado[tecnico] = agregado[tecnico] || {};
         agregado[tecnico][mesKey] = agregado[tecnico][mesKey] || {
           pontos: 0, dias: new Set(), produtivos: 0, improdutivos: 0, temposAtendimento: [], recorrencias: 0, supervisor: '', porTipo: {},
         };
         const bucket = agregado[tecnico][mesKey];
-        const tipo = svc.tipoCurto || (row[idxTipoServico] || '(sem tipo)').toString().trim();
         bucket.porTipo[tipo] = bucket.porTipo[tipo] || { produtivos: 0, improdutivos: 0, pontos: 0, temposAtendimento: [], recorrencias: 0 };
         const bucketTipo = bucket.porTipo[tipo];
 
@@ -928,31 +934,84 @@ function importarProdutividadeBruta(file){
           bucket.improdutivos += 1;
           bucketTipo.improdutivos += 1;
         }
-        if (idxSupervisor >= 0 && row[idxSupervisor]) bucket.supervisor = row[idxSupervisor].toString().trim();
 
-        // tempo de atendimento: do início do deslocamento até o fechamento
-        if (idxDataDeslocamento >= 0){
-          const dtDeslocamento = OPS.parseBRDateTime(row[idxDataDeslocamento] || '');
-          if (dtDeslocamento && dt > dtDeslocamento){
-            const horas = (dt - dtDeslocamento) / 3600000;
-            bucket.temposAtendimento.push(horas);
-            bucketTipo.temposAtendimento.push(horas);
-          }
+        if (prod.produtivo && TIPOS_REPARO_VT.includes(svc.tipoCurto)){
+          return true; // sinaliza que esse técnico é candidato a recorrência nesse registro
         }
+        return false;
+      }
 
-        // reparo produtivo com cliente identificado — candidato a recorrência
-        if (prod.produtivo && TIPOS_REPARO_VT.includes(svc.tipoCurto) && idxNumeroCliente >= 0){
-          const clienteId = (row[idxNumeroCliente] || '').toString().trim();
-          if (clienteId){
-            const chave = tecnico + '|' + clienteId;
-            (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({ data: dt, mesKey, tipo });
+      for (let i = headerRowIdx + 1; i < rows.length; i++){
+        const row = rows[i];
+        const responsavel = (row[idxResponsavel] || '').toString().trim();
+        // "18000144 - MURILO TENORIO TORRES" -> "MURILO TENORIO TORRES"
+        const tecnicoAuxiliar = idxTecnicoAuxiliar >= 0
+          ? (row[idxTecnicoAuxiliar] || '').toString().replace(/^\s*\d+\s*-\s*/, '').trim()
+          : '';
+        if (!responsavel && !tecnicoAuxiliar) continue;
+
+        const svc = OPS.lookupService(row[idxTipoServico] || '');
+        const prod = OPS.lookupProdutividade(row[idxDescricao] || '', svc.tipoCurto, row[idxPlano] || '');
+        if (prod.produtivo == null) continue; // descrição não catalogada — não conta nem como produtivo nem improdutivo
+
+        const dt = OPS.parseBRDateTime(row[idxDataFim] || '');
+        if (!dt) continue;
+        const mesKey = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        const diaKey = dt.toISOString().slice(0, 10);
+        const tipo = svc.tipoCurto || (row[idxTipoServico] || '(sem tipo)').toString().trim();
+
+        // técnicos que ganham crédito por esse registro: Responsável + Técnico
+        // Auxiliar (se for alguém diferente) — os dois somam cheio
+        const tecnicosDoRegistro = [...new Set([responsavel, tecnicoAuxiliar].filter(Boolean))];
+
+        tecnicosDoRegistro.forEach(tecnico => {
+          const ehCandidatoRecorrencia = creditarTecnico(tecnico, svc, prod, dt, mesKey, diaKey, tipo);
+          const bucket = agregado[tecnico][mesKey];
+          const bucketTipo = bucket.porTipo[tipo];
+          if (idxSupervisor >= 0 && row[idxSupervisor]) bucket.supervisor = row[idxSupervisor].toString().trim();
+
+          let horasAtendimento = null;
+          // tempo de atendimento: do início do deslocamento até o fechamento
+          if (idxDataDeslocamento >= 0){
+            const dtDeslocamento = OPS.parseBRDateTime(row[idxDataDeslocamento] || '');
+            if (dtDeslocamento && dt > dtDeslocamento){
+              horasAtendimento = (dt - dtDeslocamento) / 3600000;
+              bucket.temposAtendimento.push(horasAtendimento);
+              bucketTipo.temposAtendimento.push(horasAtendimento);
+            }
           }
-        }
+
+          detalhesRegistros.push({
+            tecnico, mesKey, tipo,
+            protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
+            area: idxArea >= 0 ? (row[idxArea] || '').toString().trim() : '',
+            localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
+            descricao: (row[idxDescricao] || '').toString().trim(),
+            produtivo: prod.produtivo,
+            tma: horasAtendimento,
+          });
+
+          // reparo produtivo com cliente identificado — candidato a recorrência
+          if (ehCandidatoRecorrencia && idxNumeroCliente >= 0){
+            const clienteId = (row[idxNumeroCliente] || '').toString().trim();
+            if (clienteId){
+              const chave = tecnico + '|' + clienteId;
+              (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({
+                data: dt, mesKey, tipo,
+                protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
+                area: idxArea >= 0 ? (row[idxArea] || '').toString().trim() : '',
+                localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
+                descricao: (row[idxDescricao] || '').toString().trim(),
+              });
+            }
+          }
+        });
       }
 
       if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); resolve(null); return; }
 
       // detecta recorrência: mesmo técnico + mesmo cliente + outro reparo em até 30 dias
+      const paresRecorrencia = []; // { tecnico, mesKey, tipo, anterior, atual }
       Object.entries(ocorrenciasReparo).forEach(([chave, lista]) => {
         const tecnico = chave.split('|')[0];
         lista.sort((a, b) => a.data - b.data);
@@ -962,6 +1021,10 @@ function importarProdutividadeBruta(file){
             const mesDoTecnico = agregado[tecnico][lista[i].mesKey];
             mesDoTecnico.recorrencias += 1;
             if (mesDoTecnico.porTipo[lista[i].tipo]) mesDoTecnico.porTipo[lista[i].tipo].recorrencias += 1;
+            paresRecorrencia.push({
+              tecnico, mesKey: lista[i].mesKey, tipo: lista[i].tipo,
+              anterior: lista[i - 1], atual: lista[i],
+            });
           }
         }
       });
@@ -978,7 +1041,7 @@ function importarProdutividadeBruta(file){
         calcularQuartis(itens).forEach(item => { quartilPorTecnicoMes[`${item.tecnico}|${mesKey}`] = item.quartil; });
       });
 
-      resolve({ agregado, quartilPorTecnicoMes });
+      resolve({ agregado, quartilPorTecnicoMes, detalhesRegistros, paresRecorrencia });
     });
   });
 }
@@ -1013,15 +1076,23 @@ function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
   let mesesAtualizados = new Set();
 
+  function supervisorReal(nomeTecnico){
+    const colab = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
+    return colab && colab.gestor ? colab.gestor.trim() : '';
+  }
+
   Object.entries(agregado).forEach(([tecnico, porMes]) => {
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
       produtividade.push(registro);
     }
+    // o cadastro de Gestão de Pessoas é a fonte confiável de supervisor — a
+    // coluna "Supervisor" da planilha bruta vem quase sempre vazia
+    registro.supervisor = supervisorReal(tecnico) || registro.supervisor;
     Object.entries(porMes).forEach(([mesKey, dados]) => {
       mesesAtualizados.add(mesKey);
-      if (dados.supervisor) registro.supervisor = dados.supervisor;
+      // supervisor já foi definido acima a partir de Gestão de Pessoas
       const totalOS = dados.produtivos + dados.improdutivos;
       const novoMes = {
         mesKey,
@@ -1066,10 +1137,13 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
   e.target.value = '';
   if (resultado){
     const meses = mesclarProdutividade(resultado);
+    detalhesRegistrosProdutividade = resultado.detalhesRegistros;
+    paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).`);
+    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nO detalhamento (clicar nos gráficos) só fica disponível nesta sessão, até você sair da página — quem quiser ver o detalhe precisa ter importado a planilha também.`);
     populateFiltroTipoProdutividade();
+    populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
   }
 });
@@ -1170,6 +1244,8 @@ function renderPainelColaborador(){
     if (papel === 'inspetor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
     const filtroSupervisor = document.getElementById('mj-prod-f-supervisor') ? document.getElementById('mj-prod-f-supervisor').value : '';
     if (papel === 'coordenador' && filtroSupervisor) visiveis = visiveis.filter(p => nomesEquivalentes(p.supervisor, filtroSupervisor));
+    const filtroTecnico = document.getElementById('mj-prod-f-tecnico') ? document.getElementById('mj-prod-f-tecnico').value : '';
+    if (filtroTecnico) visiveis = visiveis.filter(p => p.tecnico === filtroTecnico);
 
     let html = `
       <div class="field" style="max-width:220px;margin-bottom:14px">
@@ -1238,6 +1314,30 @@ function abrirGraficoTipo(tecnico, mesKey){
   document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
 }
 
+const plugRotulosSempreVisiveis = {
+  id: 'rotulosSempreVisiveis',
+  afterDatasetsDraw(chart){
+    const { ctx } = chart;
+    chart.data.datasets.forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((bar, i) => {
+        const valor = dataset.data[i];
+        if (valor == null) return;
+        const texto = mjGraficoAtual.metrica === 'improdutividade' ? valor.toFixed(1) + '%'
+          : mjGraficoAtual.metrica === 'tma' ? formatarHoras(valor)
+          : (Number.isInteger(valor) ? String(valor) : valor.toFixed(2));
+        ctx.save();
+        ctx.fillStyle = '#e6ebf2';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(texto, bar.x + 6, bar.y);
+        ctx.restore();
+      });
+    });
+  },
+};
+
 function renderGraficoTipo(){
   const registro = produtividade.find(p => p.tecnico === mjGraficoAtual.tecnico);
   const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mjGraficoAtual.mesKey) : null;
@@ -1258,6 +1358,7 @@ function renderGraficoTipo(){
   });
   // ordena do maior pro menor, pra já mostrar quem mais pesa naquela métrica
   const combinado = tipos.map((t, i) => ({ t, v: valores[i] })).sort((a, b) => b.v - a.v);
+  mjGraficoAtual.tiposOrdenados = combinado.map(c => c.t); // guarda pra saber o que foi clicado
 
   if (mjChartTipo) mjChartTipo.destroy();
   mjChartTipo = new Chart(document.getElementById('mj-grafico-canvas'), {
@@ -1268,13 +1369,69 @@ function renderGraficoTipo(){
     },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return;
+        const tipoClicado = mjGraficoAtual.tiposOrdenados[elementos[0].index];
+        abrirDetalheTipo(tipoClicado);
+      },
+      onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
       scales: {
         x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
         y: { ticks: { color: '#8a97ab' }, grid: { display: false } },
       },
       plugins: { legend: { display: false }, title: { display: true, text: METRICA_LABEL[metrica].titulo, color: '#e6ebf2' } },
     },
+    plugins: [plugRotulosSempreVisiveis],
   });
+  document.getElementById('mj-grafico-detalhe').innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver o detalhamento.</p>';
+}
+
+function abrirDetalheTipo(tipo){
+  const { tecnico, mesKey, metrica } = mjGraficoAtual;
+  const container = document.getElementById('mj-grafico-detalhe');
+
+  if (metrica === 'recorrencia'){
+    const pares = paresRecorrenciaProdutividade.filter(p => p.tecnico === tecnico && p.mesKey === mesKey && p.tipo === tipo);
+    if (!pares.length){
+      container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem detalhe disponível — reimporte a planilha nesta sessão pra ver os pares de recorrência.</p>';
+      return;
+    }
+    container.innerHTML = `
+      <div class="mj-grafico-detalhe-titulo">🔁 ${tipo} — ${pares.length} recorrência(s)</div>
+      <div class="mj-grafico-detalhe-lista">
+        ${pares.map(p => `
+          <div class="mj-grafico-detalhe-item">
+            <div class="mj-grafico-detalhe-item-linha"><b>1ª visita</b> — ${OPS.formatDateBR(p.anterior.data)} · protocolo ${p.anterior.protocolo || '—'} · ${p.anterior.descricao}</div>
+            <div class="mj-grafico-detalhe-item-linha"><b>Voltou</b> — ${OPS.formatDateBR(p.atual.data)} · protocolo ${p.atual.protocolo || '—'} · ${p.atual.descricao}</div>
+            <div class="mj-grafico-detalhe-item-linha" style="color:var(--ink-faint)">${p.atual.area || '—'} · ${p.atual.localidade || '—'}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    return;
+  }
+
+  // produtividade, improdutividade e TMA usam a mesma lista de protocolos
+  let registros = detalhesRegistrosProdutividade.filter(r => r.tecnico === tecnico && r.mesKey === mesKey && r.tipo === tipo);
+  if (metrica === 'improdutividade') registros = registros.filter(r => !r.produtivo);
+  else registros = registros.filter(r => r.produtivo);
+
+  if (!registros.length){
+    container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem detalhe disponível — reimporte a planilha nesta sessão pra ver os protocolos.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <div class="mj-grafico-detalhe-titulo">${tipo} — ${registros.length} protocolo(s)</div>
+    <div class="mj-grafico-detalhe-lista">
+      ${registros.map(r => `
+        <div class="mj-grafico-detalhe-item">
+          <div class="mj-grafico-detalhe-item-linha"><b>${r.protocolo || '—'}</b>${metrica === 'tma' && r.tma != null ? ` · ⏱ ${formatarHoras(r.tma)}` : ''}</div>
+          <div class="mj-grafico-detalhe-item-linha">${r.descricao}</div>
+          <div class="mj-grafico-detalhe-item-linha" style="color:var(--ink-faint)">${r.area || '—'} · ${r.localidade || '—'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(btn => {
@@ -1291,6 +1448,7 @@ document.getElementById('mj-modal-grafico-tipo').addEventListener('click', e => 
 
 // ---------- filtros do Painel do Colaborador (supervisor / tipo de serviço) ----------
 document.getElementById('mj-prod-f-supervisor').addEventListener('change', renderPainelColaborador);
+document.getElementById('mj-prod-f-tecnico').addEventListener('change', renderPainelColaborador);
 document.getElementById('mj-prod-f-tipo').addEventListener('change', () => {
   if (document.getElementById('mj-modal-grafico-tipo').style.display !== 'none') renderGraficoTipo();
 });
@@ -1300,6 +1458,17 @@ function populateFiltroTipoProdutividade(){
   const tipos = [...new Set(produtividade.flatMap(p => (p.historicoMensal || []).flatMap(h => Object.keys(h.porTipo || {}))))].sort();
   sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
   if (tipos.includes(valorAtual)) sel.value = valorAtual;
+}
+
+function populateFiltroTecnicoProdutividade(){
+  const sel = document.getElementById('mj-prod-f-tecnico');
+  const valorAtual = sel.value;
+  const tecnicos = produtividade
+    .filter(p => ehInstaladorReparador(p.tecnico))
+    .map(p => p.tecnico)
+    .sort();
+  sel.innerHTML = '<option value="">Todos</option>' + tecnicos.map(t => `<option value="${t.replace(/"/g, '&quot;')}">${t}</option>`).join('');
+  if (tecnicos.includes(valorAtual)) sel.value = valorAtual;
 }
 
 async function initPage(){
@@ -1322,6 +1491,7 @@ async function initPage(){
   populateVeiculosSelect();
   populateStatusFilter();
   populateFiltroTipoProdutividade();
+  populateFiltroTecnicoProdutividade();
   renderAll();
   return !!(sharedTickets || sharedPessoas);
 }
