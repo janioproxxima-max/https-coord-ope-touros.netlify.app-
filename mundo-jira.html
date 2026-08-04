@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -108,12 +109,42 @@
   </div>
 
   <div class="panel toolbar">
+    <div class="field">
+      <label for="mj-prod-f-supervisor">Supervisor</label>
+      <select id="mj-prod-f-supervisor">
+        <option value="">Todos</option>
+        <option value="JOEL TAVARES">Joel Tavares</option>
+        <option value="MARCELLO ROCHA">Marcello Rocha</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="mj-prod-f-tipo">Tipo de serviço (gráficos)</label>
+      <select id="mj-prod-f-tipo"><option value="">Todos</option></select>
+    </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="mj-btn-importar-produtividade">⇪ Importar planilha de produtividade</button>
     <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
 
   <div id="mj-prod-conteudo"></div>
+</div>
+
+<!-- Modal: gráfico por tipo de serviço (abre ao clicar num mês) -->
+<div class="modal-backdrop" id="mj-modal-grafico-tipo" style="display:none">
+  <div class="modal" style="max-width:620px">
+    <h3 id="mj-grafico-titulo">Detalhamento por tipo de serviço</h3>
+    <p class="modal-sub" id="mj-grafico-subtitulo"></p>
+    <div class="qf-tiles" id="mj-grafico-metricas" style="margin-bottom:14px">
+      <button type="button" class="qf-tile active" data-metrica="produtividade">📊 Produtividade</button>
+      <button type="button" class="qf-tile" data-metrica="recorrencia">🔁 Recorrência</button>
+      <button type="button" class="qf-tile" data-metrica="improdutividade">📉 Improdutividade</button>
+      <button type="button" class="qf-tile" data-metrica="tma">⏱ TMA</button>
+    </div>
+    <div style="position:relative;height:300px"><canvas id="mj-grafico-canvas"></canvas></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="mj-btn-fechar-grafico">Fechar</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: novo chamado -->
@@ -880,16 +911,22 @@ function importarProdutividadeBruta(file){
 
         agregado[tecnico] = agregado[tecnico] || {};
         agregado[tecnico][mesKey] = agregado[tecnico][mesKey] || {
-          pontos: 0, dias: new Set(), produtivos: 0, improdutivos: 0, temposAtendimento: [], recorrencias: 0, supervisor: '',
+          pontos: 0, dias: new Set(), produtivos: 0, improdutivos: 0, temposAtendimento: [], recorrencias: 0, supervisor: '', porTipo: {},
         };
         const bucket = agregado[tecnico][mesKey];
+        const tipo = svc.tipoCurto || (row[idxTipoServico] || '(sem tipo)').toString().trim();
+        bucket.porTipo[tipo] = bucket.porTipo[tipo] || { produtivos: 0, improdutivos: 0, pontos: 0, temposAtendimento: [], recorrencias: 0 };
+        const bucketTipo = bucket.porTipo[tipo];
 
         if (prod.produtivo){
           bucket.produtivos += 1;
           bucket.pontos += prod.pontos || 0;
           bucket.dias.add(diaKey);
+          bucketTipo.produtivos += 1;
+          bucketTipo.pontos += prod.pontos || 0;
         } else {
           bucket.improdutivos += 1;
+          bucketTipo.improdutivos += 1;
         }
         if (idxSupervisor >= 0 && row[idxSupervisor]) bucket.supervisor = row[idxSupervisor].toString().trim();
 
@@ -897,7 +934,9 @@ function importarProdutividadeBruta(file){
         if (idxDataDeslocamento >= 0){
           const dtDeslocamento = OPS.parseBRDateTime(row[idxDataDeslocamento] || '');
           if (dtDeslocamento && dt > dtDeslocamento){
-            bucket.temposAtendimento.push((dt - dtDeslocamento) / 3600000); // em horas
+            const horas = (dt - dtDeslocamento) / 3600000;
+            bucket.temposAtendimento.push(horas);
+            bucketTipo.temposAtendimento.push(horas);
           }
         }
 
@@ -906,7 +945,7 @@ function importarProdutividadeBruta(file){
           const clienteId = (row[idxNumeroCliente] || '').toString().trim();
           if (clienteId){
             const chave = tecnico + '|' + clienteId;
-            (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({ data: dt, mesKey });
+            (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({ data: dt, mesKey, tipo });
           }
         }
       }
@@ -920,7 +959,9 @@ function importarProdutividadeBruta(file){
         for (let i = 1; i < lista.length; i++){
           const diffDias = (lista[i].data - lista[i - 1].data) / 86400000;
           if (diffDias <= 30 && agregado[tecnico] && agregado[tecnico][lista[i].mesKey]){
-            agregado[tecnico][lista[i].mesKey].recorrencias += 1;
+            const mesDoTecnico = agregado[tecnico][lista[i].mesKey];
+            mesDoTecnico.recorrencias += 1;
+            if (mesDoTecnico.porTipo[lista[i].tipo]) mesDoTecnico.porTipo[lista[i].tipo].recorrencias += 1;
           }
         }
       });
@@ -994,6 +1035,13 @@ function mesclarProdutividade(resultado){
         recorrencias: dados.recorrencias,
         recorrenciaPct: dados.produtivos ? (dados.recorrencias / dados.produtivos) * 100 : null,
         tempoMedioAtendimento: dados.temposAtendimento.length ? mediaSimples(dados.temposAtendimento) : null,
+        porTipo: Object.fromEntries(Object.entries(dados.porTipo || {}).map(([tipo, dt]) => [tipo, {
+          produtivos: dt.produtivos,
+          improdutivos: dt.improdutivos,
+          pontos: dt.pontos,
+          recorrencias: dt.recorrencias,
+          tempoMedioAtendimento: dt.temposAtendimento.length ? mediaSimples(dt.temposAtendimento) : null,
+        }])),
       };
       const iExistente = registro.historicoMensal.findIndex(h => h.mesKey === mesKey);
       if (iExistente >= 0) registro.historicoMensal[iExistente] = novoMes;
@@ -1021,6 +1069,7 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
     alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).`);
+    populateFiltroTipoProdutividade();
     renderPainelColaborador();
   }
 });
@@ -1047,7 +1096,8 @@ function formatarHoras(h){
   return `${horas}h${String(minutos).padStart(2, '0')}`;
 }
 
-function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
+function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia, tecnicoKey){
+  const meses = (historicoMensal || []).filter(h => /^\d{4}-\d{2}$/.test(h.mesKey)).sort((a, b) => a.mesKey.localeCompare(b.mesKey));
   return `
     <div class="panel" style="margin-bottom:12px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1055,8 +1105,8 @@ function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia){
         <span style="font-size:13px;color:var(--ink-dim)">PPC Médio: <b style="color:var(--ink)">${ppcMedio ? ppcMedio.toFixed(2) : '—'}</b> ${tendenciaIcone(tendencia)} ${tendencia || ''}</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${(historicoMensal || []).map(h => `
-          <div style="background:var(--bg-raised);border-radius:8px;padding:8px 12px;min-width:120px;text-align:center">
+        ${meses.map(h => `
+          <div class="mj-mes-tile" data-tecnico="${(tecnicoKey || '').replace(/"/g, '&quot;')}" data-mes-key="${h.mesKey}" style="cursor:pointer;background:var(--bg-raised);border-radius:8px;padding:8px 12px;min-width:120px;text-align:center" title="Clique pra ver o detalhamento por tipo de serviço">
             <div style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase">${h.mes || '—'}</div>
             <div style="font-size:16px;font-weight:700;margin:2px 0">${h.media != null ? h.media.toFixed(2) : '—'}</div>
             ${h.quartil ? `<span class="badge ${quartilBadgeClasse(h.quartil)}" style="font-size:10px"><span class="dot"></span>${h.quartil}</span>` : ''}
@@ -1096,7 +1146,9 @@ function renderPainelColaborador(){
   }
 
   // meses disponíveis, do mais recente pro mais antigo
-  const todosMeses = [...new Set(produtividadeValida.flatMap(p => (p.historicoMensal || []).map(h => h.mesKey)))].sort().reverse();
+  const todosMeses = [...new Set(produtividadeValida.flatMap(p => (p.historicoMensal || []).map(h => h.mesKey)))]
+    .filter(m => /^\d{4}-\d{2}$/.test(m)) // descarta lixo de importações antigas sem mesKey válido
+    .sort().reverse();
   if (!mesProdutividadeSelecionado || !todosMeses.includes(mesProdutividadeSelecionado)) mesProdutividadeSelecionado = todosMeses[0];
 
   if (papel === 'tecnico'){
@@ -1105,7 +1157,10 @@ function renderPainelColaborador(){
       conteudo.innerHTML = `<p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${colab ? colab.nome : usuarioAtual}") na última planilha de produtividade importada, ou seu cargo cadastrado não é "Instalador e Reparador de Operações". Confira com seu supervisor.</p>`;
       return;
     }
-    conteudo.innerHTML = linhaHistoricoHTML(meu.tecnico, meu.historicoMensal, meu.ppcMedio, meu.tendencia);
+    conteudo.innerHTML = linhaHistoricoHTML(meu.tecnico, meu.historicoMensal, meu.ppcMedio, meu.tendencia, meu.tecnico);
+    document.querySelectorAll('.mj-mes-tile').forEach(tile => {
+      tile.addEventListener('click', () => abrirGraficoTipo(tile.dataset.tecnico, tile.dataset.mesKey));
+    });
     return;
   }
 
@@ -1113,6 +1168,8 @@ function renderPainelColaborador(){
     let visiveis = produtividadeValida;
     if (papel === 'supervisor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome));
     if (papel === 'inspetor' && colab) visiveis = produtividadeValida.filter(p => nomesEquivalentes(p.supervisor, colab.nome)); // inspetor acompanha o mesmo time do supervisor dele, se aplicável
+    const filtroSupervisor = document.getElementById('mj-prod-f-supervisor') ? document.getElementById('mj-prod-f-supervisor').value : '';
+    if (papel === 'coordenador' && filtroSupervisor) visiveis = visiveis.filter(p => nomesEquivalentes(p.supervisor, filtroSupervisor));
 
     let html = `
       <div class="field" style="max-width:220px;margin-bottom:14px">
@@ -1143,7 +1200,7 @@ function renderPainelColaborador(){
       html += `<div class="stat-row" style="margin-bottom:16px"><div class="stat-card brand"><div class="label">Média do seu time em ${formatarMes(mesProdutividadeSelecionado)} (${visiveis.length} colaborador(es))</div><div class="value">${m != null ? m.toFixed(2) : '—'}</div></div></div>`;
     }
 
-    html += visiveis.map(p => linhaHistoricoHTML(`${p.tecnico} <span style="font-weight:400;color:var(--ink-faint);font-size:12px">— ${p.supervisor}</span>`, p.historicoMensal, p.ppcMedio, p.tendencia)).join('');
+    html += visiveis.map(p => linhaHistoricoHTML(`${p.tecnico} <span style="font-weight:400;color:var(--ink-faint);font-size:12px">— ${p.supervisor}</span>`, p.historicoMensal, p.ppcMedio, p.tendencia, p.tecnico)).join('');
     conteudo.innerHTML = html || '<p style="color:var(--ink-dim);font-size:13px">Nenhum técnico encontrado pro seu time nessa planilha.</p>';
 
     const seletorMes = document.getElementById('mj-prod-mes-select');
@@ -1151,9 +1208,99 @@ function renderPainelColaborador(){
       mesProdutividadeSelecionado = e.target.value;
       renderPainelColaborador();
     });
+
+    document.querySelectorAll('.mj-mes-tile').forEach(tile => {
+      tile.addEventListener('click', () => abrirGraficoTipo(tile.dataset.tecnico, tile.dataset.mesKey));
+    });
   }
 }
 
+
+// ---------- gráfico por tipo de serviço (abre ao clicar num mês) ----------
+const METRICA_LABEL = {
+  produtividade: { titulo: 'Pontos por tipo de serviço', cor: '#00d4ff' },
+  recorrencia: { titulo: 'Recorrências por tipo de serviço', cor: '#ff4d6d' },
+  improdutividade: { titulo: 'Improdutividade (%) por tipo de serviço', cor: '#ffb020' },
+  tma: { titulo: 'Tempo médio de atendimento (h) por tipo de serviço', cor: '#a78bfa' },
+};
+let mjChartTipo = null;
+let mjGraficoAtual = { tecnico: null, mesKey: null, metrica: 'produtividade' };
+
+function abrirGraficoTipo(tecnico, mesKey){
+  const registro = produtividade.find(p => p.tecnico === tecnico);
+  const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
+  if (!mesDados || !mesDados.porTipo){ alert('Não achei o detalhamento por tipo de serviço desse mês.'); return; }
+  mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
+  document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
+  document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
+  document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.metrica === 'produtividade'));
+  renderGraficoTipo();
+  document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
+}
+
+function renderGraficoTipo(){
+  const registro = produtividade.find(p => p.tecnico === mjGraficoAtual.tecnico);
+  const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mjGraficoAtual.mesKey) : null;
+  if (!mesDados) return;
+  const porTipo = mesDados.porTipo || {};
+  const filtroTipo = document.getElementById('mj-prod-f-tipo') ? document.getElementById('mj-prod-f-tipo').value : '';
+  let tipos = Object.keys(porTipo);
+  if (filtroTipo) tipos = tipos.filter(t => t === filtroTipo);
+
+  const metrica = mjGraficoAtual.metrica;
+  const valores = tipos.map(t => {
+    const d = porTipo[t];
+    if (metrica === 'produtividade') return d.pontos;
+    if (metrica === 'recorrencia') return d.recorrencias;
+    if (metrica === 'improdutividade'){ const total = d.produtivos + d.improdutivos; return total ? (d.improdutivos / total) * 100 : 0; }
+    if (metrica === 'tma') return d.tempoMedioAtendimento || 0;
+    return 0;
+  });
+  // ordena do maior pro menor, pra já mostrar quem mais pesa naquela métrica
+  const combinado = tipos.map((t, i) => ({ t, v: valores[i] })).sort((a, b) => b.v - a.v);
+
+  if (mjChartTipo) mjChartTipo.destroy();
+  mjChartTipo = new Chart(document.getElementById('mj-grafico-canvas'), {
+    type: 'bar',
+    data: {
+      labels: combinado.map(c => c.t),
+      datasets: [{ label: METRICA_LABEL[metrica].titulo, data: combinado.map(c => c.v), backgroundColor: METRICA_LABEL[metrica].cor }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      scales: {
+        x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+        y: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false }, title: { display: true, text: METRICA_LABEL[metrica].titulo, color: '#e6ebf2' } },
+    },
+  });
+}
+
+document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b === btn));
+    mjGraficoAtual.metrica = btn.dataset.metrica;
+    renderGraficoTipo();
+  });
+});
+document.getElementById('mj-btn-fechar-grafico').onclick = () => document.getElementById('mj-modal-grafico-tipo').style.display = 'none';
+document.getElementById('mj-modal-grafico-tipo').addEventListener('click', e => {
+  if (e.target.id === 'mj-modal-grafico-tipo') e.currentTarget.style.display = 'none';
+});
+
+// ---------- filtros do Painel do Colaborador (supervisor / tipo de serviço) ----------
+document.getElementById('mj-prod-f-supervisor').addEventListener('change', renderPainelColaborador);
+document.getElementById('mj-prod-f-tipo').addEventListener('change', () => {
+  if (document.getElementById('mj-modal-grafico-tipo').style.display !== 'none') renderGraficoTipo();
+});
+function populateFiltroTipoProdutividade(){
+  const sel = document.getElementById('mj-prod-f-tipo');
+  const valorAtual = sel.value;
+  const tipos = [...new Set(produtividade.flatMap(p => (p.historicoMensal || []).flatMap(h => Object.keys(h.porTipo || {}))))].sort();
+  sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option value="${t}">${t}</option>`).join('');
+  if (tipos.includes(valorAtual)) sel.value = valorAtual;
+}
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
@@ -1174,6 +1321,7 @@ async function initPage(){
   produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
   populateVeiculosSelect();
   populateStatusFilter();
+  populateFiltroTipoProdutividade();
   renderAll();
   return !!(sharedTickets || sharedPessoas);
 }
