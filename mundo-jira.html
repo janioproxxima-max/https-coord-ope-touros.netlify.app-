@@ -1110,10 +1110,19 @@ function importarProdutividadeBruta(file){
 const PRODUTIVIDADE_SHEET_ID = '1S_a8VQ8IDLYgnQF1huVLrGwNmQQPNVs77zeuj9cGRNc';
 const PRODUTIVIDADE_SHEET_GID = '0';
 
+// só essas colunas são realmente usadas pelo cálculo de produtividade —
+// pedir só elas evita transmitir campos gigantes tipo Observação (que às
+// vezes tem foto embutida em base64), deixando a busca bem mais rápida
+const PRODUTIVIDADE_COLUNAS_NECESSARIAS = [
+  'Nº. Ordem Serviço', 'Responsável', 'Tipo de Serviço', 'Descrição do Encerramento',
+  'Plano/Produto', 'Data/Hora Fim do Atendimento', 'Data/Hora Deslocamento',
+  'Nº Cliente', 'Supervisor', 'Técnico Auxiliar', 'Área', 'Localidade',
+];
+
 async function importarProdutividadeDaPlanilhaGoogle(){
   let rows;
   try{
-    rows = await OPS.syncFetchExternalSheet(PRODUTIVIDADE_SHEET_ID, PRODUTIVIDADE_SHEET_GID);
+    rows = await OPS.syncFetchExternalSheet(PRODUTIVIDADE_SHEET_ID, PRODUTIVIDADE_SHEET_GID, PRODUTIVIDADE_COLUNAS_NECESSARIAS);
   }catch(err){
     console.error('Falha ao buscar a planilha do Google', err);
     alert(`Não consegui buscar a planilha do Google direto.\n\nMotivo técnico: ${err.message}\n\nConfere se o Apps Script foi atualizado com a versão nova (com a leitura de planilha externa), e se a conta que publicou ele tem acesso à planilha "Historico Geral de Serviços". Por enquanto, tenta importar o arquivo manualmente.`);

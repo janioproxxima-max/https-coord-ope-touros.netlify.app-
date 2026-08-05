@@ -852,12 +852,34 @@ const OPS = (() => {
   // CORS do navegador, já que o Apps Script lê a planilha do lado do
   // servidor. Devolve as linhas cruas (lista de listas), ou lança erro com
   // uma mensagem que já pode ser mostrada pro usuário.
-  async function syncFetchExternalSheet(sheetId, gid){
-    const url = `${OPS_SYNC_BASE_URL}?action=externalSheet&sheetId=${encodeURIComponent(sheetId)}&gid=${encodeURIComponent(gid || '')}&cachebust=${Date.now()}`;
-    const res = await fetch(url);
+  async function syncFetchExternalSheet(sheetId, gid, colunas){
+    const params = new URLSearchParams({ action: 'externalSheet', sheetId, gid: gid || '', cachebust: Date.now() });
+    if (colunas && colunas.length) params.set('colunas', colunas.join(','));
+    const url = `${OPS_SYNC_BASE_URL}?${params.toString()}`;
+
+    const controller = new AbortController();
+    const tempoLimiteMs = 60000; // 60s — planilha externa grande pode demorar, mas não pra sempre
+    const timeoutId = setTimeout(() => controller.abort(), tempoLimiteMs);
+    let res;
+    try{
+      res = await fetch(url, { signal: controller.signal });
+    }catch(err){
+      if (err.name === 'AbortError'){
+        throw new Error(`Demorou mais de ${tempoLimiteMs / 1000}s pra planilha responder e eu desisti — ela deve ser grande demais pro Apps Script ler a tempo. Tenta pedir menos colunas, ou importa o arquivo manualmente por enquanto.`);
+      }
+      throw err;
+    }finally{
+      clearTimeout(timeoutId);
+    }
+
     if (!res.ok) throw new Error('O Apps Script respondeu com status ' + res.status + '.');
     const data = await res.json();
-    if (!data || !data.ok) throw new Error((data && data.error) || 'Resposta inesperada do Apps Script.');
+    if (!data || !data.ok){
+      if (Array.isArray(data)){
+        throw new Error('O Apps Script devolveu uma lista de registros comuns em vez do resultado da planilha externa — isso indica que ele ainda está rodando a versão ANTIGA (sem a rota "externalSheet"). Confere se a nova versão foi mesmo implantada.');
+      }
+      throw new Error((data && data.error) || ('Resposta inesperada do Apps Script: ' + JSON.stringify(data).slice(0, 200)));
+    }
     return data.linhas;
   }
 
