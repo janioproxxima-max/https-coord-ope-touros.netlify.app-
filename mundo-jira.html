@@ -1109,15 +1109,21 @@ const PRODUTIVIDADE_SHEET_ID = '1S_a8VQ8IDLYgnQF1huVLrGwNmQQPNVs77zeuj9cGRNc';
 const PRODUTIVIDADE_SHEET_GID = '0';
 
 async function importarProdutividadeDaPlanilhaGoogle(){
-  const url = `https://docs.google.com/spreadsheets/d/${PRODUTIVIDADE_SHEET_ID}/export?format=csv&gid=${PRODUTIVIDADE_SHEET_GID}`;
+  // esse endpoint (gviz/tq) é o que o Google disponibiliza pra acesso de
+  // fora do próprio Sheets (ex: sites) — o "/export" direto costuma ser
+  // bloqueado por CORS quando chamado por fetch() de outro domínio
+  const url = `https://docs.google.com/spreadsheets/d/${PRODUTIVIDADE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${PRODUTIVIDADE_SHEET_GID}`;
   let texto;
   try{
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error('status ' + resp.status);
+    if (!resp.ok) throw new Error('A planilha respondeu com status ' + resp.status + ' — confere se o compartilhamento é "Qualquer pessoa com o link — Leitor".');
     texto = await resp.text();
+    if (texto.trim().startsWith('<')){
+      throw new Error('A planilha devolveu uma página de login em vez dos dados — o compartilhamento provavelmente não está público.');
+    }
   }catch(err){
     console.error('Falha ao buscar a planilha do Google', err);
-    alert('Não consegui buscar a planilha do Google direto. Confere se o compartilhamento continua em "Qualquer pessoa com o link — Leitor", ou tenta importar o arquivo manualmente por enquanto.');
+    alert(`Não consegui buscar a planilha do Google direto.\n\nMotivo técnico: ${err.message}\n\nSe o compartilhamento estiver certo e continuar falhando, pode ser bloqueio de CORS do navegador — nesse caso me avisa que vejo uma alternativa (ex: passar pelo Apps Script). Por enquanto, tenta importar o arquivo manualmente.`);
     return null;
   }
   const wb = XLSX.read(texto, { type: 'string' });
