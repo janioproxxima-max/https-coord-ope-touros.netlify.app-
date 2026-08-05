@@ -415,11 +415,21 @@ const PAPEL_LABEL = { tecnico: 'Técnico', inspetor: 'Inspetor', supervisor: 'Su
 // string) em vez de lista de verdade — essa função decodifica de volta,
 // e se não conseguir, avisa em vez de deixar a tela quebrar em silêncio.
 function normalizarListaSincronizada(valor, contexto){
-  if (Array.isArray(valor)) return valor;
+  function decodificarItens(lista){
+    // cada item deveria ser um objeto; se vier como texto (JSON dobrado —
+    // aconteceu de novo depois de outra volta pela sincronização), decodifica
+    return lista.map(item => {
+      if (typeof item === 'string'){
+        try { return JSON.parse(item); } catch(e){ return item; }
+      }
+      return item;
+    });
+  }
+  if (Array.isArray(valor)) return decodificarItens(valor);
   if (typeof valor === 'string' && valor.trim()){
     try {
       const parsed = JSON.parse(valor);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return decodificarItens(parsed);
     } catch(e){ /* cai pro aviso abaixo */ }
     console.error(`Não consegui decodificar "${contexto}" — texto recebido:`, valor);
   }
@@ -1317,6 +1327,13 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
     .filter(m => /^\d{4}-\d{2}$/.test(m)) // descarta lixo de importações antigas sem mesKey válido
     .sort().reverse();
   if (!mesProdutividadeSelecionado || !todosMeses.includes(mesProdutividadeSelecionado)) mesProdutividadeSelecionado = todosMeses[0];
+
+  if (!todosMeses.length){
+    const amostra = produtividadeValida[0];
+    const amostraMes = amostra && amostra.historicoMensal && amostra.historicoMensal[0];
+    conteudo.innerHTML = `<p style="color:var(--warn);font-size:12px">⚠️ Achei ${produtividadeValida.length} colaborador(es), mas nenhum mês em formato válido. Print isso e me avisa: ${JSON.stringify(amostraMes)}</p>`;
+    return;
+  }
 
   if (papel === 'tecnico'){
     const meu = colab ? produtividadeValida.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
