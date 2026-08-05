@@ -426,6 +426,16 @@ function normalizarListaSincronizada(valor, contexto){
   return [];
 }
 
+// o Google Sheets às vezes "ajuda" convertendo um texto tipo "2026-07"
+// sozinho pra uma data completa (ex: "2026-07-01T03:00:00.000Z") quando essa
+// célula passa por ele — essa função sempre devolve só "AAAA-MM", não importa
+// o formato que chegou.
+function normalizarMesKey(valor){
+  if (!valor) return valor;
+  const m = String(valor).match(/^(\d{4})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : valor;
+}
+
 function nomesEquivalentes(a, b){
   if (!a || !b) return false;
   const limpa = (s) => OPS.normalize(s).replace(/[^a-z0-9]/g, '');
@@ -1169,6 +1179,8 @@ function mesclarProdutividade(resultado){
 }
 
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
+let produtividadeSyncPendente = false;
+
 document.getElementById('mj-input-produtividade').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1180,12 +1192,34 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
     paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
-    await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
-    await OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
-    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+
+    // atualiza a tela JÁ, sem esperar a viagem até o Google Sheets
     populateFiltroTipoProdutividade();
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
+
+    // o aviso de sucesso é disparado depois de um instante (setTimeout 0),
+    // já com a tela redesenhada — assim o navegador consegue pintar o
+    // histórico antes de travar na caixa de diálogo do alert()
+    setTimeout(() => {
+      alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+    }, 0);
+
+    // sincroniza com a planilha do site em segundo plano, sem travar a tela
+    produtividadeSyncPendente = true;
+    const toast = OPS.showToast('☁️ Sincronizando...');
+    Promise.all([
+      OPS.syncPush(SYNC_PRODUTIVIDADE, produtividade),
+      OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
+    ]).then(() => {
+      toast.remove();
+    }).catch((err) => {
+      toast.remove();
+      console.error('Falha ao sincronizar produtividade', err);
+      alert('⚠️ A importação está salva no seu navegador, mas não consegui enviar pra planilha do site agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
+    }).finally(() => {
+      produtividadeSyncPendente = false;
+    });
   }
 });
 
@@ -1269,9 +1303,12 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
     return;
   }
 
-  // garante que historicoMensal é sempre lista de verdade (segunda camada de
-  // proteção, além da que já roda no carregamento — nunca é demais aqui)
-  produtividadeValida.forEach(p => { p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`); });
+  // garante que historicoMensal é sempre lista de verdade, e que mesKey está
+  // sempre em "AAAA-MM" (segunda camada de proteção — nunca é demais aqui)
+  produtividadeValida.forEach(p => {
+    p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`);
+    p.historicoMensal.forEach(h => { h.mesKey = normalizarMesKey(h.mesKey); });
+  });
 
   // meses disponíveis, do mais recente pro mais antigo
   const todosMeses = [...new Set(produtividadeValida.flatMap(p => (p.historicoMensal || []).map(h => h.mesKey)))]
@@ -1551,9 +1588,15 @@ async function initPage(){
   historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
-  produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
-  produtividade.forEach(p => { p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`); });
-  produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+  if (!produtividadeSyncPendente){
+    produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+    produtividade.forEach(p => {
+      p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`);
+      p.historicoMensal.forEach(h => { h.mesKey = normalizarMesKey(h.mesKey); });
+    });
+    produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+    produtividadeDetalhePorTipo.forEach(r => { r.mesKey = normalizarMesKey(r.mesKey); });
+  }
   populateVeiculosSelect();
   populateStatusFilter();
   populateFiltroTipoProdutividade();
