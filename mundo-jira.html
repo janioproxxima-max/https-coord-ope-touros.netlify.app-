@@ -126,7 +126,6 @@
       <select id="mj-prod-f-tipo"><option value="">Todos</option></select>
     </div>
     <div style="flex:1"></div>
-    <button class="btn ghost" id="mj-btn-sync-planilha-google">☁️ Atualizar direto da planilha</button>
     <button class="btn primary" id="mj-btn-importar-produtividade">⇪ Importar planilha de produtividade</button>
     <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
@@ -1101,36 +1100,6 @@ function importarProdutividadeBruta(file){
   });
 }
 
-// planilha "Historico Geral de Serviços - Unidade Touros" no Google Sheets.
-// A busca passa pelo Apps Script do site (não direto do navegador), então
-// não depende de CORS — só precisa que quem publicou o Apps Script tenha
-// acesso de leitura a essa planilha. Se um dia a aba certa não for a
-// primeira, troca o gid abaixo (aparece na URL quando você clica na aba,
-// depois de "gid=").
-const PRODUTIVIDADE_SHEET_ID = '1S_a8VQ8IDLYgnQF1huVLrGwNmQQPNVs77zeuj9cGRNc';
-const PRODUTIVIDADE_SHEET_GID = '0';
-
-// só essas colunas são realmente usadas pelo cálculo de produtividade —
-// pedir só elas evita transmitir campos gigantes tipo Observação (que às
-// vezes tem foto embutida em base64), deixando a busca bem mais rápida
-const PRODUTIVIDADE_COLUNAS_NECESSARIAS = [
-  'Nº. Ordem Serviço', 'Responsável', 'Tipo de Serviço', 'Descrição do Encerramento',
-  'Plano/Produto', 'Data/Hora Fim do Atendimento', 'Data/Hora Deslocamento',
-  'Nº Cliente', 'Supervisor', 'Técnico Auxiliar', 'Área', 'Localidade',
-];
-
-async function importarProdutividadeDaPlanilhaGoogle(){
-  let rows;
-  try{
-    rows = await OPS.syncFetchExternalSheet(PRODUTIVIDADE_SHEET_ID, PRODUTIVIDADE_SHEET_GID, PRODUTIVIDADE_COLUNAS_NECESSARIAS);
-  }catch(err){
-    console.error('Falha ao buscar a planilha do Google', err);
-    alert(`Não consegui buscar a planilha do Google direto.\n\nMotivo técnico: ${err.message}\n\nConfere se o Apps Script foi atualizado com a versão nova (com a leitura de planilha externa), e se a conta que publicou ele tem acesso à planilha "Historico Geral de Serviços". Por enquanto, tenta importar o arquivo manualmente.`);
-    return null;
-  }
-  return processarLinhasProdutividade(rows);
-}
-
 function mediaSimples(lista){
   const validos = lista.filter(v => typeof v === 'number' && !isNaN(v));
   if (!validos.length) return null;
@@ -1271,19 +1240,6 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
   if (resultado) await aplicarResultadoProdutividade(resultado);
 });
 
-document.getElementById('mj-btn-sync-planilha-google').addEventListener('click', async () => {
-  const btn = document.getElementById('mj-btn-sync-planilha-google');
-  btn.disabled = true;
-  btn.textContent = '☁️ Buscando na planilha...';
-  try{
-    const resultado = await importarProdutividadeDaPlanilhaGoogle();
-    if (resultado) await aplicarResultadoProdutividade(resultado);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '☁️ Atualizar direto da planilha';
-  }
-});
-
 function tendenciaIcone(t){
   const n = OPS.normalize(t);
   if (n === 'melhorando') return '📈';
@@ -1312,7 +1268,7 @@ function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia, tecnicoK
     <div class="panel" style="margin-bottom:12px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <b style="font-size:14px">${nome}</b>
-        <span style="font-size:13px;color:var(--ink-dim)">PPC Médio: <b style="color:var(--ink)">${ppcMedio ? ppcMedio.toFixed(2) : '—'}</b> ${tendenciaIcone(tendencia)} ${tendencia || ''}</span>
+        <span style="font-size:13px;color:var(--ink-dim)">PPC Médio: <b style="color:var(--ink)">${(typeof ppcMedio === 'number' && !isNaN(ppcMedio)) ? ppcMedio.toFixed(2) : (Number(ppcMedio) ? Number(ppcMedio).toFixed(2) : '—')}</b> ${tendenciaIcone(tendencia)} ${tendencia || ''}</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${meses.map(h => `
