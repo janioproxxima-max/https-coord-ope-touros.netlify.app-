@@ -126,6 +126,7 @@
       <select id="mj-prod-f-tipo"><option value="">Todos</option></select>
     </div>
     <div style="flex:1"></div>
+    <button class="btn ghost" id="mj-btn-sync-planilha-google">☁️ Atualizar direto da planilha</button>
     <button class="btn primary" id="mj-btn-importar-produtividade">⇪ Importar planilha de produtividade</button>
     <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
@@ -928,14 +929,12 @@ function segundaDaSemana(dt){ // devolve a data (só dia) da segunda-feira daque
   return d;
 }
 
-function importarProdutividadeBruta(file){
-  return new Promise((resolve) => {
-    OPS.readSpreadsheetFile(file, (rows) => {
+function processarLinhasProdutividade(rows){
       let headerRowIdx = -1;
       for (let i = 0; i < Math.min(rows.length, 5); i++){
         if (rows[i].some(c => OPS.normalize(c) === 'responsavel')) { headerRowIdx = i; break; }
       }
-      if (headerRowIdx === -1){ alert('Não achei a coluna "Responsável" nas primeiras linhas. Confere se essa é a planilha certa (o mesmo modelo do Mapa de Serviços).'); resolve(null); return; }
+      if (headerRowIdx === -1){ alert('Não achei a coluna "Responsável" nas primeiras linhas. Confere se essa é a planilha certa (o mesmo modelo do Mapa de Serviços).'); return null; }
 
       const headers = rows[headerRowIdx];
       const idx = (nome) => headers.findIndex(h => OPS.normalize(h) === OPS.normalize(nome));
@@ -953,8 +952,7 @@ function importarProdutividadeBruta(file){
       const idxLocalidade = idx('Localidade');
       if (idxResponsavel === -1 || idxDescricao === -1){
         alert('Faltou alguma coluna esperada (Responsável / Descrição do Encerramento). Confere se essa é a planilha certa.');
-        resolve(null);
-        return;
+        return null;
       }
 
       // tecnico -> mesKey -> { pontos, dias:Set, produtivos, improdutivos, temposAtendimento:[], supervisor }
@@ -1059,7 +1057,7 @@ function importarProdutividadeBruta(file){
         });
       }
 
-      if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); resolve(null); return; }
+      if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); return null; }
 
       // detecta recorrência: mesmo técnico + mesmo cliente + outro reparo em até 30 dias
       const paresRecorrencia = []; // { tecnico, mesKey, tipo, anterior, atual }
@@ -1092,9 +1090,40 @@ function importarProdutividadeBruta(file){
         calcularQuartis(itens).forEach(item => { quartilPorTecnicoMes[`${item.tecnico}|${mesKey}`] = item.quartil; });
       });
 
-      resolve({ agregado, quartilPorTecnicoMes, detalhesRegistros, paresRecorrencia });
+      return { agregado, quartilPorTecnicoMes, detalhesRegistros, paresRecorrencia };
+}
+
+function importarProdutividadeBruta(file){
+  return new Promise((resolve) => {
+    OPS.readSpreadsheetFile(file, (rows) => {
+      resolve(processarLinhasProdutividade(rows));
     });
   });
+}
+
+// planilha "Historico Geral de Serviços - Unidade Touros" no Google Sheets,
+// compartilhada como "Qualquer pessoa com o link — Leitor". Se um dia a aba
+// certa não for a primeira, é só trocar o gid abaixo (aparece na URL quando
+// você clica na aba, depois de "gid=").
+const PRODUTIVIDADE_SHEET_ID = '1S_a8VQ8IDLYgnQF1huVLrGwNmQQPNVs77zeuj9cGRNc';
+const PRODUTIVIDADE_SHEET_GID = '0';
+
+async function importarProdutividadeDaPlanilhaGoogle(){
+  const url = `https://docs.google.com/spreadsheets/d/${PRODUTIVIDADE_SHEET_ID}/export?format=csv&gid=${PRODUTIVIDADE_SHEET_GID}`;
+  let texto;
+  try{
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('status ' + resp.status);
+    texto = await resp.text();
+  }catch(err){
+    console.error('Falha ao buscar a planilha do Google', err);
+    alert('Não consegui buscar a planilha do Google direto. Confere se o compartilhamento continua em "Qualquer pessoa com o link — Leitor", ou tenta importar o arquivo manualmente por enquanto.');
+    return null;
+  }
+  const wb = XLSX.read(texto, { type: 'string' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+  return processarLinhasProdutividade(rows);
 }
 
 function mediaSimples(lista){
@@ -1193,45 +1222,60 @@ function mesclarProdutividade(resultado){
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
 let produtividadeSyncPendente = false;
 
+async function aplicarResultadoProdutividade(resultado){
+  const meses = mesclarProdutividade(resultado);
+  detalhesRegistrosProdutividade = resultado.detalhesRegistros;
+  paresRecorrenciaProdutividade = resultado.paresRecorrencia;
+  OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
+  OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+
+  // atualiza a tela JÁ, sem esperar a viagem até o Google Sheets
+  populateFiltroTipoProdutividade();
+  populateFiltroTecnicoProdutividade();
+  renderPainelColaborador();
+
+  // o aviso de sucesso é disparado depois de um instante (setTimeout 0), já
+  // com a tela redesenhada — assim o navegador consegue pintar o histórico
+  // antes de travar na caixa de diálogo do alert()
+  setTimeout(() => {
+    alert(`✅ Atualizado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+  }, 0);
+
+  // sincroniza com a planilha do site em segundo plano, sem travar a tela
+  produtividadeSyncPendente = true;
+  const toast = OPS.showToast('☁️ Sincronizando...');
+  Promise.all([
+    OPS.syncPush(SYNC_PRODUTIVIDADE, produtividade),
+    OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
+  ]).then(() => {
+    toast.remove();
+  }).catch((err) => {
+    toast.remove();
+    console.error('Falha ao sincronizar produtividade', err);
+    alert('⚠️ A atualização está salva no seu navegador, mas não consegui enviar pra planilha do site agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
+  }).finally(() => {
+    produtividadeSyncPendente = false;
+  });
+}
+
 document.getElementById('mj-input-produtividade').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const resultado = await importarProdutividadeBruta(file);
   e.target.value = '';
-  if (resultado){
-    const meses = mesclarProdutividade(resultado);
-    detalhesRegistrosProdutividade = resultado.detalhesRegistros;
-    paresRecorrenciaProdutividade = resultado.paresRecorrencia;
-    OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
-    OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+  if (resultado) await aplicarResultadoProdutividade(resultado);
+});
 
-    // atualiza a tela JÁ, sem esperar a viagem até o Google Sheets
-    populateFiltroTipoProdutividade();
-    populateFiltroTecnicoProdutividade();
-    renderPainelColaborador();
-
-    // o aviso de sucesso é disparado depois de um instante (setTimeout 0),
-    // já com a tela redesenhada — assim o navegador consegue pintar o
-    // histórico antes de travar na caixa de diálogo do alert()
-    setTimeout(() => {
-      alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
-    }, 0);
-
-    // sincroniza com a planilha do site em segundo plano, sem travar a tela
-    produtividadeSyncPendente = true;
-    const toast = OPS.showToast('☁️ Sincronizando...');
-    Promise.all([
-      OPS.syncPush(SYNC_PRODUTIVIDADE, produtividade),
-      OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
-    ]).then(() => {
-      toast.remove();
-    }).catch((err) => {
-      toast.remove();
-      console.error('Falha ao sincronizar produtividade', err);
-      alert('⚠️ A importação está salva no seu navegador, mas não consegui enviar pra planilha do site agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
-    }).finally(() => {
-      produtividadeSyncPendente = false;
-    });
+document.getElementById('mj-btn-sync-planilha-google').addEventListener('click', async () => {
+  const btn = document.getElementById('mj-btn-sync-planilha-google');
+  btn.disabled = true;
+  btn.textContent = '☁️ Buscando na planilha...';
+  try{
+    const resultado = await importarProdutividadeDaPlanilhaGoogle();
+    if (resultado) await aplicarResultadoProdutividade(resultado);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ Atualizar direto da planilha';
   }
 });
 
