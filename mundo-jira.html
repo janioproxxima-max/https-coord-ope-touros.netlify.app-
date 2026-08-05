@@ -130,8 +130,6 @@
     <input type="file" id="mj-input-produtividade" accept=".csv,.xlsx,.xls" style="display:none">
   </div>
 
-  <div id="mj-prod-import-report"></div>
-
   <div id="mj-prod-conteudo"></div>
 </div>
 
@@ -348,36 +346,8 @@ let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
-// O Google Sheets (planilha de sincronização) às vezes não preserva uma
-// lista aninhada de objetos como array de verdade — pode voltar como uma
-// string JSON, ou como um objeto tipo {"0":{...},"1":{...}} em vez de
-// [{...},{...}]. Sem isso, qualquer .map()/.find() no historicoMensal
-// quebra o painel inteiro sem avisar por quê. Essa função sempre devolve
-// um array de verdade, não importa o formato que chegou.
-function normalizarHistoricoMensal(h){
-  if (Array.isArray(h)) return h;
-  if (h == null || h === '') return [];
-  if (typeof h === 'string'){
-    try{
-      const parsed = JSON.parse(h);
-      return Array.isArray(parsed) ? parsed : normalizarHistoricoMensal(parsed);
-    }catch(e){ return []; }
-  }
-  if (typeof h === 'object'){
-    return Object.values(h).filter(v => v && typeof v === 'object');
-  }
-  return [];
-}
-function normalizarProdutividade(lista){
-  return (lista || []).map(p => ({ ...p, historicoMensal: normalizarHistoricoMensal(p.historicoMensal) }));
-}
-
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
-let produtividade = normalizarProdutividade(OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || []);
-// true enquanto o envio da produtividade pra planilha do site ainda não
-// terminou — evita que um refresh nesse meio-tempo puxe a versão antiga do
-// servidor e apague por cima a importação que acabou de acontecer aqui.
-let produtividadeSyncPendente = false;
+let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
 const SYNC_PRODUTIVIDADE_TIPO = 'ProdutividadeDetalhePorTipo';
 const STORAGE_KEY_PRODUTIVIDADE_TIPO = 'ops_touros_produtividade_tipo_v1';
 // uma linha por (técnico, mês, tipo de serviço) — sincronizado de verdade,
@@ -565,6 +535,13 @@ function renderAll(){
   // mensagem de outra pessoa aparece sem precisar fechar e abrir de novo)
   if (ticketAbertoId && modalDetalhe.style.display !== 'none'){
     try{ renderDetalhe(); }catch(err){ console.error('Erro ao atualizar detalhe aberto', err); }
+  }
+  // se estiver na tela do Painel do Colaborador, atualiza ela também — sem
+  // isso, dados novos chegavam por trás mas a tela ficava parada até trocar
+  // de aba e voltar
+  const viewColaborador = document.getElementById('mj-view-colaborador');
+  if (viewColaborador && viewColaborador.style.display !== 'none'){
+    try{ renderPainelColaborador(); }catch(err){ console.error('Erro ao atualizar Painel do Colaborador', err); }
   }
 }
 
@@ -1111,8 +1088,6 @@ function mediaPonderada(listaTecnicos, mesKey){
 function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
   let mesesAtualizados = new Set();
-  const aceitos = [];
-  const descartados = []; // { tecnico, motivo }
 
   function supervisorReal(nomeTecnico){
     const colab = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
@@ -1120,9 +1095,7 @@ function mesclarProdutividade(resultado){
   }
 
   Object.entries(agregado).forEach(([tecnico, porMes]) => {
-    const motivo = motivoExclusaoProdutividade(tecnico);
-    if (motivo){ descartados.push({ tecnico, motivo }); return; } // não polui a base com gente de outro cargo
-    aceitos.push(tecnico);
+    if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
@@ -1176,28 +1149,7 @@ function mesclarProdutividade(resultado){
       registro.tendencia = ultimo > penultimo ? 'Melhorando' : (ultimo < penultimo ? 'Piorando' : 'Estável');
     }
   });
-  return { meses: [...mesesAtualizados].sort(), aceitos, descartados };
-}
-
-// Mostra, de forma persistente (não some ao fechar o alert), quem entrou
-// e quem foi descartado na última importação — e por quê. É a resposta
-// direta pro problema de "importei e não apareceu nada": antes esse
-// descarte acontecia em silêncio.
-function renderRelatorioImportacaoProdutividade(aceitos, descartados, meses){
-  const el = document.getElementById('mj-prod-import-report');
-  if (!aceitos.length && !descartados.length){ el.innerHTML = ''; return; }
-
-  let html = `<div class="panel" style="margin-bottom:14px;padding:14px 16px;border-left:3px solid ${descartados.length ? 'var(--warn, #ffb020)' : 'var(--ok, #22c55e)'}">`;
-  html += `<div style="font-weight:600;margin-bottom:8px">Última importação (${meses.map(formatarMes).join(', ') || 'sem mês identificado'})</div>`;
-  html += `<div style="font-size:13px;color:var(--ink-dim);margin-bottom:${descartados.length ? '10px' : '0'}">✅ ${aceitos.length} técnico(s) entraram no painel${aceitos.length ? ': ' + aceitos.join(', ') : ''}</div>`;
-  if (descartados.length){
-    html += `<div style="font-size:13px;color:var(--ink-dim);margin-bottom:6px">⚠️ ${descartados.length} nome(s) da planilha foram ignorados:</div>`;
-    html += `<ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-dim)">`;
-    html += descartados.map(d => `<li><b style="color:var(--ink)">${d.tecnico}</b> — ${d.motivo}</li>`).join('');
-    html += `</ul>`;
-  }
-  html += `</div>`;
-  el.innerHTML = html;
+  return [...mesesAtualizados].sort();
 }
 
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
@@ -1207,40 +1159,17 @@ document.getElementById('mj-input-produtividade').addEventListener('change', asy
   const resultado = await importarProdutividadeBruta(file);
   e.target.value = '';
   if (resultado){
-    const { meses, aceitos, descartados } = mesclarProdutividade(resultado);
+    const meses = mesclarProdutividade(resultado);
     detalhesRegistrosProdutividade = resultado.detalhesRegistros;
     paresRecorrenciaProdutividade = resultado.paresRecorrencia;
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
     OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
-
-    // Atualiza a tela JÁ, com os dados calculados localmente — sem esperar
-    // a ida e volta até a planilha do site, que pode levar vários
-    // segundos. A sincronização roda em segundo plano (o toast "☁️
-    // Sincronizando..." avisa quando terminar ou falhar), mas o painel do
-    // colaborador não fica mais preso esperando ela.
-    renderRelatorioImportacaoProdutividade(aceitos, descartados, meses);
+    await OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade);
+    await OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+    alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo. Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
     populateFiltroTipoProdutividade();
     populateFiltroTecnicoProdutividade();
     renderPainelColaborador();
-
-    produtividadeSyncPendente = true;
-    Promise.all([
-      OPS.syncPushWithToast(SYNC_PRODUTIVIDADE, produtividade),
-      OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
-    ]).finally(() => { produtividadeSyncPendente = false; });
-
-    // O alert() é uma caixa de diálogo síncrona: se ele disparar logo depois
-    // de mexer no DOM, o navegador às vezes trava a aba antes de chegar a
-    // pintar as mudanças na tela (só aparecendo depois, quando algo força um
-    // redesenho, como trocar de aba e voltar). O setTimeout(0) dá um respiro
-    // pro navegador desenhar o painel primeiro, e só então mostra o aviso.
-    setTimeout(() => {
-      if (!aceitos.length){
-        alert(`⚠️ A planilha foi lida, mas nenhum dos ${descartados.length} nome(s) encontrados entrou no Painel do Colaborador — veja a lista de motivos logo acima do painel, embaixo do botão de importar.`);
-      } else {
-        alert(`✅ Importado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${aceitos.length} técnico(s) recalculados.${descartados.length ? `\n${descartados.length} nome(s) da planilha foram ignorados — veja os motivos na tela, embaixo do botão de importar.` : ''}\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso ☁️ no canto da tela). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
-      }
-    }, 0);
   }
 });
 
@@ -1299,37 +1228,9 @@ function ehInstaladorReparador(nomeTecnico){
   return OPS.normalize(colabEncontrado.cargo).includes('instalador') && OPS.normalize(colabEncontrado.cargo).includes('reparador');
 }
 
-// Explica por que um nome vindo da planilha não vai entrar no Painel do
-// Colaborador — devolve null se ele deveria entrar normalmente. Usada só
-// pra dar feedback visível na importação (ehInstaladorReparador() continua
-// sendo a checagem "oficial" usada no resto da tela).
-function motivoExclusaoProdutividade(nomeTecnico){
-  const colabEncontrado = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
-  if (!colabEncontrado) return 'nome não encontrado em Gestão de Pessoas (confira se está cadastrado com o nome exatamente igual ao da planilha)';
-  const cargoNorm = OPS.normalize(colabEncontrado.cargo);
-  if (!(cargoNorm.includes('instalador') && cargoNorm.includes('reparador'))){
-    return `cargo cadastrado em Gestão de Pessoas ("${colabEncontrado.cargo || '(vazio)'}") precisa conter "Instalador" e "Reparador"`;
-  }
-  return null;
-}
-
 let mesProdutividadeSelecionado = null;
 
 function renderPainelColaborador(){
-  try{
-    renderPainelColaboradorImpl();
-  }catch(err){
-    // se algo quebrar no meio da montagem do painel, os cards do fim da
-    // função (com os cliques) nunca chegavam a ser criados — e parecia que
-    // "clicar não faz nada". Agora aparece um aviso em vez de travar em
-    // silêncio.
-    console.error('Erro ao montar o Painel do Colaborador:', err);
-    const conteudo = document.getElementById('mj-prod-conteudo');
-    if (conteudo) conteudo.innerHTML = `<p style="color:var(--crit,#ff4d6d);font-size:13px">Deu um erro ao montar o painel. Abra o console do navegador (F12) e envie a mensagem de erro. Detalhe técnico: ${(err && err.message) ? err.message : err}</p>`;
-  }
-}
-
-function renderPainelColaboradorImpl(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
   document.getElementById('mj-prod-papel-banner').innerHTML =
@@ -1427,23 +1328,15 @@ let mjChartTipo = null;
 let mjGraficoAtual = { tecnico: null, mesKey: null, metrica: 'produtividade' };
 
 function abrirGraficoTipo(tecnico, mesKey){
-  try{
-    const registro = produtividade.find(p => p.tecnico === tecnico);
-    const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
-    if (!mesDados){ alert('Não achei os dados desse mês pra esse técnico.'); return; }
-    mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
-    document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
-    document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
-    document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.metrica === 'produtividade'));
-    renderGraficoTipo();
-    document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
-  }catch(err){
-    // antes, um erro aqui não dava nenhum retorno visível pro usuário — o
-    // clique parecia simplesmente não fazer nada. Agora aparece na tela e
-    // no console (F12), pra dar pra identificar a causa real.
-    console.error('Erro ao abrir o gráfico por tipo de serviço:', err);
-    alert('Deu um erro ao tentar abrir o gráfico desse mês. Abra o console do navegador (F12) e me manda a mensagem de erro que aparecer — assim consigo corrigir.\n\nDetalhe técnico: ' + (err && err.message ? err.message : err));
-  }
+  const registro = produtividade.find(p => p.tecnico === tecnico);
+  const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
+  if (!mesDados || !mesDados.porTipo){ alert('Não achei o detalhamento por tipo de serviço desse mês.'); return; }
+  mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
+  document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
+  document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
+  document.querySelectorAll('#mj-grafico-metricas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.metrica === 'produtividade'));
+  renderGraficoTipo();
+  document.getElementById('mj-modal-grafico-tipo').style.display = 'flex';
 }
 
 const plugRotulosSempreVisiveis = {
@@ -1629,26 +1522,13 @@ async function initPage(){
   historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
-  // se ainda tem um envio de produtividade em andamento (import recente),
-  // não sobrescreve com o que voltou do servidor — ele ainda não tem essa
-  // importação. Assim que o envio terminar, a próxima atualização já traz
-  // a versão certa de qualquer lugar.
-  if (!produtividadeSyncPendente){
-    produtividade = normalizarProdutividade(sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || []);
-    produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
-  }
+  produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+  produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
   populateVeiculosSelect();
   populateStatusFilter();
   populateFiltroTipoProdutividade();
   populateFiltroTecnicoProdutividade();
   renderAll();
-  // se o Painel do Colaborador estiver aberto, redesenha ele também — senão
-  // ele fica com os cartões/mês de antes do refresh enquanto os dados por
-  // baixo já mudaram, e clicar num mês pra ver o analítico passa a falhar.
-  const viewColaborador = document.getElementById('mj-view-colaborador');
-  if (viewColaborador && viewColaborador.style.display !== 'none'){
-    try{ renderPainelColaborador(); }catch(err){ console.error('Erro ao atualizar Painel do Colaborador', err); }
-  }
   return !!(sharedTickets || sharedPessoas);
 }
 window.OPS_ON_REFRESH = initPage;
