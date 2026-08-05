@@ -1101,34 +1101,24 @@ function importarProdutividadeBruta(file){
   });
 }
 
-// planilha "Historico Geral de Serviços - Unidade Touros" no Google Sheets,
-// compartilhada como "Qualquer pessoa com o link — Leitor". Se um dia a aba
-// certa não for a primeira, é só trocar o gid abaixo (aparece na URL quando
-// você clica na aba, depois de "gid=").
+// planilha "Historico Geral de Serviços - Unidade Touros" no Google Sheets.
+// A busca passa pelo Apps Script do site (não direto do navegador), então
+// não depende de CORS — só precisa que quem publicou o Apps Script tenha
+// acesso de leitura a essa planilha. Se um dia a aba certa não for a
+// primeira, troca o gid abaixo (aparece na URL quando você clica na aba,
+// depois de "gid=").
 const PRODUTIVIDADE_SHEET_ID = '1S_a8VQ8IDLYgnQF1huVLrGwNmQQPNVs77zeuj9cGRNc';
 const PRODUTIVIDADE_SHEET_GID = '0';
 
 async function importarProdutividadeDaPlanilhaGoogle(){
-  // esse endpoint (gviz/tq) é o que o Google disponibiliza pra acesso de
-  // fora do próprio Sheets (ex: sites) — o "/export" direto costuma ser
-  // bloqueado por CORS quando chamado por fetch() de outro domínio
-  const url = `https://docs.google.com/spreadsheets/d/${PRODUTIVIDADE_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${PRODUTIVIDADE_SHEET_GID}`;
-  let texto;
+  let rows;
   try{
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('A planilha respondeu com status ' + resp.status + ' — confere se o compartilhamento é "Qualquer pessoa com o link — Leitor".');
-    texto = await resp.text();
-    if (texto.trim().startsWith('<')){
-      throw new Error('A planilha devolveu uma página de login em vez dos dados — o compartilhamento provavelmente não está público.');
-    }
+    rows = await OPS.syncFetchExternalSheet(PRODUTIVIDADE_SHEET_ID, PRODUTIVIDADE_SHEET_GID);
   }catch(err){
     console.error('Falha ao buscar a planilha do Google', err);
-    alert(`Não consegui buscar a planilha do Google direto.\n\nMotivo técnico: ${err.message}\n\nSe o compartilhamento estiver certo e continuar falhando, pode ser bloqueio de CORS do navegador — nesse caso me avisa que vejo uma alternativa (ex: passar pelo Apps Script). Por enquanto, tenta importar o arquivo manualmente.`);
+    alert(`Não consegui buscar a planilha do Google direto.\n\nMotivo técnico: ${err.message}\n\nConfere se o Apps Script foi atualizado com a versão nova (com a leitura de planilha externa), e se a conta que publicou ele tem acesso à planilha "Historico Geral de Serviços". Por enquanto, tenta importar o arquivo manualmente.`);
     return null;
   }
-  const wb = XLSX.read(texto, { type: 'string' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
   return processarLinhasProdutividade(rows);
 }
 

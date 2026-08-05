@@ -847,6 +847,20 @@ const OPS = (() => {
     }
   }
 
+  // Busca uma aba de OUTRA planilha do Google (fora da planilha "banco de
+  // dados" do site), passando pelo mesmo Apps Script — evita bloqueio de
+  // CORS do navegador, já que o Apps Script lê a planilha do lado do
+  // servidor. Devolve as linhas cruas (lista de listas), ou lança erro com
+  // uma mensagem que já pode ser mostrada pro usuário.
+  async function syncFetchExternalSheet(sheetId, gid){
+    const url = `${OPS_SYNC_BASE_URL}?action=externalSheet&sheetId=${encodeURIComponent(sheetId)}&gid=${encodeURIComponent(gid || '')}&cachebust=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('O Apps Script respondeu com status ' + res.status + '.');
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error((data && data.error) || 'Resposta inesperada do Apps Script.');
+    return data.linhas;
+  }
+
   function showToast(msg){
     const toast = document.createElement('div');
     toast.className = 'ops-toast';
@@ -1116,7 +1130,7 @@ const OPS = (() => {
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
     loadMunicipioPolygons, isPointInMunicipio,
     SUPERVISOR_BY_CITY, supervisorForCity,
-    syncPull, syncPush, syncPushWithToast, showToast, importMapaServicosFile,
+    syncPull, syncPush, syncPushWithToast, syncFetchExternalSheet, showToast, importMapaServicosFile,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
     grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
     toDateSafe, formatDateBR, formatDateTimeBR, toDateInputValue,
