@@ -410,6 +410,22 @@ function papelAtual(){
 }
 const PAPEL_LABEL = { tecnico: 'Técnico', inspetor: 'Inspetor', supervisor: 'Supervisor', coordenador: 'Coordenador' };
 
+// alguns campos guardam listas (ex: historicoMensal); quando passam pela
+// sincronização com o Google Sheets, às vezes voltam como texto (JSON em
+// string) em vez de lista de verdade — essa função decodifica de volta,
+// e se não conseguir, avisa em vez de deixar a tela quebrar em silêncio.
+function normalizarListaSincronizada(valor, contexto){
+  if (Array.isArray(valor)) return valor;
+  if (typeof valor === 'string' && valor.trim()){
+    try {
+      const parsed = JSON.parse(valor);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e){ /* cai pro aviso abaixo */ }
+    console.error(`Não consegui decodificar "${contexto}" — texto recebido:`, valor);
+  }
+  return [];
+}
+
 function nomesEquivalentes(a, b){
   if (!a || !b) return false;
   const limpa = (s) => OPS.normalize(s).replace(/[^a-z0-9]/g, '');
@@ -1253,6 +1269,10 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
     return;
   }
 
+  // garante que historicoMensal é sempre lista de verdade (segunda camada de
+  // proteção, além da que já roda no carregamento — nunca é demais aqui)
+  produtividadeValida.forEach(p => { p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`); });
+
   // meses disponíveis, do mais recente pro mais antigo
   const todosMeses = [...new Set(produtividadeValida.flatMap(p => (p.historicoMensal || []).map(h => h.mesKey)))]
     .filter(m => /^\d{4}-\d{2}$/.test(m)) // descarta lixo de importações antigas sem mesKey válido
@@ -1532,6 +1552,7 @@ async function initPage(){
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+  produtividade.forEach(p => { p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`); });
   produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
   populateVeiculosSelect();
   populateStatusFilter();
