@@ -858,7 +858,7 @@ const OPS = (() => {
     const url = `${OPS_SYNC_BASE_URL}?${params.toString()}`;
 
     const controller = new AbortController();
-    const tempoLimiteMs = 60000; // 60s — planilha externa grande pode demorar, mas não pra sempre
+    const tempoLimiteMs = 100000; // 100s — planilha externa grande pode demorar, mas não pra sempre
     const timeoutId = setTimeout(() => controller.abort(), tempoLimiteMs);
     let res;
     try{
