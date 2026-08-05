@@ -892,7 +892,9 @@ document.getElementById('mj-card-colaborador').addEventListener('click', mostrar
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
 const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 function formatarMes(mesKey){ // '2026-07' -> 'jul/26'
-  const [ano, mes] = mesKey.split('-');
+  if (!mesKey) return '—';
+  const [ano, mes] = String(mesKey).split('-');
+  if (!ano || !mes || !MES_NOMES[Number(mes) - 1]) return String(mesKey);
   return `${MES_NOMES[Number(mes) - 1]}/${ano.slice(2)}`;
 }
 
