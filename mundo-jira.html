@@ -30,11 +30,11 @@
         <p>Abra e acompanhe chamados de Material, Frotas e Reclamações.</p>
       </div>
     </div>
-    <div class="mj-portal-card" id="mj-card-colaborador">
+    <div class="mj-portal-card" id="mj-card-colaborador" style="opacity:0.5;cursor:not-allowed">
       <div class="mj-portal-card-ico">🧑‍💼</div>
       <div>
         <h3>Painel do Colaborador</h3>
-        <p>Histórico de produtividade — média, quartil e tendência.</p>
+        <p>Temporariamente pausado — voltamos com uma versão mais leve em breve.</p>
       </div>
     </div>
   </div>
@@ -897,7 +897,9 @@ function mostrarColaborador(){
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
 document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
 document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', mostrarPortal);
-document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
+document.getElementById('mj-card-colaborador').addEventListener('click', () => {
+  alert('O Painel do Colaborador está pausado por enquanto — a base de produtividade cresceu demais e estava deixando o site inteiro lento. Vamos voltar com uma versão mais leve em breve.');
+});
 
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
 const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1599,14 +1601,14 @@ function populateFiltroTecnicoProdutividade(){
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas, sharedProdutividade, sharedProdutividadeTipo] = await Promise.all([
+  // produtividade pausada por enquanto (base cresceu demais e deixava o
+  // site lento) — não busca mais essas duas coleções automaticamente
+  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COMENTARIOS),
     OPS.syncPull(SYNC_HISTORICO),
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
-    OPS.syncPull(SYNC_PRODUTIVIDADE),
-    OPS.syncPull(SYNC_PRODUTIVIDADE_TIPO),
   ]);
   toast.remove();
   tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
@@ -1614,28 +1616,8 @@ async function initPage(){
   historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
-  if (!produtividadeSyncPendente){
-    produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
-    if (produtividade[0]){
-      window.__diagnosticoProdutividadeBruto = {
-        tecnico: produtividade[0].tecnico,
-        tipoDoCampo: typeof produtividade[0].historicoMensal,
-        ehArray: Array.isArray(produtividade[0].historicoMensal),
-        tamanho: Array.isArray(produtividade[0].historicoMensal) ? produtividade[0].historicoMensal.length : (produtividade[0].historicoMensal || '').length,
-        amostraTexto: JSON.stringify(produtividade[0].historicoMensal).slice(0, 300),
-      };
-    }
-    produtividade.forEach(p => {
-      p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`);
-      p.historicoMensal.forEach(h => { h.mesKey = normalizarMesKey(h.mesKey); });
-    });
-    produtividadeDetalhePorTipo = sharedProdutividadeTipo || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
-    produtividadeDetalhePorTipo.forEach(r => { r.mesKey = normalizarMesKey(r.mesKey); });
-  }
   populateVeiculosSelect();
   populateStatusFilter();
-  populateFiltroTipoProdutividade();
-  populateFiltroTecnicoProdutividade();
   renderAll();
   return !!(sharedTickets || sharedPessoas);
 }
