@@ -1234,9 +1234,18 @@ function renderPainelColaborador(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
   document.getElementById('mj-prod-papel-banner').innerHTML =
-    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab ? ` — ${colab.nome}` : ''}`;
+    `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab && colab.nome ? ` — ${colab.nome}` : ''}`;
 
   const conteudo = document.getElementById('mj-prod-conteudo');
+  try{
+    renderPainelColaboradorConteudo(papel, colab, conteudo);
+  }catch(err){
+    console.error('Erro ao montar o Painel do Colaborador', err);
+    conteudo.innerHTML = `<p style="color:var(--crit);font-size:13px">⚠️ Deu um problema ao montar essa tela. Print isso e me avisa: ${err.message}</p>`;
+  }
+}
+
+function renderPainelColaboradorConteudo(papel, colab, conteudo){
   const produtividadeValida = produtividade.filter(p => ehInstaladorReparador(p.tecnico));
 
   if (!produtividadeValida.length){
