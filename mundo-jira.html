@@ -1396,7 +1396,8 @@ let mjGraficoAtual = { tecnico: null, mesKey: null, metrica: 'produtividade' };
 function abrirGraficoTipo(tecnico, mesKey){
   const registro = produtividade.find(p => p.tecnico === tecnico);
   const mesDados = registro ? (registro.historicoMensal || []).find(h => h.mesKey === mesKey) : null;
-  if (!mesDados || !mesDados.porTipo){ alert('Não achei o detalhamento por tipo de serviço desse mês.'); return; }
+  const temDetalhe = produtividadeDetalhePorTipo.some(r => r.tecnico === tecnico && r.mesKey === mesKey);
+  if (!mesDados || !temDetalhe){ alert('Não achei o detalhamento por tipo de serviço desse mês.'); return; }
   mjGraficoAtual = { tecnico, mesKey, metrica: 'produtividade' };
   document.getElementById('mj-grafico-titulo').textContent = `${tecnico}`;
   document.getElementById('mj-grafico-subtitulo').textContent = `${formatarMes(mesKey)} — clique numa métrica pra trocar a visão`;
