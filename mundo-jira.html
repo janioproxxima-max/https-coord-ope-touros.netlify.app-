@@ -1331,7 +1331,8 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
   if (!todosMeses.length){
     const amostra = produtividadeValida[0];
     const amostraMes = amostra && amostra.historicoMensal && amostra.historicoMensal[0];
-    conteudo.innerHTML = `<p style="color:var(--warn);font-size:12px">⚠️ Achei ${produtividadeValida.length} colaborador(es), mas nenhum mês em formato válido. Print isso e me avisa: ${JSON.stringify(amostraMes)}</p>`;
+    const diag = window.__diagnosticoProdutividadeBruto;
+    conteudo.innerHTML = `<p style="color:var(--warn);font-size:12px">⚠️ Achei ${produtividadeValida.length} colaborador(es), mas nenhum mês em formato válido. Print isso e me avisa:<br>${diag ? `técnico: "${diag.tecnico}" | tipo do campo: ${diag.tipoDoCampo} | é lista? ${diag.ehArray} | tamanho: ${diag.tamanho} | amostra: ${diag.amostraTexto}` : 'sem amostra bruta disponível'}</p>`;
     return;
   }
 
@@ -1610,6 +1611,15 @@ async function initPage(){
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   if (!produtividadeSyncPendente){
     produtividade = sharedProdutividade || OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+    if (produtividade[0]){
+      window.__diagnosticoProdutividadeBruto = {
+        tecnico: produtividade[0].tecnico,
+        tipoDoCampo: typeof produtividade[0].historicoMensal,
+        ehArray: Array.isArray(produtividade[0].historicoMensal),
+        tamanho: Array.isArray(produtividade[0].historicoMensal) ? produtividade[0].historicoMensal.length : (produtividade[0].historicoMensal || '').length,
+        amostraTexto: JSON.stringify(produtividade[0].historicoMensal).slice(0, 300),
+      };
+    }
     produtividade.forEach(p => {
       p.historicoMensal = normalizarListaSincronizada(p.historicoMensal, `histórico de ${p.tecnico}`);
       p.historicoMensal.forEach(h => { h.mesKey = normalizarMesKey(h.mesKey); });
