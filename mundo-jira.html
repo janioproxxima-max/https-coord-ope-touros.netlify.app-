@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="supabase-client.js"></script>
 </head>
 <body>
 
@@ -30,11 +31,11 @@
         <p>Abra e acompanhe chamados de Material, Frotas e Reclamações.</p>
       </div>
     </div>
-    <div class="mj-portal-card" id="mj-card-colaborador" style="opacity:0.5;cursor:not-allowed">
+    <div class="mj-portal-card" id="mj-card-colaborador">
       <div class="mj-portal-card-ico">🧑‍💼</div>
       <div>
         <h3>Painel do Colaborador</h3>
-        <p>Temporariamente pausado — voltamos com uma versão mais leve em breve.</p>
+        <p>Histórico de produtividade — média, quartil e tendência.</p>
       </div>
     </div>
   </div>
@@ -345,6 +346,40 @@ let historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
 let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
 
+// ---------- conversão JS (camelCase) <-> Supabase (snake_case) ----------
+function ticketParaSupabase(t){
+  return {
+    id: t.id, numero: t.numero, modulo: t.modulo, categoria: t.categoria,
+    item: t.item, tamanho: t.tamanho, quantidade: t.quantidade, descricao: t.descricao,
+    colaborador_nome: t.colaboradorNome, matricula: t.matricula, inspetor: t.inspetor,
+    supervisor: t.supervisor, coordenador: t.coordenador, criado_por: t.criadoPor,
+    criado_em: t.criadoEm, status: t.status, responsavel_atual: t.responsavelAtual,
+    responsavel_atual_nome: t.responsavelAtualNome, data_apropriacao: t.dataApropriacao,
+  };
+}
+function ticketDeSupabase(r){
+  return {
+    id: r.id, numero: r.numero, modulo: r.modulo, categoria: r.categoria,
+    item: r.item, tamanho: r.tamanho, quantidade: r.quantidade, descricao: r.descricao,
+    colaboradorNome: r.colaborador_nome, matricula: r.matricula, inspetor: r.inspetor,
+    supervisor: r.supervisor, coordenador: r.coordenador, criadoPor: r.criado_por,
+    criadoEm: r.criado_em, status: r.status, responsavelAtual: r.responsavel_atual,
+    responsavelAtualNome: r.responsavel_atual_nome, dataApropriacao: r.data_apropriacao,
+  };
+}
+function comentarioParaSupabase(c){
+  return { id: c.id, ticket_id: c.ticketId, usuario: c.usuario, data: c.data, mensagem: c.mensagem, foto: c.foto };
+}
+function comentarioDeSupabase(r){
+  return { id: r.id, ticketId: r.ticket_id, usuario: r.usuario, data: r.data, mensagem: r.mensagem, foto: r.foto };
+}
+function historicoParaSupabase(h){
+  return { id: h.id, ticket_id: h.ticketId, tipo: h.tipo, data: h.data, usuario: h.usuario, detalhe: h.detalhe };
+}
+function historicoDeSupabase(r){
+  return { id: r.id, ticketId: r.ticket_id, tipo: r.tipo, data: r.data, usuario: r.usuario, detalhe: r.detalhe };
+}
+
 const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
 let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
@@ -365,16 +400,31 @@ function comentariosDoTicket(ticketId){
 function historicoDoTicket(ticketId){
   return historicos.filter(h => h.ticketId === ticketId).sort((a,b) => new Date(a.data) - new Date(b.data));
 }
-async function salvarComentarios(){
+async function salvarComentarioUnico(comentario){
   OPS.saveData(STORAGE_KEY_COMENTARIOS, comentarios);
-  await OPS.syncPushWithToast(SYNC_COMENTARIOS, comentarios);
+  try{
+    await OPS_SUPABASE.upsert('mundo_jira_comentarios', [comentarioParaSupabase(comentario)], 'id');
+    return true;
+  }catch(err){
+    console.error('Falha ao salvar comentário no Supabase', err);
+    alert('⚠️ Não consegui salvar essa mensagem no servidor. Ela fica só no seu navegador por enquanto — tenta de novo em instantes.');
+    return false;
+  }
 }
-async function salvarHistoricos(){
+async function salvarHistoricoUnico(evento){
   OPS.saveData(STORAGE_KEY_HISTORICO, historicos);
-  await OPS.syncPush(SYNC_HISTORICO, historicos);
+  try{
+    await OPS_SUPABASE.upsert('mundo_jira_historico', [historicoParaSupabase(evento)], 'id');
+    return true;
+  }catch(err){
+    console.error('Falha ao salvar histórico no Supabase', err);
+    return false;
+  }
 }
 function adicionarHistorico(ticketId, tipo, detalhe){
-  historicos.push({ id: OPS.uid(), ticketId, tipo, data: new Date().toISOString(), usuario: usuarioAtual, detalhe });
+  const evento = { id: OPS.uid(), ticketId, tipo, data: new Date().toISOString(), usuario: usuarioAtual, detalhe };
+  historicos.push(evento);
+  return evento;
 }
 
 function populateVeiculosSelect(){
@@ -666,10 +716,9 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     dataApropriacao: null,
   };
   tickets.push(ticket);
-  adicionarHistorico(ticket.id, 'criacao', `Chamado aberto (${MJ_MODULO_LABEL[modulo]})`);
-  OPS.saveData(STORAGE_KEY, tickets);
-  await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
-  await salvarHistoricos();
+  const eventoCriacao = adicionarHistorico(ticket.id, 'criacao', `Chamado aberto (${MJ_MODULO_LABEL[modulo]})`);
+  await salvarTicketUnico(ticket);
+  await salvarHistoricoUnico(eventoCriacao);
   modalNovo.style.display = 'none';
   renderAll();
 });
@@ -752,9 +801,16 @@ function renderDetalhe(){
   `).join('');
 }
 
-async function salvarTickets(){
+async function salvarTicketUnico(ticket){
   OPS.saveData(STORAGE_KEY, tickets);
-  await OPS.syncPushWithToast(SYNC_COLLECTION, tickets);
+  try{
+    await OPS_SUPABASE.upsert('mundo_jira_tickets', [ticketParaSupabase(ticket)], 'id');
+    return true;
+  }catch(err){
+    console.error('Falha ao salvar chamado no Supabase', err);
+    alert('⚠️ Não consegui salvar essa alteração no servidor. Tenta de novo em instantes, ou avisa se continuar falhando.');
+    return false;
+  }
 }
 
 async function excluirTicket(id){
@@ -766,9 +822,17 @@ async function excluirTicket(id){
   comentarios = comentarios.filter(c => c.ticketId !== id);
   historicos = historicos.filter(h => h.ticketId !== id);
   modalDetalhe.style.display = 'none';
-  await salvarTickets();
-  await salvarComentarios();
-  await salvarHistoricos();
+  OPS.saveData(STORAGE_KEY, tickets);
+  OPS.saveData(STORAGE_KEY_COMENTARIOS, comentarios);
+  OPS.saveData(STORAGE_KEY_HISTORICO, historicos);
+  try{
+    // apagar o chamado já apaga em cascata os comentários e histórico dele
+    // (configurado assim nas tabelas do Supabase)
+    await OPS_SUPABASE.del('mundo_jira_tickets', `id=eq.${encodeURIComponent(id)}`);
+  }catch(err){
+    console.error('Falha ao excluir chamado no Supabase', err);
+    alert('⚠️ Não consegui confirmar a exclusão no servidor. Tenta de novo em instantes.');
+  }
   renderAll();
 }
 
@@ -779,10 +843,10 @@ async function apropriarSe(id){
   t.responsavelAtual = usuarioAtual;
   t.responsavelAtualNome = colab ? colab.nome : usuarioAtual;
   t.dataApropriacao = new Date().toISOString();
-  adicionarHistorico(t.id, 'apropriacao', `${t.responsavelAtualNome} se apropriou da solicitação`);
+  const evento = adicionarHistorico(t.id, 'apropriacao', `${t.responsavelAtualNome} se apropriou da solicitação`);
   if (t.status === 'aberto') t.status = 'em_analise';
-  await salvarTickets();
-  await salvarHistoricos();
+  await salvarTicketUnico(t);
+  await salvarHistoricoUnico(evento);
   renderDetalhe();
   renderAll();
 }
@@ -792,9 +856,9 @@ async function mudarStatus(id, novoStatus){
   if (!t) return;
   const antigo = t.status;
   t.status = novoStatus;
-  adicionarHistorico(t.id, 'status', `Status alterado de "${MJ_STATUS_LABEL[antigo]}" para "${MJ_STATUS_LABEL[novoStatus]}"`);
-  await salvarTickets();
-  await salvarHistoricos();
+  const evento = adicionarHistorico(t.id, 'status', `Status alterado de "${MJ_STATUS_LABEL[antigo]}" para "${MJ_STATUS_LABEL[novoStatus]}"`);
+  await salvarTicketUnico(t);
+  await salvarHistoricoUnico(evento);
   renderDetalhe();
   renderAll();
 }
@@ -858,13 +922,14 @@ document.getElementById('mj-btn-enviar-comentario').onclick = async () => {
   const t = tickets.find(x => x.id === ticketAbertoId);
   if (!t) return;
   const agora = new Date().toISOString();
-  comentarios.push({ id: OPS.uid(), ticketId: t.id, usuario: usuarioAtual, data: agora, mensagem: msg, foto: fotoAnexadaBase64 || null });
-  adicionarHistorico(t.id, 'comentario', fotoAnexadaBase64 ? 'Nova mensagem com foto no chat' : 'Nova mensagem no chat');
+  const novoComentario = { id: OPS.uid(), ticketId: t.id, usuario: usuarioAtual, data: agora, mensagem: msg, foto: fotoAnexadaBase64 || null };
+  comentarios.push(novoComentario);
+  const evento = adicionarHistorico(t.id, 'comentario', fotoAnexadaBase64 ? 'Nova mensagem com foto no chat' : 'Nova mensagem no chat');
   input.value = '';
   fotoAnexadaBase64 = null;
   document.getElementById('mj-d-foto-preview').style.display = 'none';
-  await salvarComentarios();
-  await salvarHistoricos();
+  await salvarComentarioUnico(novoComentario);
+  await salvarHistoricoUnico(evento);
   renderDetalhe();
 };
 document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e => {
@@ -897,9 +962,7 @@ function mostrarColaborador(){
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
 document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
 document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', mostrarPortal);
-document.getElementById('mj-card-colaborador').addEventListener('click', () => {
-  alert('O Painel do Colaborador está pausado por enquanto — a base de produtividade cresceu demais e estava deixando o site inteiro lento. Vamos voltar com uma versão mais leve em breve.');
-});
+document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
 
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
 const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -1131,6 +1194,8 @@ function mediaPonderada(listaTecnicos, mesKey){
 function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
   let mesesAtualizados = new Set();
+  const registrosTocados = [];
+  const detalhesTocados = [];
 
   function supervisorReal(nomeTecnico){
     const colab = pessoas.find(p => nomesEquivalentes(p.nome, nomeTecnico));
@@ -1144,6 +1209,7 @@ function mesclarProdutividade(resultado){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
       produtividade.push(registro);
     }
+    registrosTocados.push(registro);
     // o cadastro de Gestão de Pessoas é a fonte confiável de supervisor — a
     // coluna "Supervisor" da planilha bruta vem quase sempre vazia
     registro.supervisor = supervisorReal(tecnico) || registro.supervisor;
@@ -1182,6 +1248,7 @@ function mesclarProdutividade(resultado){
         regTipo.pontos = dt.pontos;
         regTipo.recorrencias = dt.recorrencias;
         regTipo.tempoMedioAtendimento = dt.temposAtendimento.length ? mediaSimples(dt.temposAtendimento) : null;
+        detalhesTocados.push(regTipo);
       });
     });
     registro.historicoMensal.sort((a, b) => a.mesKey.localeCompare(b.mesKey));
@@ -1192,20 +1259,47 @@ function mesclarProdutividade(resultado){
       registro.tendencia = ultimo > penultimo ? 'Melhorando' : (ultimo < penultimo ? 'Piorando' : 'Estável');
     }
   });
-  return [...mesesAtualizados].sort();
+  return { meses: [...mesesAtualizados].sort(), registrosTocados, detalhesTocados };
 }
 
 document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
 let produtividadeSyncPendente = false;
 
+function produtividadeParaSupabase(p){
+  return {
+    id: p.id, tecnico: p.tecnico, supervisor: p.supervisor, coordenador: p.coordenador,
+    ppc_medio: p.ppcMedio, tendencia: p.tendencia, historico_mensal: p.historicoMensal || [],
+  };
+}
+function produtividadeDeSupabase(r){
+  return {
+    id: r.id, tecnico: r.tecnico, supervisor: r.supervisor, coordenador: r.coordenador,
+    ppcMedio: r.ppc_medio, tendencia: r.tendencia, historicoMensal: r.historico_mensal || [],
+  };
+}
+function detalheTipoParaSupabase(r){
+  return {
+    id: r.id, tecnico: r.tecnico, mes_key: r.mesKey, tipo: r.tipo,
+    produtivos: r.produtivos, improdutivos: r.improdutivos, pontos: r.pontos,
+    recorrencias: r.recorrencias, tempo_medio_atendimento: r.tempoMedioAtendimento,
+  };
+}
+function detalheTipoDeSupabase(r){
+  return {
+    id: r.id, tecnico: r.tecnico, mesKey: r.mes_key, tipo: r.tipo,
+    produtivos: r.produtivos, improdutivos: r.improdutivos, pontos: r.pontos,
+    recorrencias: r.recorrencias, tempoMedioAtendimento: r.tempo_medio_atendimento,
+  };
+}
+
 async function aplicarResultadoProdutividade(resultado){
-  const meses = mesclarProdutividade(resultado);
+  const { meses, registrosTocados, detalhesTocados } = mesclarProdutividade(resultado);
   detalhesRegistrosProdutividade = resultado.detalhesRegistros;
   paresRecorrenciaProdutividade = resultado.paresRecorrencia;
   OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
   OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
 
-  // atualiza a tela JÁ, sem esperar a viagem até o Google Sheets
+  // atualiza a tela JÁ, sem esperar a viagem até o servidor
   populateFiltroTipoProdutividade();
   populateFiltroTecnicoProdutividade();
   renderPainelColaborador();
@@ -1214,21 +1308,22 @@ async function aplicarResultadoProdutividade(resultado){
   // com a tela redesenhada — assim o navegador consegue pintar o histórico
   // antes de travar na caixa de diálogo do alert()
   setTimeout(() => {
-    alert(`✅ Atualizado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${Object.keys(resultado.agregado).length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+    alert(`✅ Atualizado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${registrosTocados.length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
   }, 0);
 
-  // sincroniza com a planilha do site em segundo plano, sem travar a tela
+  // sincroniza só quem mudou (não a base toda) com o servidor, em segundo
+  // plano, sem travar a tela
   produtividadeSyncPendente = true;
   const toast = OPS.showToast('☁️ Sincronizando...');
   Promise.all([
-    OPS.syncPush(SYNC_PRODUTIVIDADE, produtividade),
-    OPS.syncPush(SYNC_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo),
+    OPS_SUPABASE.upsert('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 'tecnico'),
+    OPS_SUPABASE.upsert('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 'tecnico,mes_key,tipo'),
   ]).then(() => {
     toast.remove();
   }).catch((err) => {
     toast.remove();
     console.error('Falha ao sincronizar produtividade', err);
-    alert('⚠️ A atualização está salva no seu navegador, mas não consegui enviar pra planilha do site agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
+    alert('⚠️ A atualização está salva no seu navegador, mas não consegui enviar pro servidor agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
   }).finally(() => {
     produtividadeSyncPendente = false;
   });
@@ -1601,25 +1696,60 @@ function populateFiltroTecnicoProdutividade(){
 
 async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
-  // produtividade pausada por enquanto (base cresceu demais e deixava o
-  // site lento) — não busca mais essas duas coleções automaticamente
-  const [sharedTickets, sharedComentarios, sharedHistoricos, sharedPessoas, sharedFrotas] = await Promise.all([
-    OPS.syncPull(SYNC_COLLECTION),
-    OPS.syncPull(SYNC_COMENTARIOS),
-    OPS.syncPull(SYNC_HISTORICO),
+  // Mundo Jira agora vem do Supabase; Pessoas/Frotas continuam no Google
+  // Sheets (Apps Script), sem mudança nenhuma nessa parte
+  const [sharedPessoas, sharedFrotas] = await Promise.all([
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
   ]);
+  let supabaseFuncionou = true;
+  try{
+    const [rowsTickets, rowsComentarios, rowsHistoricos] = await Promise.all([
+      OPS_SUPABASE.select('mundo_jira_tickets'),
+      OPS_SUPABASE.select('mundo_jira_comentarios'),
+      OPS_SUPABASE.select('mundo_jira_historico'),
+    ]);
+    tickets = rowsTickets.map(ticketDeSupabase);
+    comentarios = rowsComentarios.map(comentarioDeSupabase);
+    historicos = rowsHistoricos.map(historicoDeSupabase);
+    OPS.saveData(STORAGE_KEY, tickets);
+    OPS.saveData(STORAGE_KEY_COMENTARIOS, comentarios);
+    OPS.saveData(STORAGE_KEY_HISTORICO, historicos);
+  }catch(err){
+    supabaseFuncionou = false;
+    console.error('Falha ao buscar dados do Mundo Jira no Supabase', err);
+    tickets = OPS.loadData(STORAGE_KEY) || [];
+    comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
+    historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
+  }
   toast.remove();
-  tickets = sharedTickets || OPS.loadData(STORAGE_KEY) || [];
-  comentarios = sharedComentarios || OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
-  historicos = sharedHistoricos || OPS.loadData(STORAGE_KEY_HISTORICO) || [];
+  if (!supabaseFuncionou){
+    alert('⚠️ Não consegui buscar os chamados do Mundo Jira no servidor agora — mostrando o que ficou salvo no seu navegador da última vez. Tenta atualizar a página em instantes.');
+  }
+  if (!produtividadeSyncPendente){
+    try{
+      const [rowsProdutividade, rowsDetalheTipo] = await Promise.all([
+        OPS_SUPABASE.select('produtividade_historico'),
+        OPS_SUPABASE.select('produtividade_detalhe_por_tipo'),
+      ]);
+      produtividade = rowsProdutividade.map(produtividadeDeSupabase);
+      produtividadeDetalhePorTipo = rowsDetalheTipo.map(detalheTipoDeSupabase);
+      OPS.saveData(STORAGE_KEY_PRODUTIVIDADE, produtividade);
+      OPS.saveData(STORAGE_KEY_PRODUTIVIDADE_TIPO, produtividadeDetalhePorTipo);
+    }catch(err){
+      console.error('Falha ao buscar produtividade no Supabase', err);
+      produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
+      produtividadeDetalhePorTipo = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
+    }
+  }
   pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   populateVeiculosSelect();
   populateStatusFilter();
+  populateFiltroTipoProdutividade();
+  populateFiltroTecnicoProdutividade();
   renderAll();
-  return !!(sharedTickets || sharedPessoas);
+  return supabaseFuncionou;
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
