@@ -407,7 +407,7 @@ async function salvarComentarioUnico(comentario){
     return true;
   }catch(err){
     console.error('Falha ao salvar comentário no Supabase', err);
-    alert('⚠️ Não consegui salvar essa mensagem no servidor. Ela fica só no seu navegador por enquanto — tenta de novo em instantes.');
+    alert(`⚠️ Não consegui salvar essa mensagem no servidor. Ela fica só no seu navegador por enquanto.\n\nMotivo técnico: ${err.message}`);
     return false;
   }
 }
@@ -808,7 +808,7 @@ async function salvarTicketUnico(ticket){
     return true;
   }catch(err){
     console.error('Falha ao salvar chamado no Supabase', err);
-    alert('⚠️ Não consegui salvar essa alteração no servidor. Tenta de novo em instantes, ou avisa se continuar falhando.');
+    alert(`⚠️ Não consegui salvar essa alteração no servidor.\n\nMotivo técnico: ${err.message}`);
     return false;
   }
 }
@@ -831,7 +831,7 @@ async function excluirTicket(id){
     await OPS_SUPABASE.del('mundo_jira_tickets', `id=eq.${encodeURIComponent(id)}`);
   }catch(err){
     console.error('Falha ao excluir chamado no Supabase', err);
-    alert('⚠️ Não consegui confirmar a exclusão no servidor. Tenta de novo em instantes.');
+    alert(`⚠️ Não consegui confirmar a exclusão no servidor.\n\nMotivo técnico: ${err.message}`);
   }
   renderAll();
 }
@@ -1292,6 +1292,29 @@ function detalheTipoDeSupabase(r){
   };
 }
 
+function detalheRegistroParaSupabase(r){
+  return {
+    id: OPS.uid(), tecnico: r.tecnico, mes_key: r.mesKey, tipo: r.tipo,
+    protocolo: r.protocolo, area: r.area, localidade: r.localidade,
+    descricao: r.descricao, produtivo: r.produtivo, tma: r.tma,
+  };
+}
+function parRecorrenciaParaSupabase(p){
+  return {
+    id: OPS.uid(), tecnico: p.tecnico, mes_key: p.mesKey, tipo: p.tipo,
+    protocolo_anterior: p.anterior.protocolo, data_anterior: p.anterior.data, descricao_anterior: p.anterior.descricao,
+    protocolo_atual: p.atual.protocolo, data_atual: p.atual.data, descricao_atual: p.atual.descricao,
+    area: p.atual.area, localidade: p.atual.localidade,
+  };
+}
+// insere em lotes (uma planilha pode gerar milhares de linhas — evita
+// mandar tudo numa requisição só)
+async function inserirEmLotes(tabela, registros, tamanhoLote){
+  for (let i = 0; i < registros.length; i += tamanhoLote){
+    await OPS_SUPABASE.upsert(tabela, registros.slice(i, i + tamanhoLote), 'id');
+  }
+}
+
 async function aplicarResultadoProdutividade(resultado){
   const { meses, registrosTocados, detalhesTocados } = mesclarProdutividade(resultado);
   detalhesRegistrosProdutividade = resultado.detalhesRegistros;
@@ -1308,7 +1331,7 @@ async function aplicarResultadoProdutividade(resultado){
   // com a tela redesenhada — assim o navegador consegue pintar o histórico
   // antes de travar na caixa de diálogo do alert()
   setTimeout(() => {
-    alert(`✅ Atualizado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${registrosTocados.length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos por tipo de serviço já ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto). Só a lista de protocolos (ao clicar numa barra) fica disponível apenas nesta sessão, até você sair da página.`);
+    alert(`✅ Atualizado! Meses atualizados: ${meses.map(formatarMes).join(', ')}\n${registrosTocados.length} técnico(s) recalculados.\n\nOs meses anteriores que você já tinha registrado continuam guardados — só o(s) mês(es) dessa planilha foi(ram) atualizado(s).\n\nOs gráficos e a lista de protocolos ficam disponíveis pra todo mundo assim que a sincronização terminar (veja o aviso "☁️ Sincronizando..." no canto).`);
   }, 0);
 
   // sincroniza só quem mudou (não a base toda) com o servidor, em segundo
@@ -1318,12 +1341,22 @@ async function aplicarResultadoProdutividade(resultado){
   Promise.all([
     OPS_SUPABASE.upsert('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 'tecnico'),
     OPS_SUPABASE.upsert('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 'tecnico,mes_key,tipo'),
+    // limpa o detalhe antigo desses meses antes de inserir o novo, pra não
+    // acumular linhas duplicadas a cada reimportação do mesmo mês
+    (async () => {
+      for (const mesKey of meses){
+        await OPS_SUPABASE.del('produtividade_registros', `mes_key=eq.${encodeURIComponent(mesKey)}`);
+        await OPS_SUPABASE.del('produtividade_pares_recorrencia', `mes_key=eq.${encodeURIComponent(mesKey)}`);
+      }
+      await inserirEmLotes('produtividade_registros', resultado.detalhesRegistros.map(detalheRegistroParaSupabase), 500);
+      await inserirEmLotes('produtividade_pares_recorrencia', resultado.paresRecorrencia.map(parRecorrenciaParaSupabase), 500);
+    })(),
   ]).then(() => {
     toast.remove();
   }).catch((err) => {
     toast.remove();
     console.error('Falha ao sincronizar produtividade', err);
-    alert('⚠️ A atualização está salva no seu navegador, mas não consegui enviar pro servidor agora. Tenta clicar em "↻ Atualizar" daqui a pouco pra tentar de novo, ou me avisa se continuar falhando.');
+    alert(`⚠️ A atualização está salva no seu navegador, mas não consegui enviar pro servidor agora.\n\nMotivo técnico: ${err.message}\n\nPrint isso e me avisa. Por enquanto, os outros usuários não vão ver essa atualização.`);
   }).finally(() => {
     produtividadeSyncPendente = false;
   });
@@ -1609,14 +1642,28 @@ function renderGraficoTipo(){
   document.getElementById('mj-grafico-detalhe').innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver o detalhamento.</p>';
 }
 
-function abrirDetalheTipo(tipo){
+async function abrirDetalheTipo(tipo){
   const { tecnico, mesKey, metrica } = mjGraficoAtual;
   const container = document.getElementById('mj-grafico-detalhe');
+  container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Buscando detalhe...</p>';
 
   if (metrica === 'recorrencia'){
-    const pares = paresRecorrenciaProdutividade.filter(p => p.tecnico === tecnico && p.mesKey === mesKey && p.tipo === tipo);
+    let pares = paresRecorrenciaProdutividade.filter(p => p.tecnico === tecnico && p.mesKey === mesKey && p.tipo === tipo);
     if (!pares.length){
-      container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem detalhe disponível — reimporte a planilha nesta sessão pra ver os pares de recorrência.</p>';
+      try{
+        const filtro = `tecnico=eq.${encodeURIComponent(tecnico)}&mes_key=eq.${encodeURIComponent(mesKey)}&tipo=eq.${encodeURIComponent(tipo)}`;
+        const rows = await OPS_SUPABASE.select('produtividade_pares_recorrencia', filtro);
+        pares = rows.map(r => ({
+          tecnico: r.tecnico, mesKey: r.mes_key, tipo: r.tipo,
+          anterior: { protocolo: r.protocolo_anterior, data: r.data_anterior, descricao: r.descricao_anterior },
+          atual: { protocolo: r.protocolo_atual, data: r.data_atual, descricao: r.descricao_atual, area: r.area, localidade: r.localidade },
+        }));
+      }catch(err){
+        console.error('Falha ao buscar pares de recorrência', err);
+      }
+    }
+    if (!pares.length){
+      container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem recorrência registrada pra esse tipo nesse mês.</p>';
       return;
     }
     container.innerHTML = `
@@ -1636,11 +1683,23 @@ function abrirDetalheTipo(tipo){
 
   // produtividade, improdutividade e TMA usam a mesma lista de protocolos
   let registros = detalhesRegistrosProdutividade.filter(r => r.tecnico === tecnico && r.mesKey === mesKey && r.tipo === tipo);
+  if (!registros.length){
+    try{
+      const filtro = `tecnico=eq.${encodeURIComponent(tecnico)}&mes_key=eq.${encodeURIComponent(mesKey)}&tipo=eq.${encodeURIComponent(tipo)}`;
+      const rows = await OPS_SUPABASE.select('produtividade_registros', filtro);
+      registros = rows.map(r => ({
+        tecnico: r.tecnico, mesKey: r.mes_key, tipo: r.tipo, protocolo: r.protocolo,
+        area: r.area, localidade: r.localidade, descricao: r.descricao, produtivo: r.produtivo, tma: r.tma,
+      }));
+    }catch(err){
+      console.error('Falha ao buscar protocolos', err);
+    }
+  }
   if (metrica === 'improdutividade') registros = registros.filter(r => !r.produtivo);
   else registros = registros.filter(r => r.produtivo);
 
   if (!registros.length){
-    container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem detalhe disponível — reimporte a planilha nesta sessão pra ver os protocolos.</p>';
+    container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem protocolo registrado pra esse tipo nesse mês.</p>';
     return;
   }
   container.innerHTML = `
