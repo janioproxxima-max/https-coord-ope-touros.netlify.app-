@@ -957,6 +957,8 @@ function mostrarColaborador(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'block';
+  const podeImportar = getCurrentAccess() === 'TOTAL';
+  document.getElementById('mj-btn-importar-produtividade').style.display = podeImportar ? '' : 'none';
   renderPainelColaborador();
 }
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
@@ -1262,7 +1264,10 @@ function mesclarProdutividade(resultado){
   return { meses: [...mesesAtualizados].sort(), registrosTocados, detalhesTocados };
 }
 
-document.getElementById('mj-btn-importar-produtividade').onclick = () => document.getElementById('mj-input-produtividade').click();
+document.getElementById('mj-btn-importar-produtividade').onclick = () => {
+  if (getCurrentAccess() !== 'TOTAL'){ alert('Só o Coordenador pode importar a planilha de produtividade.'); return; }
+  document.getElementById('mj-input-produtividade').click();
+};
 let produtividadeSyncPendente = false;
 
 function produtividadeParaSupabase(p){

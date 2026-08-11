@@ -328,6 +328,27 @@ const OPS = (() => {
   // real, via malha do IBGE, quando disponível); caso contrário, cai no
   // central da cidade. reason: 'missing' (sem coordenada própria) ou
   // 'out_of_area' (coordenada informada cai fora da área da cidade).
+  // A coluna "Latitude/Longitude" da planilha bruta vem às vezes com ponto
+  // decimal ("-5.53,-35.82") e às vezes em formato brasileiro, com vírgula
+  // decimal ("-5,53409218322486,-35,8096517063677") — nesse segundo caso
+  // dá 4 pedaços ao separar por vírgula, não 2. Essa função entende os dois.
+  function parseLatLngPair(text){
+    if (!text) return null;
+    const partes = text.trim().split(',').map(s => s.trim()).filter(s => s !== '');
+    if (partes.length === 2){
+      const lat = parseFloat(partes[0]);
+      const lng = parseFloat(partes[1]);
+      if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+    }
+    if (partes.length === 4){
+      // formato brasileiro: vírgula é separador decimal — junta de volta com ponto
+      const lat = parseFloat(partes[0] + '.' + partes[1]);
+      const lng = parseFloat(partes[2] + '.' + partes[3]);
+      if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+    }
+    return null;
+  }
+
   function resolveCoords(record){
     const center = cityCenter(record.cidade) || DEFAULT_CENTER;
     const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
@@ -960,8 +981,8 @@ const OPS = (() => {
 
           let lat, lng;
           if (row.latlng){
-            const parts = row.latlng.split(',').map(s => parseFloat(s.trim()));
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])){ lat = parts[0]; lng = parts[1]; }
+            const parsed = parseLatLngPair(row.latlng);
+            if (parsed){ lat = parsed.lat; lng = parsed.lng; }
           }
           if (lat === undefined && row.lat){ const v = parseFloat(row.lat.replace(',', '.')); if (!isNaN(v)) lat = v; }
           if (lng === undefined && row.lng){ const v = parseFloat(row.lng.replace(',', '.')); if (!isNaN(v)) lng = v; }
