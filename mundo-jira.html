@@ -334,11 +334,8 @@ const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'R
 const MJ_CATEGORIA_LABEL = { equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT' };
 const MJ_SLA_DIAS = 3;
 
-const SYNC_COLLECTION = 'MundoJiraTickets';
 const STORAGE_KEY = 'ops_touros_mundo_jira_v1';
-const SYNC_COMENTARIOS = 'MundoJiraComentarios';
 const STORAGE_KEY_COMENTARIOS = 'ops_touros_mundo_jira_comentarios_v1';
-const SYNC_HISTORICO = 'MundoJiraHistorico';
 const STORAGE_KEY_HISTORICO = 'ops_touros_mundo_jira_historico_v1';
 let tickets = OPS.loadData(STORAGE_KEY) || [];
 let comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
@@ -380,10 +377,8 @@ function historicoDeSupabase(r){
   return { id: r.id, ticketId: r.ticket_id, tipo: r.tipo, data: r.data, usuario: r.usuario, detalhe: r.detalhe };
 }
 
-const SYNC_PRODUTIVIDADE = 'ProdutividadeHistorico';
 const STORAGE_KEY_PRODUTIVIDADE = 'ops_touros_produtividade_v1';
 let produtividade = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE) || [];
-const SYNC_PRODUTIVIDADE_TIPO = 'ProdutividadeDetalhePorTipo';
 const STORAGE_KEY_PRODUTIVIDADE_TIPO = 'ops_touros_produtividade_tipo_v1';
 // uma linha por (técnico, mês, tipo de serviço) — sincronizado de verdade,
 // pra alimentar os gráficos sem sobrecarregar o registro principal do técnico

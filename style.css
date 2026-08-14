@@ -142,6 +142,12 @@ body.has-shell{ display:flex; height:100vh; overflow:hidden; }
 
 /* ---------------- layout shells ---------------- */
 .page{ max-width:1360px; margin:0 auto; padding:28px 24px 64px; }
+.page.mapa-full{
+  max-width:none; padding:14px 16px; height:100%; box-sizing:border-box;
+  display:flex; flex-direction:column;
+}
+.page.mapa-full #split-view{ flex:1 !important; min-height:0; }
+.page.mapa-full #map-panel{ height:auto !important; flex:1; }
 .page-head{ margin-bottom:22px; }
 .eyebrow{
   font-family:var(--f-display); font-size:11.5px; letter-spacing:.14em;
@@ -179,6 +185,14 @@ h1.page-title{ font-size:26px; margin:0 0 4px; font-weight:800; letter-spacing:-
 .stat-card.ok .value{ color:var(--ok); }
 .stat-card.crit .value{ color:var(--crit); }
 .stat-card.brand .value{ color:var(--brand); }
+
+.qf-stats-mini{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:8px;
+}
+.qf-stats-mini .stat-card{ padding:8px 10px; border-radius:8px; }
+.qf-stats-mini .stat-card .label{ font-size:9.5px; margin-bottom:3px; }
+.qf-stats-mini .stat-card .value{ font-size:16px; }
+.qf-stats-mini .stat-card .value small{ font-size:10.5px; }
 
 /* ---------------- toolbar / filters ---------------- */
 .toolbar{
@@ -229,7 +243,7 @@ select:focus, .input:focus, button:focus-visible{
   position:fixed; inset:0; z-index:150; height:100vh; border-radius:0;
 }
 .map-filters-drawer{
-  position:absolute; top:60px; right:16px; z-index:900; width:280px;
+  position:absolute; top:60px; right:16px; z-index:900; width:300px;
   max-height:calc(100% - 90px); overflow-y:auto;
   background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
   padding:14px; box-shadow:var(--shadow);
@@ -335,15 +349,21 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 /* ---------------- map panel ---------------- */
 .map-panel{ height:640px; display:flex; flex-direction:column; overflow:hidden; position:relative; }
 .map-panel .map-head{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 14px; border-bottom:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 14px; border-bottom:1px solid var(--line);
 }
+.map-panel .map-head-left{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.map-panel .map-head-left .btn{ white-space:nowrap; }
 .map-panel .map-head .title{ font-weight:700; font-size:13.5px; }
 .map-panel .map-head .legend{ flex:1; justify-content:center; }
 .map-panel .map-head-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .map-panel .map-head .legend{ display:flex; gap:12px; font-size:11.5px; color:var(--ink-dim); }
 .map-panel .map-head .legend span{ display:inline-flex; align-items:center; gap:5px; }
 .map-panel .map-head .legend .sw{ width:8px; height:8px; border-radius:50%; }
+@media (max-width:900px){
+  .map-panel .map-head{ flex-wrap:wrap; }
+  .map-panel .map-head .legend{ order:3; width:100%; justify-content:flex-start; flex-wrap:wrap; }
+}
 #map{ flex:1; min-height:0; background:#0c1013; }
 
 .leaflet-popup-content-wrapper{ background:var(--bg-panel-2); color:var(--ink); border-radius:8px; }

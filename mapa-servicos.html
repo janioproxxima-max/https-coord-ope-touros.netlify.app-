@@ -12,17 +12,17 @@
 </head>
 <body>
 
-<div class="page">
-  <div class="page-head">
+<div class="page mapa-full">
+  <div class="page-head" style="display:none">
     <p class="eyebrow">Mapa de serviços</p>
     <h1 class="page-title">Protocolos por tempo de atendimento</h1>
     <p class="page-sub">Tempo decorrido calculado em tempo real a partir da abertura — cidade, bairro e status de prazo por tipo de serviço.</p>
     <p class="page-sub" id="last-import-info" style="margin-top:4px;color:var(--ink-faint);font-size:12.5px"></p>
   </div>
 
-  <div class="stat-row" id="stat-row"></div>
+  <div class="stat-row" id="stat-row" style="display:none"></div>
 
-  <div class="panel toolbar" id="mapa-toolbar">
+  <div class="panel toolbar" id="mapa-toolbar" style="display:none">
     <div id="mapa-toolbar-filters" style="display:contents">
     <div class="field">
       <label for="f-search">Buscar</label>
@@ -34,10 +34,6 @@
         <button type="button" class="btn ghost" id="f-cidade-btn">Todas as cidades ▾</button>
         <div class="multi-select-panel" id="f-cidade-panel" style="display:none"></div>
       </div>
-    </div>
-    <div class="field" style="justify-content:flex-end">
-      <label>&nbsp;</label>
-      <button type="button" class="btn ghost" id="btn-refresh-agora" title="Verificar se tem atualização pendente">🔄</button>
     </div>
     <div class="field">
       <label for="f-tipo">Tipo de serviço</label>
@@ -128,7 +124,12 @@
 
     <div class="panel map-panel" id="map-panel">
       <div class="map-head">
-        <span class="title">📍 Localização dos protocolos</span>
+        <div class="map-head-left">
+          <div class="multi-select" id="map-head-cidade-wrap">
+            <button type="button" class="btn ghost map-head-city-btn" id="map-head-cidade-btn">📍 Todas as cidades</button>
+          </div>
+          <button type="button" class="btn ghost" id="btn-map-filters">🔽 Filtros detalhados</button>
+        </div>
         <div class="legend" id="map-legend">
           <span data-prazo="dentro" style="cursor:pointer"><span class="sw" style="background:var(--ok)"></span>Dentro do prazo</span>
           <span data-prazo="perto" style="cursor:pointer"><span class="sw" style="background:var(--warn)"></span>Perto de vencer</span>
@@ -136,12 +137,16 @@
           <span title="Sem coordenada própria: exibido no ponto central da cidade">◇ Aproximado</span>
         </div>
         <div class="map-head-actions">
-          <button type="button" class="icon-btn" id="btn-map-filters" title="Filtros" style="display:none">🔍</button>
+          <button type="button" class="icon-btn" id="btn-map-refresh" title="Verificar se tem atualização pendente">🔄</button>
           <button type="button" class="icon-btn" id="btn-map-fullscreen" title="Tela cheia">⛶</button>
         </div>
       </div>
       <div id="map"></div>
       <div id="map-filters-drawer" class="map-filters-drawer" style="display:none">
+        <div class="qf-block">
+          <p id="last-import-info-drawer" style="margin:0 0 10px;color:var(--ink-faint);font-size:11.5px"></p>
+          <div class="qf-stats-mini" id="qf-stats-mini"></div>
+        </div>
         <div class="qf-block">
           <button type="button" class="btn primary" id="qf-btn-importar" style="width:100%">⇪ Importar planilha (Excel/CSV)</button>
         </div>
@@ -621,6 +626,8 @@ function updateCityButtonLabel(total){
       els.cidadeBtn.textContent = selectedCities.size + ' cidades ▾';
     }
   }
+  const btnCabecalho = document.getElementById('map-head-cidade-btn');
+  if (btnCabecalho) btnCabecalho.textContent = '📍 ' + els.cidadeBtn.textContent.replace(/^📍\s*/, '');
 }
 
 function updateResponsavelButtonLabel(total){
@@ -631,6 +638,12 @@ function updateResponsavelButtonLabel(total){
 
 els.cidadeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
+  document.getElementById('f-cidade-wrap').appendChild(els.cidadePanel);
+  els.cidadePanel.style.display = els.cidadePanel.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('map-head-cidade-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('map-head-cidade-wrap').appendChild(els.cidadePanel);
   els.cidadePanel.style.display = els.cidadePanel.style.display === 'none' ? 'block' : 'none';
 });
 els.responsavelBtn.addEventListener('click', (e) => {
@@ -638,9 +651,9 @@ els.responsavelBtn.addEventListener('click', (e) => {
   els.responsavelPanel.style.display = els.responsavelPanel.style.display === 'none' ? 'block' : 'none';
 });
 document.addEventListener('click', (e) => {
-  if (!document.getElementById('f-cidade-wrap').contains(e.target)){
-    els.cidadePanel.style.display = 'none';
-  }
+  const dentroCidade = document.getElementById('f-cidade-wrap').contains(e.target)
+    || document.getElementById('map-head-cidade-wrap').contains(e.target);
+  if (!dentroCidade) els.cidadePanel.style.display = 'none';
   if (!document.getElementById('f-responsavel-wrap').contains(e.target)){
     els.responsavelPanel.style.display = 'none';
   }
@@ -693,7 +706,7 @@ function computeStats(list){
 function renderStats(){
   const s = computeStats(getFiltered());
   const pctDentro = s.total ? Math.round(s.dentro / s.total * 100) : 0;
-  els.statRow.innerHTML = `
+  const html = `
     <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${s.total}</div></div>
     <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${s.dentro} <small>(${pctDentro}%)</small></div></div>
     <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${s.fora}</div></div>
@@ -701,6 +714,9 @@ function renderStats(){
     <div class="stat-card ${s.erroProjeto ? 'crit' : ''}"><div class="label">Erro de projeto</div><div class="value">${s.erroProjeto}</div></div>
     <div class="stat-card"><div class="label">Tempo médio</div><div class="value">${s.tempoMedio.toFixed(1)}<small>h</small></div></div>
   `;
+  els.statRow.innerHTML = html;
+  const mini = document.getElementById('qf-stats-mini');
+  if (mini) mini.innerHTML = html;
 }
 
 function runwayColor(r){
@@ -870,7 +886,14 @@ function renderMap(fitView = true){
       const errProj = OPS.checkProjectError(r);
       badges.push({ icon: '🚩', title: `Erro de projeto — esperado ${errProj.esperado}, veio ${errProj.encontrado}` });
     }
-    if (coords.reason) badges.push({ icon: '◇', title: coords.reason === 'out_of_area' ? 'Lat/long fora da área — corrigida' : 'Sem coordenada própria' });
+    if (coords.reason){
+      const titulos = {
+        out_of_area: 'Lat/long fora da área — corrigida pro centro da cidade',
+        bairro: 'Sem coordenada própria — usando localização aproximada do bairro "' + (r.bairro || '') + '"',
+        missing: 'Sem coordenada própria — exibido no centro da cidade',
+      };
+      badges.push({ icon: coords.reason === 'bairro' ? '📌' : '◇', title: titulos[coords.reason] || 'Coordenada aproximada' });
+    }
     if (statusChamado === 'atendimento_hoje') badges.push({ icon: '⏰', title: 'Atendimento para hoje' });
     const badgesHtml = badges.length
       ? `<div class="marker-badges">${badges.map(b => `<span title="${b.title}">${b.icon}</span>`).join('')}</div>`
@@ -995,11 +1018,12 @@ async function pullImportMeta(){
 }
 function renderImportMeta(){
   const el = document.getElementById('last-import-info');
-  if (!el) return;
+  const elDrawer = document.getElementById('last-import-info-drawer');
   let meta = null;
   try{ meta = JSON.parse(localStorage.getItem(IMPORT_META_KEY) || 'null'); }catch(e){}
-  if (!meta){ el.textContent = 'Nenhuma planilha importada ainda.'; return; }
-  el.textContent = `📥 Última importação: ${OPS.formatDateTimeBR(meta.data)} por ${meta.usuario}`;
+  const texto = !meta ? 'Nenhuma planilha importada ainda.' : `📥 Última importação: ${OPS.formatDateTimeBR(meta.data)} por ${meta.usuario}`;
+  if (el) el.textContent = texto;
+  if (elDrawer) elDrawer.textContent = texto;
 }
 renderImportMeta();
 
@@ -1016,7 +1040,7 @@ async function pullAndRefresh(){
 }
 setInterval(pullAndRefresh, 5 * 60 * 1000);
 
-const btnRefreshAgora = document.getElementById('btn-refresh-agora');
+const btnRefreshAgora = document.getElementById('btn-map-refresh');
 if (btnRefreshAgora){
   btnRefreshAgora.addEventListener('click', async () => {
     btnRefreshAgora.disabled = true;
@@ -1302,7 +1326,6 @@ function setFullscreen(indo){
   mapPanel.classList.toggle('map-fullscreen', indo);
   document.getElementById('btn-map-fullscreen').textContent = indo ? '✕' : '⛶';
   document.getElementById('btn-map-fullscreen').title = indo ? 'Sair da tela cheia' : 'Tela cheia';
-  document.getElementById('btn-map-filters').style.display = indo ? 'inline-flex' : 'none';
   if (!indo) closeFiltersDrawer();
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
 }
@@ -1326,14 +1349,14 @@ const toolbarSlot = document.getElementById('map-filters-toolbar-slot');
 function openFiltersDrawer(){
   toolbarSlot.appendChild(toolbarOriginal);
   filtersDrawer.style.display = 'block';
-  document.getElementById('btn-map-filters').textContent = '✕';
+  document.getElementById('btn-map-filters').textContent = '✕ Fechar filtros';
 }
 function closeFiltersDrawer(){
   if (toolbarOriginal.parentElement === toolbarSlot){
     toolbarHomeParent.insertBefore(toolbarOriginal, toolbarHomeParent.firstChild);
   }
   filtersDrawer.style.display = 'none';
-  document.getElementById('btn-map-filters').textContent = '🔍';
+  document.getElementById('btn-map-filters').textContent = '🔽 Filtros detalhados';
 }
 document.getElementById('btn-map-filters').addEventListener('click', () => {
   if (filtersDrawer.style.display === 'none') openFiltersDrawer();

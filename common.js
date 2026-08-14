@@ -176,6 +176,92 @@ const OPS = (() => {
     };
   }
 
+  // Distritos/localidades da Unidade Touros — pontos de referência pra achar
+  // coordenada quando o registro tem bairro reconhecível mas a lat/long
+  // própria falhou ou está fora da área do município (fonte: KMZ enviado
+  // pelo usuário, mais "Arizona" adicionado manualmente).
+  const DISTRICT_REGISTRY = [
+    { nome: 'CARNAUBAL', lat: -5.256728, lng: -35.553567 },
+    { nome: 'Vila Israel', lat: -5.201028, lng: -35.552106 },
+    { nome: 'Monte Alegre', lat: -5.134685, lng: -35.597778 },
+    { nome: 'Carnaubinha', lat: -5.215286, lng: -35.43415 },
+    { nome: 'Boqueirão - Touros', lat: -5.252608, lng: -35.551431 },
+    { nome: 'Lagoa da Prata', lat: -5.327978, lng: -35.500091 },
+    { nome: 'Vila Assis', lat: -5.238299, lng: -35.584595 },
+    { nome: 'São José', lat: -5.136085, lng: -35.575961 },
+    { nome: 'Golandim', lat: -5.328022, lng: -35.509531 },
+    { nome: 'Vila Mayne', lat: -5.187532, lng: -35.596009 },
+    { nome: 'Cajueiro', lat: -5.153004, lng: -35.51769 },
+    { nome: 'Santa Luzia', lat: -5.311176, lng: -35.474232 },
+    { nome: 'Cana Brava', lat: -5.309624, lng: -35.581618 },
+    { nome: 'Bebida Velha', lat: -5.332074, lng: -35.532045 },
+    { nome: 'Lagoa do Sal', lat: -5.150683, lng: -35.539438 },
+    { nome: 'Boa Cica', lat: -5.278985, lng: -35.559801 },
+    { nome: 'Tubibas', lat: -5.334957, lng: -35.825508 },
+    { nome: 'Baixa do Quinquim', lat: -5.217491, lng: -35.618688 },
+    { nome: 'Marco 0', lat: -5.159927, lng: -35.497158 },
+    { nome: 'Lagoa de Serra Verde', lat: -5.301887, lng: -35.775122 },
+    { nome: 'Canto da Ilha de Cima', lat: -5.072175, lng: -35.848829 },
+    { nome: 'Juá', lat: -5.291251, lng: -35.759268 },
+    { nome: 'Acauã', lat: -5.098908, lng: -35.800596 },
+    { nome: 'Zabelê', lat: -5.37495, lng: -35.738618 },
+    { nome: 'Colorado', lat: -5.290878, lng: -35.719083 },
+    { nome: 'As Cem', lat: -5.353198, lng: -35.729743 },
+    { nome: 'Santo Antônio', lat: -5.336652, lng: -35.7232853 },
+    { nome: 'Arribão', lat: -5.31967, lng: -35.785134 },
+    { nome: 'Baixa Funda', lat: -5.440658, lng: -35.796474 },
+    { nome: 'Canudos', lat: -5.262776, lng: -35.615792 },
+    { nome: 'Cajá', lat: -5.40363, lng: -35.770275 },
+    { nome: 'Chico Mendes 2', lat: -5.320652, lng: -35.811252 },
+    { nome: 'Chico Mendes 1', lat: -5.327302, lng: -35.780994 },
+    { nome: 'Aracati', lat: -5.309378, lng: -35.663292 },
+    { nome: 'Planalto', lat: -5.253104, lng: -35.645769 },
+    { nome: 'Reduto', lat: -5.1117306, lng: -35.6833657 },
+    { nome: 'Tábua do Rebuto', lat: -5.1365904, lng: -35.7012294 },
+    { nome: 'Mundo Novo', lat: -5.2259544, lng: -35.6864373 },
+    { nome: 'Angico', lat: -5.172265, lng: -35.6908356 },
+    { nome: 'Antônio Conselheiro', lat: -5.1989162, lng: -35.7111826 },
+    { nome: 'Morro dos Martins', lat: -5.1004942, lng: -35.760339 },
+    { nome: 'Fazendinha', lat: -5.1637943, lng: -35.642422 },
+    { nome: 'Zumbi', lat: -5.3330795, lng: -35.3630764 },
+    { nome: 'Punaú', lat: -5.3513992, lng: -35.4228852 },
+    { nome: 'Catolé', lat: -5.3831433, lng: -35.4789166 },
+    { nome: 'Canto Grande', lat: -5.4062429, lng: -35.4537059 },
+    { nome: 'Pititinga', lat: -5.3795259, lng: -35.3386888 },
+    { nome: 'Brejinho', lat: -5.526294, lng: -35.8167116 },
+    { nome: 'Queimadas', lat: -5.3637511, lng: -35.8828689 },
+    { nome: 'Lajeado de Baixo', lat: -5.4645486, lng: -35.801369 },
+    { nome: 'Baixa Do Macaco', lat: -5.407794, lng: -35.8233241 },
+    { nome: 'Quixabeira', lat: -5.2097403, lng: -35.8328617 },
+    { nome: 'Umburana', lat: -5.2403315, lng: -35.7939029 },
+    { nome: 'Emburana', lat: -5.2146422, lng: -35.8020724 },
+    { nome: 'Baixinha da França', lat: -5.2581726, lng: -35.8111907 },
+    { nome: 'Estrada da Lagoa de Vera Cruz', lat: -5.2361466, lng: -35.8618158 },
+    { nome: 'Pereiros', lat: -5.2799412, lng: -35.9855818 },
+    { nome: 'Amazonas', lat: -5.2965115, lng: -36.0124351 },
+    { nome: 'São Luís', lat: -5.2957955, lng: -35.9424077 },
+    { nome: '3 Irmãos', lat: -5.3014695, lng: -35.9086402 },
+    { nome: 'Santa Luzia', lat: -5.2198314, lng: -35.8969714 },
+    { nome: 'Alivio', lat: -5.2417126, lng: -35.9064128 },
+    { nome: 'Santa Vitoria', lat: -5.2231083, lng: -35.9943034 },
+    { nome: 'Rua Baixa da Quixaba', lat: -5.0728214, lng: -35.9993746 },
+    { nome: 'Baixa da Quixaba 2', lat: -5.1001629, lng: -36.0007827 },
+    { nome: 'Alto do Oriente', lat: -5.2275923, lng: -36.0567155 },
+    { nome: 'São Miguel', lat: -5.1656752, lng: -35.9374838 },
+    { nome: 'São Francisco', lat: -5.1524465, lng: -35.9308339 },
+    { nome: 'Juremal', lat: -5.1167777, lng: -35.9396281 },
+    { nome: 'Guajiru', lat: -5.0746178, lng: -35.9457019 },
+    { nome: 'Maria das Graças', lat: -5.4979424, lng: -35.793013 },
+    { nome: 'Santa Luzia', lat: -5.5088634, lng: -35.8180365 },
+    { nome: 'Boa Sorte', lat: -5.4693111, lng: -35.8328455 },
+    { nome: 'Xoar', lat: -5.439951, lng: -35.8364202 },
+    { nome: 'Lajeado de Cima', lat: -5.4672187, lng: -35.8138793 },
+    { nome: 'Chico Santana', lat: -5.4509363, lng: -35.7502758 },
+    { nome: 'Parazinho', lat: -5.2261572, lng: -35.8397958 },
+    { nome: 'Baixa do Meio', lat: -5.253706, lng: -36.3559039 },
+    { nome: 'Arizona', lat: -5.27361, lng: -35.70681 },
+  ];
+
   // compatibilidade com código antigo que ainda referencia CITY_CENTERS
   const CITY_CENTERS = CITY_REGISTRY;
 
@@ -349,12 +435,53 @@ const OPS = (() => {
     return null;
   }
 
+  // distância de edição simples (Levenshtein) — usada só pra achar bairro
+  // "parecido" quando não bate exato (ex: erro de digitação na planilha)
+  function levenshtein(a, b){
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++){
+      for (let j = 1; j <= n; j++){
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
+  const DISTRICT_REGISTRY_NORM = DISTRICT_REGISTRY.map(d => ({ ...d, norm: normalize(d.nome) }));
+
+  // acha um distrito conhecido pelo nome do bairro do registro — igual,
+  // contido, ou parecido (poucos caracteres de diferença, cobre erro de
+  // digitação tipo "Arizona" vs "Arisona").
+  function findDistrictByBairro(bairroTexto){
+    const alvo = normalize(bairroTexto);
+    if (!alvo) return null;
+    let exato = DISTRICT_REGISTRY_NORM.find(d => d.norm === alvo);
+    if (exato) return exato;
+    let contido = DISTRICT_REGISTRY_NORM.find(d => alvo.includes(d.norm) || d.norm.includes(alvo));
+    if (contido) return contido;
+    let melhor = null, melhorDist = Infinity;
+    DISTRICT_REGISTRY_NORM.forEach(d => {
+      const limite = Math.max(2, Math.round(Math.max(d.norm.length, alvo.length) * 0.2));
+      const dist = levenshtein(alvo, d.norm);
+      if (dist <= limite && dist < melhorDist){ melhor = d; melhorDist = dist; }
+    });
+    return melhor;
+  }
+
   function resolveCoords(record){
     const center = cityCenter(record.cidade) || DEFAULT_CENTER;
     const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
       && !isNaN(record.lat) && !isNaN(record.lng);
 
     if (!hasOwn){
+      const distrito = findDistrictByBairro(record.bairro);
+      if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'missing' };
     }
 
@@ -363,12 +490,16 @@ const OPS = (() => {
       return { lat: record.lat, lng: record.lng, approx: false, reason: null };
     }
     if (dentro === false){
+      const distrito = findDistrictByBairro(record.bairro);
+      if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
     }
     // dentro === null: malha ainda não carregou, ou cidade não está nela —
     // respaldo pelo método antigo (raio de distância)
     const dist = haversineKm(center, { lat: record.lat, lng: record.lng });
     if (dist > MAX_CITY_RADIUS_KM){
+      const distrito = findDistrictByBairro(record.bairro);
+      if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
 
     }
