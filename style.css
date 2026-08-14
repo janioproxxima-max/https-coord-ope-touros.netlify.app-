@@ -243,7 +243,7 @@ select:focus, .input:focus, button:focus-visible{
   position:fixed; inset:0; z-index:150; height:100vh; border-radius:0;
 }
 .map-filters-drawer{
-  position:absolute; top:60px; right:16px; z-index:900; width:300px;
+  position:absolute; top:60px; right:16px; z-index:1100; width:300px;
   max-height:calc(100% - 90px); overflow-y:auto;
   background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
   padding:14px; box-shadow:var(--shadow);
@@ -441,7 +441,7 @@ table.services tbody tr.row-highlight{
 #detail-modal.detail-floating{
   position:absolute; inset:0; background:transparent; backdrop-filter:none;
   padding:16px; align-items:flex-start; justify-content:flex-end;
-  z-index:950; pointer-events:none; overflow:visible;
+  z-index:1300; pointer-events:none; overflow:visible;
 }
 #detail-modal.detail-floating .modal{
   pointer-events:auto; width:340px; max-width:calc(100% - 32px); max-height:calc(100% - 32px);
@@ -504,7 +504,7 @@ table.services tbody tr.row-highlight{
 .multi-select{ position:relative; }
 .multi-select .btn{ min-width:170px; justify-content:space-between; }
 .multi-select-panel{
-  position:absolute; top:calc(100% + 4px); left:0; z-index:80;
+  position:absolute; top:calc(100% + 4px); left:0; z-index:1200;
   background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm);
   padding:8px; min-width:220px; max-height:260px; overflow-y:auto; box-shadow:var(--shadow);
 }
