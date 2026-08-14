@@ -35,6 +35,10 @@
         <div class="multi-select-panel" id="f-cidade-panel" style="display:none"></div>
       </div>
     </div>
+    <div class="field" style="justify-content:flex-end">
+      <label>&nbsp;</label>
+      <button type="button" class="btn ghost" id="btn-refresh-agora" title="Verificar se tem atualização pendente">🔄</button>
+    </div>
     <div class="field">
       <label for="f-tipo">Tipo de serviço</label>
       <select id="f-tipo"><option value="">Todos</option></select>
@@ -406,19 +410,29 @@ function classifyStatusChamado(r){
   if (cat === 'iniciado') return 'iniciado';
   if (cat === 'deslocamento') return 'deslocamento';
   if (cat === 'pausado') return 'pausado';
-  // urgência de prazo vem antes de "pendente" — mesmo sem responsável ainda,
-  // se está atrasado ou vence hoje, precisa aparecer nessas categorias
+
+  // "Pendente" é sobre responsabilidade, não sobre prazo — se não está na
+  // caixa de ninguém, é Pendente, mesmo que já esteja atrasado
+  if (!r.responsavel) return 'pendente';
+
+  // a partir daqui, o chamado já tem responsável — a urgência de prazo
+  // decide se precisa de atenção hoje
   if (getStatus(r) === 'fora') return 'atendimento_atrasado';
   if (venceAteAmanha9h(r)) return 'atendimento_hoje';
-  if (!r.responsavel) return 'pendente';
+
+  // tem responsável, sem urgência de prazo — olha a data de agendamento
   const dtAgendamento = OPS.toDateSafe(r.dataAgendamento);
   if (dtAgendamento){
     const hojeData = new Date(); hojeData.setHours(0,0,0,0);
+    const amanhaData = new Date(hojeData); amanhaData.setDate(amanhaData.getDate() + 1);
     const agData = new Date(dtAgendamento); agData.setHours(0,0,0,0);
-    if (agData.getTime() === hojeData.getTime()) return 'proximo_atendimento'; // agendado pra hoje, já tem responsável
-    if (agData.getTime() > hojeData.getTime()) return 'futuro'; // agendado pra depois de hoje
+    if (agData.getTime() > amanhaData.getTime()) return 'futuro'; // agendado pra depois de amanhã
+    // agendado pra amanhã, hoje, ou sem data futura clara — é o próximo da fila
+    return 'proximo_atendimento';
   }
-  return null; // dentro do prazo, sem urgência — não entra em nenhuma categoria
+  // sem urgência e sem data de agendamento — ainda assim tem responsável e
+  // precisa aparecer em algum status: é o próximo a ser atendido pela equipe
+  return 'proximo_atendimento';
 }
 
 function isAlwaysHidden(r){
@@ -472,9 +486,36 @@ function populateFilterOptions(){
 
   document.getElementById('ms-city-search').addEventListener('input', (e) => {
     const q = OPS.normalize(e.target.value);
+    let algumVisivel = false;
     els.cidadePanel.querySelectorAll('#ms-city-list label').forEach(label => {
-      label.style.display = OPS.normalize(label.dataset.city).includes(q) ? 'flex' : 'none';
+      const bate = OPS.normalize(label.dataset.city).includes(q);
+      label.style.display = bate ? 'flex' : 'none';
+      if (bate) algumVisivel = true;
     });
+    // se digitou algo e nenhuma cidade da lista bate, oferece adicionar
+    // esse nome mesmo sem ter nenhum registro importado ainda pra ela
+    let avisoAdd = document.getElementById('ms-city-add-nova');
+    if (q && !algumVisivel){
+      if (!avisoAdd){
+        avisoAdd = document.createElement('button');
+        avisoAdd.type = 'button';
+        avisoAdd.id = 'ms-city-add-nova';
+        avisoAdd.className = 'ms-city-add-nova';
+        document.getElementById('ms-city-list').prepend(avisoAdd);
+      }
+      const nomeDigitado = e.target.value.trim().toUpperCase();
+      avisoAdd.textContent = `+ Usar "${nomeDigitado}" mesmo sem dado importado ainda`;
+      avisoAdd.style.display = 'block';
+      avisoAdd.onclick = () => {
+        if (!cidades.includes(nomeDigitado)) cidades.push(nomeDigitado);
+        selectedCities.add(nomeDigitado);
+        e.target.value = '';
+        populateFilterOptions();
+        renderAll();
+      };
+    } else if (avisoAdd){
+      avisoAdd.style.display = 'none';
+    }
   });
   // não fecha o painel ao clicar/digitar dentro do campo de busca
   document.getElementById('ms-city-search').addEventListener('click', e => e.stopPropagation());
@@ -755,10 +796,24 @@ function renderTable(){
 
 function initMap(){
   leafletMap = L.map('map', { zoomControl: true }).setView([OPS.DEFAULT_CENTER.lat, OPS.DEFAULT_CENTER.lng], 9);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+  const camadaRuas = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap',
-    maxZoom: 18,
-  }).addTo(leafletMap);
+    maxZoom: 19,
+  });
+  // Esri World Imagery — satélite gratuito, sem precisar de API key do Google
+  const camadaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19,
+  });
+
+  camadaRuas.addTo(leafletMap);
+  L.control.layers(
+    { '🗺️ Mapa (ruas)': camadaRuas, '🛰️ Satélite': camadaSatelite },
+    {},
+    { position: 'topleft', collapsed: false }
+  ).addTo(leafletMap);
+
   markerLayer = L.layerGroup().addTo(leafletMap);
 }
 
@@ -960,6 +1015,21 @@ async function pullAndRefresh(){
   return !!shared;
 }
 setInterval(pullAndRefresh, 5 * 60 * 1000);
+
+const btnRefreshAgora = document.getElementById('btn-refresh-agora');
+if (btnRefreshAgora){
+  btnRefreshAgora.addEventListener('click', async () => {
+    btnRefreshAgora.disabled = true;
+    btnRefreshAgora.style.animation = 'spin 0.8s linear infinite';
+    try{
+      const teveAtualizacao = await pullAndRefresh();
+      btnRefreshAgora.title = teveAtualizacao ? 'Atualizado agora' : 'Já estava atualizado';
+    } finally {
+      btnRefreshAgora.style.animation = '';
+      btnRefreshAgora.disabled = false;
+    }
+  });
+}
 
 // botão manual "↻ Atualizar" na barra lateral — mesma lógica, preserva a posição do mapa
 window.OPS_ON_REFRESH = pullAndRefresh;

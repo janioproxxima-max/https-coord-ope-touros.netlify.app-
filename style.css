@@ -348,6 +348,9 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 
 .leaflet-popup-content-wrapper{ background:var(--bg-panel-2); color:var(--ink); border-radius:8px; }
 .leaflet-popup-tip{ background:var(--bg-panel-2); }
+.leaflet-control-layers{ background:var(--bg-panel-2); color:var(--ink); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
+.leaflet-control-layers label{ color:var(--ink); font-size:12.5px; display:flex; align-items:center; gap:6px; margin:4px 0; }
+.leaflet-control-layers-selector{ accent-color:var(--brand); }
 .popup-svc{ user-select:text; cursor:text; }
 .popup-svc .proto{ display:block; margin-bottom:4px; }
 .popup-svc .title{ font-weight:700; font-size:13px; margin-bottom:3px; }
@@ -680,3 +683,8 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .badge-quartil.q2{ background:var(--brand-wash); color:var(--brand); }
 .badge-quartil.q3{ background:var(--warn-wash); color:var(--warn); }
 .badge-quartil.q4{ background:var(--crit-wash); color:var(--crit); }
+
+@keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+.ms-city-add-nova{ width:100%; text-align:left; padding:8px 10px; margin-bottom:6px; border-radius:6px; border:1px dashed var(--brand); background:var(--brand-wash); color:var(--brand); font-size:12.5px; cursor:pointer; }
+.ms-city-add-nova:hover{ background:var(--brand); color:var(--bg); }
