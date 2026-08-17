@@ -2063,7 +2063,7 @@ async function initPage(){
       produtividadeDetalhePorTipo = OPS.loadData(STORAGE_KEY_PRODUTIVIDADE_TIPO) || [];
     }
   }
-  pessoas = sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || [];
+  pessoas = (sharedPessoas || OPS.loadData('ops_touros_pessoas_v1') || []).map(OPS.corrigirCamposPessoa);
   veiculos = sharedFrotas || OPS.loadData('ops_touros_frotas_v1') || [];
   populateVeiculosSelect();
   populateStatusFilter();

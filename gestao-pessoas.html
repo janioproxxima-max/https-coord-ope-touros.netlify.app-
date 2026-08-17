@@ -769,12 +769,16 @@ async function initPage(){
 
   // corrige registros sem "id" (ex: alguém adicionado direto na planilha,
   // sem passar pelo formulário do site) — sem isso, coisas como o histórico
-  // de feedback não sabem identificar de quem é o clique
+  // de feedback não sabem identificar de quem é o clique. Também corrige o
+  // campo "nome" quando a planilha tem a coluna com um nome ligeiramente
+  // diferente (ex: "Nome" com maiúscula) por ter sido editada direto nela.
   let precisaResync = false, precisaResyncFeedback = false, precisaResyncAusencias = false, precisaResyncAtestados = false;
   records = records.map(r => {
-    if (r.id) return r;
+    const corrigido = OPS.corrigirCamposPessoa(r);
+    if (corrigido.nome !== r.nome) precisaResync = true;
+    if (corrigido.id) return corrigido;
     precisaResync = true;
-    return { ...r, id: OPS.uid() };
+    return { ...corrigido, id: OPS.uid() };
   });
   feedbacks = feedbacks.map(f => { if (f.id) return f; precisaResyncFeedback = true; return { ...f, id: OPS.uid() }; });
   ausencias = ausencias.map(a => { if (a.id) return a; precisaResyncAusencias = true; return { ...a, id: OPS.uid() }; });

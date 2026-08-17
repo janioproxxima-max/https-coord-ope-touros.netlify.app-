@@ -279,6 +279,23 @@ const OPS = (() => {
       .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos
   }
 
+  // Alguns registros de Gestão de Pessoas foram digitados direto na
+  // planilha do Google (não pelo formulário do site), e às vezes a coluna
+  // acaba com um nome ligeiramente diferente do que o site espera (ex:
+  // "Nome" com maiúscula, "Nome completo", espaço a mais) — isso faz
+  // p.nome vir undefined mesmo com o dado preenchido na planilha. Essa
+  // função corrige isso, procurando em variações comuns do nome da coluna.
+  function corrigirCamposPessoa(p){
+    if (!p.nome){
+      const chaveNome = Object.keys(p).find(k => {
+        const kn = normalize(k).replace(/[^a-z]/g, '');
+        return kn === 'nome' || kn === 'nomecompleto' || kn === 'nomecolaborador';
+      });
+      if (chaveNome && p[chaveNome]) p.nome = p[chaveNome];
+    }
+    return p;
+  }
+
   function cityCenter(cidade){
     const known = CITY_REGISTRY[normalize(cidade)];
     if (known) return known;
@@ -1262,7 +1279,7 @@ const OPS = (() => {
 
   return {
     STORAGE_KEY, CITY_CENTERS, CITY_REGISTRY, DEFAULT_CENTER, MAX_CITY_RADIUS_KM,
-    normalize, cityCenter, canonicalCity, haversineKm, resolveCoords,
+    normalize, cityCenter, canonicalCity, haversineKm, resolveCoords, corrigirCamposPessoa,
     ensureCityGeocoded, loadGeocodeCache,
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid,
