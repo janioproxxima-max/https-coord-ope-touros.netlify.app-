@@ -1347,9 +1347,9 @@ function parRecorrenciaParaSupabase(p){
 }
 // insere em lotes (uma planilha pode gerar milhares de linhas — evita
 // mandar tudo numa requisição só)
-async function inserirEmLotes(tabela, registros, tamanhoLote){
+async function inserirEmLotes(tabela, registros, tamanhoLote, onConflict){
   for (let i = 0; i < registros.length; i += tamanhoLote){
-    await OPS_SUPABASE.upsert(tabela, registros.slice(i, i + tamanhoLote), 'id');
+    await OPS_SUPABASE.upsert(tabela, registros.slice(i, i + tamanhoLote), onConflict || 'id');
   }
 }
 
@@ -1377,8 +1377,8 @@ async function aplicarResultadoProdutividade(resultado){
   produtividadeSyncPendente = true;
   const toast = OPS.showToast('☁️ Sincronizando...');
   Promise.all([
-    OPS_SUPABASE.upsert('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 'tecnico'),
-    OPS_SUPABASE.upsert('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 'tecnico,mes_key,tipo'),
+    inserirEmLotes('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 500, 'tecnico'),
+    inserirEmLotes('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 500, 'tecnico,mes_key,tipo'),
     // limpa o detalhe antigo desses meses antes de inserir o novo, pra não
     // acumular linhas duplicadas a cada reimportação do mesmo mês
     (async () => {
