@@ -516,6 +516,19 @@ function nomesEquivalentes(a, b){
   const limpa = (s) => OPS.normalize(s).replace(/[^a-z0-9]/g, '');
   return limpa(a) === limpa(b);
 }
+// versão mais tolerante — usada só como segunda tentativa quando o nome
+// exato não bate (ex: falta um nome do meio, ou ordem diferente entre
+// duas planilhas importadas em datas diferentes)
+function nomesParecidos(a, b){
+  if (!a || !b) return false;
+  if (nomesEquivalentes(a, b)) return true;
+  const palavras = (s) => OPS.normalize(s).replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const pa = palavras(a), pb = palavras(b);
+  if (!pa.length || !pb.length) return false;
+  const emComum = pa.filter(w => pb.includes(w)).length;
+  const proporcao = emComum / Math.min(pa.length, pb.length);
+  return proporcao >= 0.7; // pelo menos 70% das palavras batem
+}
 function ticketVisivelPara(t, papel, colab){
   if (papel === 'coordenador') return true;
   if (t.modulo === 'reclamacao'){
@@ -1227,7 +1240,7 @@ function mesclarProdutividade(resultado){
     if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
-      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [], tendencia: null };
+      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
       produtividade.push(registro);
     }
     registrosTocados.push(registro);
@@ -1516,11 +1529,29 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
   }
 
   if (papel === 'tecnico'){
-    const meu = colab ? produtividadeValida.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
+    let meu = colab ? produtividadeValida.find(p => nomesEquivalentes(p.tecnico, colab.nome)) : null;
+    // não achou exato — tenta por semelhança (ex: falta nome do meio numa das planilhas)
+    if (!meu && colab) meu = produtividadeValida.find(p => nomesParecidos(p.tecnico, colab.nome));
     if (!meu){
-      conteudo.innerHTML = `<p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${colab ? colab.nome : usuarioAtual}") na última planilha de produtividade importada, ou seu cargo cadastrado não é "Instalador e Reparador de Operações". Confira com seu supervisor.</p>`;
+      // pode ser só uma corrida: a tela abriu antes dos dados terminarem de
+      // chegar do Supabase — tenta de novo uma vez, depois de dar tempo
+      if (!window.__mjTentouDeNovoHistorico){
+        window.__mjTentouDeNovoHistorico = true;
+        conteudo.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Carregando seu histórico...</p>';
+        setTimeout(() => { renderPainelColaborador(); }, 1500);
+        return;
+      }
+      window.__mjTentouDeNovoHistorico = false;
+      const nomesDisponiveis = produtividadeValida.map(p => p.tecnico);
+      const nomeAlvo = colab ? colab.nome : usuarioAtual;
+      const parecido = nomesDisponiveis.find(n => OPS.normalize(n).includes(OPS.normalize(nomeAlvo).split(' ')[0] || ''));
+      conteudo.innerHTML = `
+        <p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${nomeAlvo}") na última planilha de produtividade importada, ou seu cargo cadastrado não é "Instalador e Reparador de Operações". Confira com seu supervisor.</p>
+        <p style="color:var(--ink-faint);font-size:11.5px;margin-top:8px">Diagnóstico técnico — print isso e manda pro coordenador: usuário logado = "${usuarioAtual}" | nome resolvido em Gestão de Pessoas = "${colab ? colab.nome : '(não achou cadastro)'}" | ${nomesDisponiveis.length} técnico(s) disponíveis no total${parecido ? ` | nome parecido encontrado: "${parecido}"` : ''}</p>
+      `;
       return;
     }
+    window.__mjTentouDeNovoHistorico = false;
     conteudo.innerHTML = linhaHistoricoHTML(meu.tecnico, meu.historicoMensal, meu.ppcMedio, meu.tendencia, meu.tecnico);
     document.querySelectorAll('.mj-mes-tile').forEach(tile => {
       tile.addEventListener('click', () => abrirGraficoTipo(tile.dataset.tecnico, tile.dataset.mesKey));
