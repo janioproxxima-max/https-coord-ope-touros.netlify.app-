@@ -21,17 +21,31 @@ const OPS_SUPABASE = (function(){
       try{ corpo = await res.text(); }catch(e){}
       throw new Error(`Supabase (${path}) respondeu ${res.status}: ${corpo.slice(0, 300)}`);
     }
-    if (res.status === 204) return null;
+    if (res.status === 204) return { dados: null, contentRange: null };
     const texto = await res.text();
-    return texto ? JSON.parse(texto) : null;
+    return { dados: texto ? JSON.parse(texto) : null, contentRange: res.headers.get('content-range') };
   }
 
-  // Busca todos os registros de uma tabela. filtro é opcional, ex:
-  // "ticket_id=eq.abc123" (sintaxe de query do PostgREST).
+  // Busca TODOS os registros de uma tabela, paginando por baixo dos panos —
+  // o Supabase, por padrão, corta silenciosamente em ~1000 linhas por
+  // requisição (sem erro nenhum, só devolve menos do que existe de verdade).
+  // filtro é opcional, ex: "ticket_id=eq.abc123" (sintaxe de query do PostgREST).
   async function select(tabela, filtro){
-    const query = filtro ? `?select=*&${filtro}` : '?select=*';
-    const dados = await req(`${tabela}${query}`, { method: 'GET' });
-    return dados || [];
+    const TAMANHO_PAGINA = 1000;
+    let todos = [];
+    let inicio = 0;
+    while (true){
+      const query = filtro ? `?select=*&${filtro}` : '?select=*';
+      const { dados } = await req(`${tabela}${query}`, {
+        method: 'GET',
+        headers: { 'Range-Unit': 'items', 'Range': `${inicio}-${inicio + TAMANHO_PAGINA - 1}` },
+      });
+      const pagina = dados || [];
+      todos = todos.concat(pagina);
+      if (pagina.length < TAMANHO_PAGINA) break; // última página (veio menos do que pedimos)
+      inicio += TAMANHO_PAGINA;
+    }
+    return todos;
   }
 
   // Insere ou atualiza registros (upsert) — precisa de uma coluna/combinação
