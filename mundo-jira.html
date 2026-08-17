@@ -109,6 +109,11 @@
     <p id="mj-prod-papel-banner" class="mj-papel-banner"></p>
   </div>
 
+  <div class="qf-tiles" id="mj-prod-abas" style="margin-bottom:14px">
+    <button type="button" class="qf-tile active" data-aba="historico">📅 Meu Histórico</button>
+    <button type="button" class="qf-tile" data-aba="tempo_real">⚡ Produtividade Tempo Real</button>
+  </div>
+
   <div class="panel toolbar">
     <div class="field">
       <label for="mj-prod-f-supervisor">Supervisor</label>
@@ -132,6 +137,7 @@
   </div>
 
   <div id="mj-prod-conteudo"></div>
+  <div id="mj-prod-tempo-real" style="display:none"></div>
 </div>
 
 <!-- Modal: gráfico por tipo de serviço (abre ao clicar num mês) -->
@@ -151,6 +157,20 @@
     </div>
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="mj-btn-fechar-grafico">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="mj-modal-dia" style="display:none">
+  <div class="modal" style="max-width:680px">
+    <h3 id="mj-dia-titulo">Detalhamento do dia</h3>
+    <p class="modal-sub" id="mj-dia-subtitulo"></p>
+    <div style="position:relative;height:220px"><canvas id="mj-dia-canvas"></canvas></div>
+    <div id="mj-dia-detalhe" style="margin-top:14px;max-height:220px;overflow-y:auto">
+      <p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver os protocolos daquele tipo.</p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="mj-btn-fechar-dia">Fechar</button>
     </div>
   </div>
 </div>
@@ -1005,6 +1025,7 @@ function processarLinhasProdutividade(rows){
       const idxPlano = idx('Plano/Produto');
       const idxDataFim = idx('Data/Hora Fim do Atendimento');
       const idxDataDeslocamento = idx('Data/Hora Deslocamento');
+      const idxDataEncerramento = idx('Data/Hora Encerramento');
       const idxNumeroCliente = idx('Nº Cliente');
       const idxSupervisor = idx('Supervisor');
       const idxTecnicoAuxiliar = idx('Técnico Auxiliar');
@@ -1091,6 +1112,7 @@ function processarLinhasProdutividade(rows){
             }
           }
 
+          const dtEncerramento = idxDataEncerramento >= 0 ? OPS.parseBRDateTime(row[idxDataEncerramento] || '') : null;
           detalhesRegistros.push({
             tecnico, mesKey, tipo,
             protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
@@ -1098,7 +1120,9 @@ function processarLinhasProdutividade(rows){
             localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
             descricao: (row[idxDescricao] || '').toString().trim(),
             produtivo: prod.produtivo,
+            pontos: prod.pontos || 0,
             tma: horasAtendimento,
+            dataEncerramento: dtEncerramento ? dtEncerramento.toISOString() : null,
           });
 
           // reparo produtivo com cliente identificado — candidato a recorrência
@@ -1297,6 +1321,7 @@ function detalheRegistroParaSupabase(r){
     id: OPS.uid(), tecnico: r.tecnico, mes_key: r.mesKey, tipo: r.tipo,
     protocolo: r.protocolo, area: r.area, localidade: r.localidade,
     descricao: r.descricao, produtivo: r.produtivo, tma: r.tma,
+    pontos: r.pontos || 0, data_encerramento: r.dataEncerramento,
   };
 }
 function parRecorrenciaParaSupabase(p){
@@ -1427,6 +1452,8 @@ function ehInstaladorReparador(nomeTecnico){
 
 let mesProdutividadeSelecionado = null;
 
+let mjAbaProdutividade = 'historico';
+
 function renderPainelColaborador(){
   const papel = papelAtual();
   const colab = colaboradorAtual();
@@ -1434,13 +1461,30 @@ function renderPainelColaborador(){
     `Você está vendo como <b>${PAPEL_LABEL[papel]}</b>${colab && colab.nome ? ` — ${colab.nome}` : ''}`;
 
   const conteudo = document.getElementById('mj-prod-conteudo');
+  const tempoReal = document.getElementById('mj-prod-tempo-real');
+  conteudo.style.display = mjAbaProdutividade === 'historico' ? 'block' : 'none';
+  tempoReal.style.display = mjAbaProdutividade === 'tempo_real' ? 'block' : 'none';
+
   try{
-    renderPainelColaboradorConteudo(papel, colab, conteudo);
+    if (mjAbaProdutividade === 'historico'){
+      renderPainelColaboradorConteudo(papel, colab, conteudo);
+    } else {
+      renderProdutividadeTempoReal(papel, colab, tempoReal);
+    }
   }catch(err){
     console.error('Erro ao montar o Painel do Colaborador', err);
-    conteudo.innerHTML = `<p style="color:var(--crit);font-size:13px">⚠️ Deu um problema ao montar essa tela. Print isso e me avisa: ${err.message}</p>`;
+    const alvo = mjAbaProdutividade === 'historico' ? conteudo : tempoReal;
+    alvo.innerHTML = `<p style="color:var(--crit);font-size:13px">⚠️ Deu um problema ao montar essa tela. Print isso e me avisa: ${err.message}</p>`;
   }
 }
+
+document.getElementById('mj-prod-abas').addEventListener('click', (e) => {
+  const btn = e.target.closest('.qf-tile');
+  if (!btn) return;
+  mjAbaProdutividade = btn.dataset.aba;
+  document.querySelectorAll('#mj-prod-abas .qf-tile').forEach(b => b.classList.toggle('active', b === btn));
+  renderPainelColaborador();
+});
 
 function renderPainelColaboradorConteudo(papel, colab, conteudo){
   const produtividadeValida = produtividade.filter(p => ehInstaladorReparador(p.tecnico));
@@ -1537,6 +1581,186 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
   }
 }
 
+
+// ---------- Produtividade Tempo Real (últimos 15 dias, por Data de Encerramento) ----------
+const TEMPO_REAL_DIAS = 15;
+
+function listaDiasTempoReal(){
+  const dias = [];
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  for (let i = TEMPO_REAL_DIAS - 1; i >= 0; i--){
+    const d = new Date(hoje); d.setDate(d.getDate() - i);
+    dias.push(d.toISOString().slice(0, 10));
+  }
+  return dias;
+}
+
+function corCelulaTempoReal(valor){
+  if (!valor) return { bg: 'transparent', texto: 'var(--ink-faint)' };
+  if (valor >= 8) return { bg: 'rgba(52,199,89,0.28)', texto: '#34c759' };
+  if (valor >= 5) return { bg: 'rgba(255,176,32,0.28)', texto: '#ffb020' };
+  if (valor >= 2) return { bg: 'rgba(255,90,64,0.24)', texto: '#ff6b52' };
+  return { bg: 'rgba(255,64,64,0.32)', texto: '#ff4040' };
+}
+
+async function renderProdutividadeTempoReal(papel, colab, container){
+  container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Buscando produtividade dos últimos ' + TEMPO_REAL_DIAS + ' dias...</p>';
+
+  const dias = listaDiasTempoReal();
+  const inicio = dias[0] + 'T00:00:00.000Z';
+
+  let linhas = [];
+  try{
+    linhas = await OPS_SUPABASE.select('produtividade_registros', `produtivo=eq.true&data_encerramento=gte.${inicio}`);
+  }catch(err){
+    console.error('Falha ao buscar produtividade tempo real', err);
+    container.innerHTML = `<p style="color:var(--crit);font-size:13px">⚠️ Não consegui buscar os dados. Motivo técnico: ${err.message}</p>`;
+    return;
+  }
+
+  // filtra só quem é do cargo certo e tá na visibilidade do papel atual
+  let tecnicosVisiveis = null; // null = todos
+  if (papel === 'tecnico') tecnicosVisiveis = colab ? [colab.nome] : [];
+  else if ((papel === 'supervisor' || papel === 'inspetor') && colab){
+    tecnicosVisiveis = produtividade.filter(p => nomesEquivalentes(p.supervisor, colab.nome)).map(p => p.tecnico);
+  }
+
+  const filtroSupervisor = document.getElementById('mj-prod-f-supervisor') ? document.getElementById('mj-prod-f-supervisor').value : '';
+  const filtroTecnico = document.getElementById('mj-prod-f-tecnico') ? document.getElementById('mj-prod-f-tecnico').value : '';
+
+  // agrega: tecnico -> diaKey -> pontos
+  const porTecnicoDia = {};
+  linhas.forEach(r => {
+    if (!ehInstaladorReparador(r.tecnico)) return;
+    if (tecnicosVisiveis && !tecnicosVisiveis.some(n => nomesEquivalentes(n, r.tecnico))) return;
+    if (filtroTecnico && r.tecnico !== filtroTecnico) return;
+    if (filtroSupervisor){
+      const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, r.tecnico));
+      if (!registroTec || !nomesEquivalentes(registroTec.supervisor, filtroSupervisor)) return;
+    }
+    if (!r.data_encerramento) return;
+    const diaKey = r.data_encerramento.slice(0, 10);
+    if (!dias.includes(diaKey)) return;
+    porTecnicoDia[r.tecnico] = porTecnicoDia[r.tecnico] || {};
+    porTecnicoDia[r.tecnico][diaKey] = (porTecnicoDia[r.tecnico][diaKey] || 0) + (Number(r.pontos) || 0);
+  });
+
+  const tecnicosComDado = Object.keys(porTecnicoDia);
+  if (!tecnicosComDado.length){
+    container.innerHTML = `<div class="empty-state"><div class="glyph">⚡</div><h3>Nenhum serviço encerrado nos últimos ${TEMPO_REAL_DIAS} dias</h3><p>Essa visão usa a Data de Encerramento (não a Data de Criação) — precisa ter protocolo importado com essa coluna preenchida.</p></div>`;
+    return;
+  }
+
+  const linhasOrdenadas = tecnicosComDado
+    .map(tecnico => {
+      const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, tecnico));
+      const total = dias.reduce((soma, d) => soma + (porTecnicoDia[tecnico][d] || 0), 0);
+      return { tecnico, supervisor: registroTec ? registroTec.supervisor : '', dados: porTecnicoDia[tecnico], total };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const formatarDiaCabecalho = (diaKey) => {
+    const [ano, mes, dia] = diaKey.split('-');
+    return `${dia}/${mes}`;
+  };
+
+  container.innerHTML = `
+    <div class="panel" style="overflow-x:auto">
+      <table class="mj-tempo-real-table">
+        <thead>
+          <tr>
+            <th style="text-align:left">Técnico</th>
+            <th style="text-align:left">Origem</th>
+            ${dias.map(d => `<th>${formatarDiaCabecalho(d)}</th>`).join('')}
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${linhasOrdenadas.map(l => `
+            <tr>
+              <td style="text-align:left;font-weight:600">${l.tecnico}</td>
+              <td style="text-align:left;color:var(--ink-dim)">TOUROS</td>
+              ${dias.map(d => {
+                const v = l.dados[d];
+                const cor = corCelulaTempoReal(v);
+                return v
+                  ? `<td class="mj-tr-cell" data-tecnico="${l.tecnico}" data-dia="${d}" style="background:${cor.bg};color:${cor.texto}">${v.toFixed(2)} <span class="mj-tr-lupa">🔍</span></td>`
+                  : `<td class="mj-tr-cell-vazia">·</td>`;
+              }).join('')}
+              <td style="font-weight:700">${l.total.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.querySelectorAll('.mj-tr-cell').forEach(td => {
+    td.style.cursor = 'pointer';
+    td.addEventListener('click', () => abrirDetalheDia(td.dataset.tecnico, td.dataset.dia));
+  });
+}
+
+let mjChartDia = null;
+async function abrirDetalheDia(tecnico, diaKey){
+  document.getElementById('mj-dia-titulo').textContent = tecnico;
+  const [ano, mes, dia] = diaKey.split('-');
+  document.getElementById('mj-dia-subtitulo').textContent = `Encerrados em ${dia}/${mes}/${ano} — por tipo de serviço`;
+  document.getElementById('mj-modal-dia').style.display = 'flex';
+  const detalheEl = document.getElementById('mj-dia-detalhe');
+  detalheEl.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Buscando...</p>';
+
+  let linhas = [];
+  try{
+    const filtro = `tecnico=eq.${encodeURIComponent(tecnico)}&produtivo=eq.true&data_encerramento=gte.${diaKey}T00:00:00.000Z&data_encerramento=lt.${diaKey}T23:59:59.999Z`;
+    linhas = await OPS_SUPABASE.select('produtividade_registros', filtro);
+  }catch(err){
+    console.error('Falha ao buscar detalhe do dia', err);
+    detalheEl.innerHTML = `<p style="color:var(--crit);font-size:12px">⚠️ ${err.message}</p>`;
+    return;
+  }
+
+  const porTipo = {};
+  linhas.forEach(r => {
+    porTipo[r.tipo] = (porTipo[r.tipo] || 0) + (Number(r.pontos) || 0);
+  });
+  const combinado = Object.entries(porTipo).sort((a, b) => b[1] - a[1]);
+
+  if (mjChartDia) mjChartDia.destroy();
+  mjChartDia = new Chart(document.getElementById('mj-dia-canvas'), {
+    type: 'bar',
+    data: { labels: combinado.map(c => c[0]), datasets: [{ label: 'Pontos', data: combinado.map(c => c[1]), backgroundColor: '#00d4ff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return;
+        const tipoClicado = combinado[elementos[0].index][0];
+        const registrosTipo = linhas.filter(r => r.tipo === tipoClicado);
+        detalheEl.innerHTML = `
+          <div class="mj-grafico-detalhe-titulo">${tipoClicado} — ${registrosTipo.length} protocolo(s)</div>
+          <div class="mj-grafico-detalhe-lista">
+            ${registrosTipo.map(r => `
+              <div class="mj-grafico-detalhe-item">
+                <div class="mj-grafico-detalhe-item-linha"><b>${r.protocolo || '—'}</b></div>
+                <div class="mj-grafico-detalhe-item-linha">${r.descricao}</div>
+                <div class="mj-grafico-detalhe-item-linha" style="color:var(--ink-faint)">${r.area || '—'} · ${r.localidade || '—'}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+        y: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+  detalheEl.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver os protocolos daquele tipo.</p>';
+}
+document.getElementById('mj-btn-fechar-dia').addEventListener('click', () => {
+  document.getElementById('mj-modal-dia').style.display = 'none';
+});
 
 // ---------- gráfico por tipo de serviço (abre ao clicar num mês) ----------
 const METRICA_LABEL = {

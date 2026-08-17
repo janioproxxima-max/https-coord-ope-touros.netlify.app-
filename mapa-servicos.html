@@ -156,6 +156,7 @@
             <span>Total: <b id="qf-status-total">0</b></span>
           </div>
           <div id="qf-status-list"></div>
+          <button type="button" class="btn ghost" id="btn-export-pendentes" style="width:100%;margin-top:8px;font-size:12px">⇩ Exportar só os Pendentes</button>
         </div>
         <div class="qf-block">
           <div class="qf-label">Sigla</div>
@@ -396,6 +397,7 @@ const STATUS_CHAMADO_DEFS = [
   { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
   { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)', alerta: true },
 ];
+const STATUS_CHAMADO_LABEL = Object.fromEntries(STATUS_CHAMADO_DEFS.map(d => [d.key, d.label]));
 
 // Vence até amanhã às 9h? (ex: SLA 24h aberto hoje 8h vence amanhã 8h — antes
 // das 9h de amanhã, então precisa ser atendido hoje)
@@ -1299,12 +1301,25 @@ document.getElementById('file-import-mapa').addEventListener('change', async (e)
 });
 
 document.getElementById('btn-export').onclick = () => {
-  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','RESPONSÁVEL','PROJETO','OBSERVAÇÃO','OBSERVAÇÃO DO TÉCNICO','CRIADO EM','SLA HORAS','LAT','LNG'];
-  const rows = records.map(r => [
+  const lista = getFiltered();
+  if (!lista.length){ alert('Nenhum registro pra exportar com os filtros atuais.'); return; }
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','RESPONSÁVEL','PROJETO','OBSERVAÇÃO','OBSERVAÇÃO DO TÉCNICO','CRIADO EM','SLA HORAS','STATUS','LAT','LNG'];
+  const rows = lista.map(r => [
     r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.responsavel || '', r.projeto, r.observacao, r.observacaoTecnico || '',
-    r.criadoEm || '', r.slaHoras ?? '', r.lat ?? '', r.lng ?? '',
+    r.criadoEm || '', r.slaHoras ?? '', STATUS_CHAMADO_LABEL[classifyStatusChamado(r)] || '', r.lat ?? '', r.lng ?? '',
   ]);
-  OPS.downloadXLSX('mapa-servicos-touros.xlsx', headers, rows);
+  OPS.downloadXLSX(`mapa-servicos-touros-${lista.length}-registros.xlsx`, headers, rows);
+};
+
+document.getElementById('btn-export-pendentes').onclick = () => {
+  const pendentes = records.filter(r => classifyStatusChamado(r) === 'pendente');
+  if (!pendentes.length){ alert('Nenhum chamado pendente no momento (parabéns!).'); return; }
+  const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','ENDERECO','NUMERO','COMPLEMENTO','TELEFONE','PROJETO','OBSERVAÇÃO','CRIADO EM','SLA HORAS'];
+  const rows = pendentes.map(r => [
+    r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.endereco || '', r.numero || '', r.complemento || '', r.telefone, r.projeto, r.observacao,
+    r.criadoEm || '', r.slaHoras ?? '',
+  ]);
+  OPS.downloadXLSX(`mapa-servicos-touros-pendentes-${pendentes.length}.xlsx`, headers, rows);
 };
 
 

@@ -708,3 +708,12 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 
 .ms-city-add-nova{ width:100%; text-align:left; padding:8px 10px; margin-bottom:6px; border-radius:6px; border:1px dashed var(--brand); background:var(--brand-wash); color:var(--brand); font-size:12.5px; cursor:pointer; }
 .ms-city-add-nova:hover{ background:var(--brand); color:var(--bg); }
+
+.mj-tempo-real-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.mj-tempo-real-table th{ padding:8px 10px; text-align:center; color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid var(--line); white-space:nowrap; }
+.mj-tempo-real-table td{ padding:8px 10px; text-align:center; border-bottom:1px solid var(--line); white-space:nowrap; }
+.mj-tempo-real-table tr:hover td{ background:rgba(255,255,255,0.02); }
+.mj-tr-cell{ border-radius:6px; font-weight:700; transition:filter .15s; }
+.mj-tr-cell:hover{ filter:brightness(1.25); }
+.mj-tr-cell-vazia{ color:var(--ink-faint); opacity:.35; }
+.mj-tr-lupa{ font-size:10px; opacity:.7; margin-left:2px; }
