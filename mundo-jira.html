@@ -1227,7 +1227,7 @@ function mesclarProdutividade(resultado){
     if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
-      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
+      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [], tendencia: null };
       produtividade.push(registro);
     }
     registrosTocados.push(registro);
