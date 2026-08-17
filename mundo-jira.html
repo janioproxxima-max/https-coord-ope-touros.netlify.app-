@@ -1544,6 +1544,13 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
       window.__mjTentouDeNovoHistorico = false;
       const nomesDisponiveis = produtividadeValida.map(p => p.tecnico);
       const nomeAlvo = colab ? colab.nome : usuarioAtual;
+      if (colab && !colab.nome){
+        conteudo.innerHTML = `
+          <p style="color:var(--warn);font-size:13px">⚠️ Achei seu cadastro em Gestão de Pessoas (pelo login "${usuarioAtual}"), mas o campo <b>Nome</b> dele está vazio.</p>
+          <p style="color:var(--ink-dim);font-size:12.5px;margin-top:6px">Pede pro coordenador entrar em Gestão de Pessoas, procurar sua linha (login "${usuarioAtual}"${colab.matricula ? `, matrícula ${colab.matricula}` : ''}) e preencher o campo Nome. Sem isso, o site não consegue casar seu login com seu nome na planilha de produtividade.</p>
+        `;
+        return;
+      }
       const parecido = nomesDisponiveis.find(n => OPS.normalize(n).includes(OPS.normalize(nomeAlvo).split(' ')[0] || ''));
       conteudo.innerHTML = `
         <p style="color:var(--ink-dim);font-size:13px">Não achei seu nome ("${nomeAlvo}") na última planilha de produtividade importada, ou seu cargo cadastrado não é "Instalador e Reparador de Operações". Confira com seu supervisor.</p>

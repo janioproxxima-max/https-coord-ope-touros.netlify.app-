@@ -1448,7 +1448,10 @@ function initShell(active, pageTitle){
   const topbar = document.createElement('div');
   topbar.className = 'topbar';
   topbar.innerHTML = `
-    <div class="crumb-left"><span class="unit">OPE · Coordenação</span></div>
+    <div class="crumb-left">
+      <button class="sb-toggle-mobile" id="sb-toggle-mobile" aria-label="Abrir menu">☰</button>
+      <span class="unit">OPE · Coordenação</span>
+    </div>
     <div class="crumb-center"><span class="page">${pageTitle}</span></div>
     <div class="crumb-right">
       <div class="clock" id="ops-clock"></div>
@@ -1477,8 +1480,20 @@ function initShell(active, pageTitle){
   shellMain.appendChild(topbar);
   shellMain.appendChild(shellContent);
 
+  const overlayMobile = document.createElement('div');
+  overlayMobile.className = 'sb-overlay-mobile';
   document.body.appendChild(sidebar);
+  document.body.appendChild(overlayMobile);
   document.body.appendChild(shellMain);
+
+  function fecharMenuMobile(){ document.body.classList.remove('sidebar-open-mobile'); }
+  topbar.querySelector('#sb-toggle-mobile').addEventListener('click', () => {
+    document.body.classList.toggle('sidebar-open-mobile');
+  });
+  overlayMobile.addEventListener('click', fecharMenuMobile);
+  // fecha o menu sozinho ao navegar pra outra página, pra não ficar aberto
+  // quando a próxima tela carregar
+  sidebar.querySelectorAll('.sb-item').forEach(a => a.addEventListener('click', fecharMenuMobile));
 
   const clockEl = topbar.querySelector('#ops-clock');
   function tick(){
