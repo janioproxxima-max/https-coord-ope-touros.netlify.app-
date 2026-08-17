@@ -1,7 +1,8 @@
-const CACHE_NAME = 'mundo-jira-v1';
+const CACHE_NAME = 'mundo-jira-v2';
 const ARQUIVOS_ESSENCIAIS = [
   'mundo-jira.html',
   'common.js',
+  'supabase-client.js',
   'style.css',
   'mundo-jira-logo.png',
   'icon-mundo-jira-192.png',
@@ -25,16 +26,19 @@ self.addEventListener('activate', (event) => {
 });
 
 // Estratégia: tenta buscar na rede primeiro (dados sempre atualizados);
-// se estiver sem internet, cai pro que estiver salvo em cache.
+// se estiver sem internet — ou a conexão estiver muito lenta/travada,
+// como às vezes acontece no 4G do celular — cai pro que estiver em cache
+// depois de um tempo limite, em vez de ficar esperando pra sempre.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request)
-      .then((resposta) => {
+    Promise.race([
+      fetch(event.request).then((resposta) => {
         const copia = resposta.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copia));
         return resposta;
-      })
-      .catch(() => caches.match(event.request))
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+    ]).catch(() => caches.match(event.request))
   );
 });
