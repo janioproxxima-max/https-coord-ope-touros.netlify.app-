@@ -1135,7 +1135,13 @@ function processarLinhasProdutividade(rows){
             produtivo: prod.produtivo,
             pontos: prod.pontos || 0,
             tma: horasAtendimento,
-            dataEncerramento: dtEncerramento ? dtEncerramento.toISOString() : null,
+            // toISOString() converte pra UTC e desloca a data (ex: 31/07 22h
+            // vira 01/08 no fuso do Brasil, que é 3h atrás de UTC) — em vez
+            // disso, guarda os números do horário local "disfarçados" de UTC,
+            // pra manter o mesmo dia/hora que está na planilha
+            dataEncerramento: dtEncerramento
+              ? new Date(Date.UTC(dtEncerramento.getFullYear(), dtEncerramento.getMonth(), dtEncerramento.getDate(), dtEncerramento.getHours(), dtEncerramento.getMinutes())).toISOString()
+              : null,
           });
 
           // reparo produtivo com cliente identificado — candidato a recorrência
