@@ -1661,12 +1661,14 @@ function corCelulaTempoReal(valor){
   return { bg: 'rgba(255,64,64,0.32)', texto: '#ff4040' };
 }
 
-// segunda a domingo da semana atual — segunda é o índice 0, domingo o 6
-function limitesSemanaAtual(){
+// segunda a domingo da semana atual (ou de offsetSemanas atrás/à frente) —
+// segunda é o índice 0, domingo o 6
+function limitesSemanaAtual(offsetSemanas){
+  offsetSemanas = offsetSemanas || 0;
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const diaSemana = hoje.getDay(); // 0=domingo, 1=segunda...6=sábado
   const diffParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-  const segunda = new Date(hoje); segunda.setDate(segunda.getDate() - diffParaSegunda);
+  const segunda = new Date(hoje); segunda.setDate(segunda.getDate() - diffParaSegunda + (offsetSemanas * 7));
   const diasDaSemana = [];
   for (let i = 0; i < 7; i++){
     const d = new Date(segunda); d.setDate(d.getDate() + i);
@@ -1689,6 +1691,16 @@ function faltaParaProximoNivel(pontos){
   if (p >= 9) return { faltam: (10 - p), nivel: 'Ouro' };
   if (p >= 8) return { faltam: (9 - p), nivel: 'Prata' };
   return { faltam: (8 - p), nivel: 'Bronze' };
+}
+
+// quanto falta pra cada um dos três níveis, todos de uma vez (0 = já bateu)
+function faltasParaTodosNiveis(pontos){
+  const p = pontos || 0;
+  return {
+    bronze: Math.max(0, 8 - p),
+    prata: Math.max(0, 9 - p),
+    ouro: Math.max(0, 10 - p),
+  };
 }
 
 async function renderProdutividadeTempoReal(papel, colab, container){
@@ -1752,45 +1764,6 @@ async function renderProdutividadeTempoReal(papel, colab, container){
     return `${dia}/${mes}`;
   };
 
-  // ---------- bloco extra pro técnico: sua semana em Bronze/Prata/Ouro ----------
-  let blocoSemanal = '';
-  if (papel === 'tecnico' && colab){
-    const diasSemana = limitesSemanaAtual();
-    const NOMES_DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-    const chaveTecnico = tecnicosComDado.find(t => nomesEquivalentes(t, colab.nome))
-      || tecnicosComDado.find(t => nomesParecidos(t, colab.nome));
-    const dadosDoTecnico = chaveTecnico ? porTecnicoDia[chaveTecnico] : {};
-    const totalMeta = diasSemana.slice(0, 6).reduce((s, d) => s + (dadosDoTecnico[d] || 0), 0); // seg a sáb
-    const pontosDomingo = dadosDoTecnico[diasSemana[6]] || 0; // domingo é extra, não entra na meta
-
-    const cardsDias = diasSemana.map((d, i) => {
-      const pontos = dadosDoTecnico[d] || 0;
-      const tier = tierDoDia(pontos);
-      const falta = faltaParaProximoNivel(pontos);
-      const ehDomingo = i === 6;
-      const [, mm, dd] = d.split('-');
-      return `
-        <div class="mj-semana-dia${ehDomingo ? ' mj-semana-extra' : ''}" style="${tier ? `border-color:${tier.cor}` : ''}">
-          <div class="mj-semana-dia-label">${NOMES_DIAS_SEMANA[i]} ${dd}/${mm}${ehDomingo ? ' · extra' : ''}</div>
-          <div class="mj-semana-dia-pontos">${pontos ? pontos.toFixed(2) : '—'}</div>
-          ${tier ? `<div class="mj-semana-dia-tier" style="color:${tier.cor}">${tier.emoji} ${tier.nome}</div>`
-                 : (pontos ? `<div class="mj-semana-dia-falta">faltam ${falta.faltam.toFixed(2)} p/ ${falta.nivel}</div>` : '<div class="mj-semana-dia-falta">—</div>')}
-        </div>
-      `;
-    }).join('');
-
-    blocoSemanal = `
-      <div class="panel" style="margin-top:16px">
-        <div class="qf-label" style="margin-bottom:10px">🏅 Sua semana <span style="font-weight:400;color:var(--ink-faint)">(segunda a sábado vale meta · domingo é extra)</span></div>
-        <div class="mj-semana-grid">${cardsDias}</div>
-        <div class="mj-semana-legenda">🥉 8 pts = Bronze &nbsp;·&nbsp; 🥈 9 pts = Prata &nbsp;·&nbsp; 🥇 10 pts = Ouro</div>
-        <div class="mj-semana-total">Total da semana (seg–sáb): <b>${totalMeta.toFixed(2)} pts</b>${pontosDomingo ? ` &nbsp;+&nbsp; <span style="color:var(--ok)">domingo: ${pontosDomingo.toFixed(2)} pts extra</span>` : ''}</div>
-        <div class="qf-label" style="margin:16px 0 6px">📈 Média dos últimos 3 meses</div>
-        <div style="position:relative;height:160px"><canvas id="mj-semana-3meses-canvas"></canvas></div>
-      </div>
-    `;
-  }
-
   container.innerHTML = `
     <div class="panel" style="overflow-x:auto">
       <table class="mj-tempo-real-table">
@@ -1820,7 +1793,7 @@ async function renderProdutividadeTempoReal(papel, colab, container){
         </tbody>
       </table>
     </div>
-    ${blocoSemanal}
+    ${papel === 'tecnico' && colab ? '<div id="mj-premiacao-semanal"></div>' : ''}
   `;
 
   container.querySelectorAll('.mj-tr-cell').forEach(td => {
@@ -1828,28 +1801,195 @@ async function renderProdutividadeTempoReal(papel, colab, container){
     td.addEventListener('click', () => abrirDetalheDia(td.dataset.tecnico, td.dataset.dia));
   });
 
-  // gráfico dos últimos 3 meses — só depois do innerHTML, pro canvas já existir
-  if (papel === 'tecnico' && colab && document.getElementById('mj-semana-3meses-canvas')){
-    const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, colab.nome) || nomesParecidos(p.tecnico, colab.nome));
-    const ultimosMeses = registroTec ? (registroTec.historicoMensal || []).slice(-3) : [];
-    if (mjChart3Meses) mjChart3Meses.destroy();
-    if (ultimosMeses.length){
-      mjChart3Meses = new Chart(document.getElementById('mj-semana-3meses-canvas'), {
-        type: 'bar',
-        data: {
-          labels: ultimosMeses.map(m => m.mes || m.mesKey),
-          datasets: [{ label: 'Média de pontos/dia', data: ultimosMeses.map(m => m.media || 0), backgroundColor: '#00d4ff' }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          scales: {
-            x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
-            y: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
-          },
-          plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
-        },
+  if (papel === 'tecnico' && colab){
+    mjSemanaOffset = 0;
+    renderPremiacaoSemanal(colab.nome, 0);
+  }
+}
+
+// plugin simples que escreve o valor em cima de cada barra — usado nos
+// gráficos de 3 meses, pra sempre mostrar o número (ex: "8,2"), não só a
+// legenda/eixo
+const plugRotuloBarraSimples = {
+  id: 'rotuloBarraSimples',
+  afterDatasetsDraw(chart){
+    const { ctx } = chart;
+    chart.data.datasets.forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((barra, i) => {
+        const valor = dataset.data[i];
+        if (valor == null) return;
+        const texto = valor.toFixed(1).replace('.', ',') + (chart.__sufixo || '');
+        ctx.save();
+        ctx.fillStyle = '#e6ebf2';
+        ctx.font = 'bold 11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(texto, barra.x, barra.y - 4);
+        ctx.restore();
       });
-    }
+    });
+  },
+};
+
+let mjSemanaOffset = 0;
+let mjChartImprodutividade = null;
+
+async function renderPremiacaoSemanal(nomeTecnico, offsetSemanas){
+  mjSemanaOffset = offsetSemanas;
+  const placeholder = document.getElementById('mj-premiacao-semanal');
+  if (!placeholder) return;
+  placeholder.innerHTML = '<div class="panel" style="margin-top:16px"><p style="color:var(--ink-faint);font-size:12px">Carregando premiação semanal...</p></div>';
+
+  const diasSemana = limitesSemanaAtual(offsetSemanas);
+  const NOMES_DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  const inicio = diasSemana[0] + 'T00:00:00.000Z';
+  const fimExclusivo = (() => {
+    const d = new Date(diasSemana[6]); d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10) + 'T00:00:00.000Z';
+  })();
+
+  let linhas = [];
+  try{
+    const filtro = `tecnico=eq.${encodeURIComponent(nomeTecnico)}&produtivo=eq.true&data_encerramento=gte.${inicio}&data_encerramento=lt.${fimExclusivo}`;
+    linhas = await OPS_SUPABASE.select('produtividade_registros', filtro);
+  }catch(err){
+    console.error('Falha ao buscar premiação semanal', err);
+    placeholder.innerHTML = `<div class="panel" style="margin-top:16px"><p style="color:var(--crit);font-size:12px">⚠️ Não consegui buscar a semana. Motivo técnico: ${err.message}</p></div>`;
+    return;
+  }
+
+  const dadosDoTecnico = {};
+  linhas.forEach(r => {
+    if (!r.data_encerramento) return;
+    const diaKey = r.data_encerramento.slice(0, 10);
+    dadosDoTecnico[diaKey] = (dadosDoTecnico[diaKey] || 0) + (Number(r.pontos) || 0);
+  });
+
+  const totalMeta = diasSemana.slice(0, 6).reduce((s, d) => s + (dadosDoTecnico[d] || 0), 0); // seg a sáb
+  const pontosDomingo = dadosDoTecnico[diasSemana[6]] || 0;
+
+  const cardsDias = diasSemana.map((d, i) => {
+    const pontos = dadosDoTecnico[d] || 0;
+    const tier = tierDoDia(pontos);
+    const falta = faltaParaProximoNivel(pontos);
+    const ehDomingo = i === 6;
+    const [, mm, dd] = d.split('-');
+    return `
+      <div class="mj-semana-dia${ehDomingo ? ' mj-semana-extra' : ''}" style="${tier ? `border-color:${tier.cor}` : ''}">
+        <div class="mj-semana-dia-label">${NOMES_DIAS_SEMANA[i]} ${dd}/${mm}</div>
+        <div class="mj-semana-dia-pontos">${pontos ? pontos.toFixed(2) : '—'}</div>
+        ${tier ? `<div class="mj-semana-dia-tier" style="color:${tier.cor}">${tier.emoji} ${tier.nome}</div>`
+               : (pontos ? `<div class="mj-semana-dia-falta">faltam ${falta.faltam.toFixed(2)} p/ ${falta.nivel}</div>` : '<div class="mj-semana-dia-falta">—</div>')}
+      </div>
+    `;
+  }).join('');
+
+  // card de "quanto falta pra cada nível" — usando a pontuação de hoje (só
+  // faz sentido mostrar isso na semana atual, não em semanas passadas)
+  const hojeKey = new Date().toISOString().slice(0, 10);
+  const pontosHoje = dadosDoTecnico[hojeKey] || 0;
+  const faltas = faltasParaTodosNiveis(pontosHoje);
+  const cardFaltas = offsetSemanas === 0 ? `
+    <div class="mj-semana-faltas-card">
+      <div class="mj-semana-dia-label">Hoje, faltam pra cada nível</div>
+      <div class="mj-semana-faltas-linha">🥉 Bronze — ${faltas.bronze <= 0 ? '<span style="color:var(--ok)">✓ atingido</span>' : faltas.bronze.toFixed(2) + ' pts'}</div>
+      <div class="mj-semana-faltas-linha">🥈 Prata — ${faltas.prata <= 0 ? '<span style="color:var(--ok)">✓ atingido</span>' : faltas.prata.toFixed(2) + ' pts'}</div>
+      <div class="mj-semana-faltas-linha">🥇 Ouro — ${faltas.ouro <= 0 ? '<span style="color:var(--ok)">✓ atingido</span>' : faltas.ouro.toFixed(2) + ' pts'}</div>
+    </div>
+  ` : '';
+
+  const formatarDataCurta = (diaKey) => { const [, mm, dd] = diaKey.split('-'); return `${dd}/${mm}`; };
+  const rotuloSemana = offsetSemanas === 0 ? 'Semana atual' : (offsetSemanas === -1 ? 'Semana passada' : `${formatarDataCurta(diasSemana[0])} a ${formatarDataCurta(diasSemana[6])}`);
+
+  placeholder.innerHTML = `
+    <div class="panel" style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div class="qf-label" style="margin-bottom:0">🏅 Premiação Semanal</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" class="btn ghost" id="mj-semana-btn-anterior" style="font-size:12px;padding:6px 10px">← Semana anterior</button>
+          <span style="font-size:12px;color:var(--ink-dim);min-width:110px;text-align:center">${rotuloSemana}</span>
+          <button type="button" class="btn ghost" id="mj-semana-btn-proxima" style="font-size:12px;padding:6px 10px" ${offsetSemanas >= 0 ? 'disabled' : ''}>Semana atual →</button>
+        </div>
+      </div>
+      <div class="mj-semana-grid">${cardsDias}</div>
+      ${cardFaltas}
+      <div class="mj-semana-legenda">🥉 8 pts = Bronze &nbsp;·&nbsp; 🥈 9 pts = Prata &nbsp;·&nbsp; 🥇 10 pts = Ouro</div>
+      <div class="mj-semana-total">Total da semana (seg–sáb): <b>${totalMeta.toFixed(2)} pts</b>${pontosDomingo ? ` &nbsp;+&nbsp; <span style="color:var(--ok)">domingo: ${pontosDomingo.toFixed(2)} pts</span>` : ''}</div>
+      <div class="qf-label" style="margin:16px 0 6px">📈 Média dos últimos 3 meses</div>
+      <div style="position:relative;height:160px"><canvas id="mj-semana-3meses-canvas"></canvas></div>
+      <div class="qf-label" style="margin:16px 0 6px">📉 Improdutividade dos últimos 3 meses</div>
+      <div style="position:relative;height:160px"><canvas id="mj-semana-improdutividade-canvas"></canvas></div>
+    </div>
+  `;
+
+  document.getElementById('mj-semana-btn-anterior').addEventListener('click', () => renderPremiacaoSemanal(nomeTecnico, mjSemanaOffset - 1));
+  document.getElementById('mj-semana-btn-proxima').addEventListener('click', () => { if (mjSemanaOffset < 0) renderPremiacaoSemanal(nomeTecnico, mjSemanaOffset + 1); });
+
+  const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, nomeTecnico) || nomesParecidos(p.tecnico, nomeTecnico));
+  const ultimosMeses = registroTec ? (registroTec.historicoMensal || []).slice(-3) : [];
+
+  if (mjChart3Meses) mjChart3Meses.destroy();
+  if (mjChartImprodutividade) mjChartImprodutividade.destroy();
+
+  if (ultimosMeses.length){
+    mjChart3Meses = new Chart(document.getElementById('mj-semana-3meses-canvas'), {
+      type: 'bar',
+      data: {
+        labels: ultimosMeses.map(m => m.mes || m.mesKey),
+        datasets: [{ label: 'Média de pontos/dia', data: ultimosMeses.map(m => m.media || 0), backgroundColor: '#00d4ff' }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 20 } },
+        scales: {
+          x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+        },
+        plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
+      },
+      plugins: [plugRotuloBarraSimples],
+    });
+
+    mjChartImprodutividade = new Chart(document.getElementById('mj-semana-improdutividade-canvas'), {
+      type: 'bar',
+      data: {
+        labels: ultimosMeses.map(m => m.mes || m.mesKey),
+        datasets: [{ label: 'Improdutividade (%)', data: ultimosMeses.map(m => m.improdutividadePct || 0), backgroundColor: '#ff6b52' }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 20 } },
+        scales: {
+          x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+        },
+        plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
+      },
+      plugins: [{
+        id: 'rotuloImprodutividade',
+        afterDatasetsDraw(chart){
+          const { ctx } = chart;
+          chart.data.datasets.forEach((dataset, di) => {
+            const meta = chart.getDatasetMeta(di);
+            meta.data.forEach((barra, i) => {
+              const valor = dataset.data[i];
+              if (valor == null) return;
+              ctx.save();
+              ctx.fillStyle = '#e6ebf2';
+              ctx.font = 'bold 11px Inter, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(valor.toFixed(1).replace('.', ',') + '%', barra.x, barra.y - 4);
+              ctx.restore();
+            });
+          });
+        },
+      }],
+    });
+  } else {
+    document.getElementById('mj-semana-3meses-canvas').parentElement.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Sem meses suficientes no histórico ainda.</p>';
+    document.getElementById('mj-semana-improdutividade-canvas').parentElement.innerHTML = '';
   }
 }
 
