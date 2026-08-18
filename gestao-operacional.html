@@ -51,15 +51,7 @@
   <!-- ================= ABA: SERVIÇOS ================= -->
   <div id="go-aba-servicos">
     <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</div>
-    <div class="panel toolbar" style="margin-bottom:14px;flex-wrap:wrap">
-      <span class="page-sub" id="go-fechamento-info" style="margin:0;flex:1;min-width:280px;line-height:1.6">Nenhuma planilha de fechamento importada ainda.</span>
-      <button class="btn primary" id="go-btn-importar-fechamento">⇪ Importar planilha de fechamento</button>
-      <input type="file" id="go-input-fechamento" accept=".csv,.xlsx,.xls" style="display:none">
-    </div>
     <div class="sla-grid" id="go-cards-sla"></div>
-
-    <div class="sec-hdr">Produtividade — só o que a equipe fechou como produtivo</div>
-    <div class="sla-grid" id="go-cards-gerais"></div>
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
@@ -214,18 +206,29 @@ requireAuthThenInit('gestao-operacional.html', 'Gestão Operacional');
 
 const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c','#5eead4','#f472b6','#818cf8','#facc15'];
 const commonChartOpts = { responsive:true, maintainAspectRatio:false };
-const META_PRODUTIVIDADE = 85;
 
 // ---------------- SLA por tipo de serviço ----------------
 // "dentro do prazo" = tma (horas) <= limite do grupo — é o único dado de
 // tempo que existe em produtividade_registros (não tem data de abertura
 // separada, só data_encerramento). Recolhimento fica fora do cálculo de
 // SLA por pedido explícito.
+// horas de SLA por tipo, direto do catálogo oficial do site (OPS.SERVICE_CATALOG)
+// — em vez de uma tabela própria que podia ficar desatualizada ou errada.
+// Recolhimento fica fora do SLA por pedido explícito (tem tempo variável,
+// 48h ou 120h dependendo do subtipo, e não é tratado como meta de SLA aqui).
+const HORAS_SLA_POR_TIPO = {};
+OPS.SERVICE_CATALOG.forEach(c => {
+  if (c.tipo === 'RECOLHIMENTO' || c.tipo === 'REDES' || c.tipo === 'RETRABALHO' || c.tipo === 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO') return;
+  if (!(c.tipo in HORAS_SLA_POR_TIPO)) HORAS_SLA_POR_TIPO[c.tipo] = c.tempo;
+});
+// agrupamento pros 5 cards pedidos: Reparo (VT), Serviço Adicional,
+// Ativação, Mudança de Endereço — cada um usa as horas reais do catálogo
 const SLA_GROUPS = {
-  reparo:    { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO'] },
-  sa:        { label: 'SLA Serviço Adicional (48h)', horas: 48, meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
-  ativacao:  { label: 'SLA Ativação (72h)', horas: 72, meta: 95, tipos: ['ATIVAÇÃO'] },
-  mde:       { label: 'SLA Mud. de Endereço (72h)', horas: 72, meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
+  reparo:    { label: 'SLA Reparo (VT)', meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO'] },
+  preventiva:{ label: 'SLA Ações Preventivas', meta: 90, tipos: ['AÇÕES PREVENTIVAS'] },
+  sa:        { label: 'SLA Serviço Adicional', meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
+  ativacao:  { label: 'SLA Ativação', meta: 95, tipos: ['ATIVAÇÃO'] },
+  mde:       { label: 'SLA Mud. de Endereço', meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
 };
 const META_SLA_GERAL = 80;
 // estimativa de reparos/dia: 200 serviços a cada 2 dias = 100/dia
@@ -255,8 +258,6 @@ const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardan
 
 let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
 let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Reparo"
-let goFechamento = null;   // lazy-load: planilha de fechamento (abertura real → SLA)
-const FECHAMENTO_SYNC = 'FechamentoData';
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
@@ -310,7 +311,7 @@ async function initPage(){
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';
-    document.getElementById('go-cards-gerais').innerHTML =
+    document.getElementById('go-cards-sla').innerHTML =
       `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--crit);font-size:13px">⚠️ Não consegui buscar os dados no Supabase. Motivo técnico: ${err.message}</div></div>`;
   }
 }
@@ -428,8 +429,7 @@ function goRenderAbaAtiva(){
 
 // ================= ABA SERVIÇOS =================
 function renderAbaServicos(data){
-  renderCardsSLA();
-  renderCardsGerais(data);
+  renderCardsSLA(data);
   renderTabelaCidadeTipo(data);
   renderDonut(data);
   renderTMA(data);
@@ -439,40 +439,24 @@ function renderAbaServicos(data){
   renderResumo(data);
 }
 
-async function renderCardsSLA(){
-  const info = document.getElementById('go-fechamento-info');
-  if (goFechamento === null){
-    info.textContent = 'Carregando planilha de fechamento...';
-    try{
-      goFechamento = (await OPS.syncPull(FECHAMENTO_SYNC)) || [];
-    }catch(err){
-      console.error('Falha ao buscar planilha de fechamento', err);
-      goFechamento = [];
-      info.textContent = `⚠️ Não consegui buscar a planilha de fechamento. ${err.message}`;
-    }
-  }
-  if (goAbaAtiva !== 'servicos') return; // aba trocou enquanto buscava
-
-  const elegiveis = fechamentoFiltrado();
-  if (goFechamento.length && !elegiveis.length){
-    info.innerHTML = diagnosticoFechamentoVazio();
-  } else {
-    info.textContent = goFechamento.length
-      ? `${fmtNum(goFechamento.length)} registro(s) na planilha de fechamento · ${fmtNum(elegiveis.length)} produtivo(s) em cidades de Touros`
-      : 'Nenhuma planilha de fechamento importada ainda — clique em "Importar" acima.';
-  }
-
-  const dentro = elegiveis.filter(r => horasFechamento(r) <= horasLimiteFechamento(r));
+function renderCardsSLA(data){
+  // SLA usa a mesma base de encerrados (produtividade_registros, já
+  // alimentada automaticamente desde novembro) — filtrada a produtivo=true
+  // + tipo dentro dos grupos de SLA (Recolhimento fica de fora).
+  // "Dentro do prazo" = tma (horas) <= limite do grupo.
+  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
+  const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
   const corGeral = pctGeral >= META_SLA_GERAL ? 'ok' : (pctGeral >= META_SLA_GERAL - 10 ? 'warn' : 'crit');
 
   const cardsPorGrupo = Object.entries(SLA_GROUPS).map(([chave, cfg]) => {
-    const arr = elegiveis.filter(r => grupoSlaDoTipo(r.tipoCurto) === chave);
-    const dentroGrupo = arr.filter(r => horasFechamento(r) <= cfg.horas).length;
+    const arr = elegiveis.filter(r => grupoSlaDoTipo(r.tipo) === chave);
+    const dentroGrupo = arr.filter(r => dentroDoPrazo(r) === true).length;
     const pct = arr.length ? (dentroGrupo / arr.length) * 100 : null;
     const cor = pct == null ? 'neutral' : (pct >= cfg.meta ? 'ok' : (pct >= cfg.meta - 10 ? 'warn' : 'crit'));
+    const horas = HORAS_SLA_POR_TIPO[cfg.tipos[0]];
     return `<div class="sla-card ${cor}">
-      <div class="sla-label">${cfg.label}</div>
+      <div class="sla-label">${cfg.label} (${horas}h)</div>
       <div class="sla-value">${pct == null ? '—' : fmtPct(pct)}</div>
       <div class="sla-meta">Meta: ${cfg.meta}% · ${fmtNum(arr.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${pct == null ? 0 : Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
@@ -487,145 +471,15 @@ async function renderCardsSLA(){
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
     </div>${cardsPorGrupo}`;
 }
-
-// se o filtro zerar tudo, mostra em qual etapa os registros foram
-// descartados — evita ficar adivinhando (cidade não reconhecida? tipo fora
-// dos grupos de SLA? nada bateu como produtivo no catálogo?)
-function diagnosticoFechamentoVazio(){
-  const total = goFechamento.length;
-  const comDatas = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm).length;
-  const comGrupoSla = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto)).length;
-  const comCidadeTouros = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto) && OPS.isTourosUnitCity(r.cidade)).length;
-  const produtivos = goFechamento.filter(r => {
-    if (!(r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto) && OPS.isTourosUnitCity(r.cidade))) return false;
-    return OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto).produtivo === true;
-  }).length;
-  const cidadesVistas = [...new Set(goFechamento.map(r => r.cidade))].filter(Boolean).slice(0, 6).join(', ');
-  return `⚠️ ${fmtNum(total)} registros na planilha, mas 0 sobraram depois dos filtros. Onde travou:
-    <br>· Com data de abertura e fim válidas: ${fmtNum(comDatas)}
-    <br>· ...e tipo dentro dos grupos de SLA (não é Recolhimento nem outro fora da lista): ${fmtNum(comGrupoSla)}
-    <br>· ...e cidade reconhecida como Unidade Touros: ${fmtNum(comCidadeTouros)} <span style="color:var(--ink-faint)">(cidades na planilha: ${cidadesVistas || '—'})</span>
-    <br>· ...e classificado como produtivo no catálogo: ${fmtNum(produtivos)}`;
+function horasLimiteDoTipo(tipo){
+  const t = (tipo || '').toUpperCase();
+  return t in HORAS_SLA_POR_TIPO ? HORAS_SLA_POR_TIPO[t] : null;
 }
-function horasFechamento(r){ return (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000; }
-function horasLimiteFechamento(r){ const g = grupoSlaDoTipo(r.tipoCurto); return g ? SLA_GROUPS[g].horas : Infinity; }
-
-function fechamentoFiltrado(){
-  if (!goFechamento || !goFechamento.length) return [];
-  const supervisor = document.getElementById('go-f-supervisor').value;
-  const cidade = document.getElementById('go-f-cidade').value;
-  // SLA não depende do filtro De/Até — considera TUDO que a equipe fechou
-  // produtivo nas cidades de Touros, ponto. Supervisor/cidade continuam
-  // filtráveis se o usuário escolher.
-  return goFechamento.filter(r => {
-    if (!r.dataFimAtendimento || !r.criadoEm) return false;
-    if (!grupoSlaDoTipo(r.tipoCurto)) return false; // fora dos grupos de SLA (ex: Recolhimento)
-    if (!OPS.isTourosUnitCity(r.cidade)) return false;
-    if (cidade && r.cidade !== cidade) return false;
-    if (supervisor && goTecnicoSupervisor[r.responsavel] !== supervisor) return false;
-    const prod = OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto);
-    return prod.produtivo === true;
-  });
-}
-
-// ---------------- importar planilha de fechamento (mesma lógica que existia no antigo Indicadores) ----------------
-function mapHeaderFechamento(h){
-  const n = OPS.normalize(h);
-  if (n.includes('ordem servico') || n === 'protocolo') return 'protocolo';
-  if (n === 'tipo de servico') return 'tituloCompleto';
-  if (n.includes('titulo') && !n.includes('subtipo')) return 'tituloCompleto';
-  if (n === 'area') return 'cidade';
-  if (n === 'cidade') return 'cidade';
-  if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
-  if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
-  if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
-  if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
-  if (n === 'responsavel') return 'responsavel';
-  if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
-  if (n.includes('abertura original')) return 'dataAberturaOriginal';
-  return null;
-}
-
-document.getElementById('go-btn-importar-fechamento').onclick = () => document.getElementById('go-input-fechamento').click();
-document.getElementById('go-input-fechamento').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  OPS.readSpreadsheetFile(file, async (rows) => {
-    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
-
-    let headerRowIdx = -1, bestScore = -1;
-    for (let i = 0; i < Math.min(rows.length, 10); i++){
-      const mapped = rows[i].map(mapHeaderFechamento);
-      if (!mapped.includes('protocolo')) continue;
-      const score = mapped.filter(Boolean).length;
-      if (score > bestScore){ bestScore = score; headerRowIdx = i; }
-    }
-    if (headerRowIdx === -1) headerRowIdx = rows.length > 1 ? 1 : 0;
-    const headers = rows[headerRowIdx].map(mapHeaderFechamento);
-
-    const imported = rows.slice(headerRowIdx + 1).map(cols => {
-      const row = {};
-      headers.forEach((key, idx) => { if (key) row[key] = (cols[idx] ?? '').toString().trim(); });
-      if (!row.protocolo) return null;
-
-      const tituloCompleto = row.tituloCompleto || '';
-      const svc = OPS.lookupService(tituloCompleto);
-      const cidade = OPS.canonicalCity(row.cidade || '');
-
-      const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
-      const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
-      const dtCriacao = OPS.parseBRDateTime(row.dataCriacao);
-      const dtOriginal = OPS.parseBRDateTime(row.dataAberturaOriginal);
-      const baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
-      const dtFim = OPS.parseBRDateTime(row.dataFimAtendimento);
-
-      return {
-        id: OPS.uid(),
-        protocolo: row.protocolo,
-        tituloCompleto,
-        tipoCurto: svc.catalogado ? svc.tipoCurto : tituloCompleto,
-        cidade,
-        descricaoEncerramento: row.descricaoEncerramento || '',
-        planoProduto: row.planoProduto || '',
-        responsavel: row.responsavel || '',
-        tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
-        criadoEm: baseDt ? baseDt.toISOString() : null,
-        dataFimAtendimento: dtFim ? dtFim.toISOString() : null,
-      };
-    }).filter(Boolean);
-
-    if (!imported.length){ alert('Não encontrei registros válidos nessa planilha de fechamento.'); return; }
-
-    const mode = confirm(`Foram lidos ${imported.length} registros de fechamento.\nOK = substituir a base atual.\nCancelar = adicionar aos registros existentes.`);
-    goFechamento = mode ? imported : [...(goFechamento || []), ...imported];
-    await OPS.syncPushWithToast(FECHAMENTO_SYNC, goFechamento);
-    e.target.value = '';
-    if (goAbaAtiva === 'servicos') renderCardsSLA();
-  });
-});
-
-function renderCardsGerais(data){
-  const pctGeral = pctProdutivo(data);
-  const corGeral = pctGeral >= META_PRODUTIVIDADE ? 'ok' : (pctGeral >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
-  const counts = {};
-  data.forEach(r => { counts[r.tipo] = (counts[r.tipo] || 0) + 1; });
-  const topTipos = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,4).map(([t]) => t);
-  const cardsTipos = topTipos.map(tipo => {
-    const arr = data.filter(r => r.tipo === tipo);
-    const pct = pctProdutivo(arr);
-    const cor = pct >= META_PRODUTIVIDADE ? 'ok' : (pct >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
-    return `<div class="sla-card ${cor}">
-      <div class="sla-label">${tipo}</div><div class="sla-value">${fmtPct(pct)}</div>
-      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(arr.length)} encerrados</div>
-      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
-    </div>`;
-  }).join('');
-  document.getElementById('go-cards-gerais').innerHTML = `
-    <div class="sla-card ${corGeral}">
-      <div class="sla-label">Produtividade Geral</div><div class="sla-value">${fmtPct(pctGeral)}</div>
-      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(data.length)} encerrados</div>
-      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
-    </div>${cardsTipos}`;
+function dentroDoPrazo(r){
+  const limite = horasLimiteDoTipo(r.tipo);
+  const tma = parseFloat(r.tma);
+  if (limite == null || !isFinite(tma)) return null;
+  return tma <= limite;
 }
 
 function renderTabelaCidadeTipo(data){
