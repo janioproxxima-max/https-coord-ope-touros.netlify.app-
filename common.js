@@ -1253,7 +1253,7 @@ const OPS = (() => {
             `${mode ? `A base foi substituída — agora tem ${finalRecords.length} protocolo(s) no total.` : `Foram adicionados aos que já existiam — agora tem ${finalRecords.length} protocolo(s) no total.`}\n\n` +
             `✅ Já sincronizado na nuvem — todo mundo já consegue ver.`
           );
-          const paginasComMapa = ['mapa-servicos.html', 'sla.html', 'indicadores.html'];
+          const paginasComMapa = ['mapa-servicos.html', 'sla.html'];
           const paginaAtual = window.location.pathname.split('/').pop();
           if (!paginasComMapa.includes(paginaAtual) && confirm('Quer ir agora pro Mapa de Serviços pra conferir os dados importados?')){
             window.location.href = 'mapa-servicos.html';
@@ -1310,7 +1310,7 @@ const OPS = (() => {
    tirar acesso de alguém, basta adicionar/apagar uma linha na planilha
    (colunas: USUARIO, SENHA, LIMITE DE ACESSO). Não precisa mexer no código.
    LIMITE DE ACESSO = "TOTAL" (vê tudo) ou uma lista de módulos separados por
-   vírgula (ex: "mapa-servicos, indicadores") pra ver só partes específicas.
+   vírgula (ex: "mapa-servicos, gestao-operacional") pra ver só partes específicas.
    É uma trava informal, não uma autenticação segura de verdade — qualquer
    pessoa com o link da planilha consegue ver usuário e senha. */
 
@@ -1321,7 +1321,7 @@ const OPS_USERS_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1YADg1BB
 const OPS_USERS_FALLBACK = { coordenador: { senha: 'ops2024', acesso: 'TOTAL' } };
 
 // Módulos válidos pra usar na coluna LIMITE DE ACESSO (mesma chave do href, sem .html)
-const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'gestao-pessoas', 'frotas', 'desligamentos', 'indicadores'];
+const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'sla', 'mundo-jira', 'gestao-operacional', 'gestao-pessoas', 'frotas', 'desligamentos'];
 
 function parseAcesso(raw){
   const v = (raw || '').trim();
@@ -1361,7 +1361,6 @@ const OPS_NAV_LINKS = [
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
   { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },
-  { href: 'indicadores.html',      label: 'Indicadores',        icon: '📈' },
 ];
 
 function requireAuthThenInit(active, pageTitle){
@@ -1455,11 +1454,6 @@ function initShell(active, pageTitle){
       <h1>Coord. Regional</h1>
       <p>Unidade Touros</p>
     </div>
-    <div class="sb-import-box" id="sb-import-box" title="Importar planilha (Excel/CSV)">
-      <span class="ico">📥</span>
-      <span>Importar planilha<br><small>Excel / CSV</small></span>
-    </div>
-    <input type="file" id="sb-file-import" accept=".csv,.xlsx,.xls" style="display:none">
     <div class="sb-section">Painéis</div>
     ${visibleLinks.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
     <div class="sb-footer">
@@ -1556,33 +1550,6 @@ function initShell(active, pageTitle){
   }
   stampUltimaImportacao();
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
-
-  const importBox = sidebar.querySelector('#sb-import-box');
-  const importFileInput = sidebar.querySelector('#sb-file-import');
-  if (importBox && importFileInput){
-    importBox.addEventListener('click', () => {
-      // usa sempre o mesmo mecanismo que já funciona dentro do Mapa de
-      // Serviços — se não estiver nessa página, manda pra lá primeiro.
-      const pageFileInput = document.getElementById('file-import-mapa');
-      if (pageFileInput){ pageFileInput.click(); return; }
-      if (confirm('Pra importar, precisa estar na página do Mapa de Serviços. Ir pra lá agora?')){
-        window.location.href = 'mapa-servicos.html';
-      }
-    });
-    importFileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      console.log('[Barra lateral] Iniciando importação de:', file.name);
-      const resultado = await importMapaServicosFile(file);
-      e.target.value = '';
-      console.log('[Barra lateral] Resultado da importação:', resultado ? `${resultado.length} registros` : 'cancelado/falhou');
-      if (resultado){
-        if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
-        if (typeof stampUltimaImportacao === 'function') stampUltimaImportacao();
-        if (typeof window.OPS_ON_REFRESH === 'function') window.OPS_ON_REFRESH();
-      }
-    });
-  }
 
   sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
     const btn = sidebar.querySelector('#sb-refresh');

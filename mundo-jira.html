@@ -364,6 +364,10 @@ let comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
 let historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
 let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
+// carregados no initPage() — usados só pra marcar dia de folga na tabela
+// de Produtividade Tempo Real (mesma lógica que a Gestão de Pessoas já usa)
+let ausencias = [];
+let atestados = [];
 
 // ---------- conversão JS (camelCase) <-> Supabase (snake_case) ----------
 function ticketParaSupabase(t){
@@ -1758,9 +1762,21 @@ async function renderProdutividadeTempoReal(papel, colab, container){
     .map(tecnico => {
       const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, tecnico));
       const total = dias.reduce((soma, d) => soma + (porTecnicoDia[tecnico][d] || 0), 0);
-      return { tecnico, supervisor: registroTec ? registroTec.supervisor : '', dados: porTecnicoDia[tecnico], total };
+      const colab = pessoas.find(p => nomesEquivalentes(p.nome, tecnico)) || null;
+      return { tecnico, supervisor: registroTec ? registroTec.supervisor : '', dados: porTecnicoDia[tecnico], total, colab };
     })
     .sort((a, b) => b.total - a.total);
+
+  // dia é folga fixa/rodízio de fim de semana (Gestão de Pessoas), ou
+  // ausência/atestado registrado — mesma lógica usada lá, só que aqui
+  // aplicada em cima da tabela de Produtividade Tempo Real
+  function motivoDiaSemDado(colab, diaKey){
+    if (!colab) return null;
+    const dataObj = new Date(diaKey + 'T00:00:00');
+    if (OPS.isFolgaNoDia(colab, dataObj)) return 'Folga';
+    if (OPS.isIndisponivelNoDia(colab.id, dataObj, ausencias, atestados)) return 'Ausência/Atestado';
+    return null;
+  }
 
   const formatarDiaCabecalho = (diaKey) => {
     const [ano, mes, dia] = diaKey.split('-');
@@ -1786,8 +1802,12 @@ async function renderProdutividadeTempoReal(papel, colab, container){
               ${dias.map(d => {
                 const v = l.dados[d];
                 const cor = corCelulaTempoReal(v);
-                return v
-                  ? `<td class="mj-tr-cell" data-tecnico="${l.tecnico}" data-dia="${d}" style="background:${cor.bg};color:${cor.texto}">${v.toFixed(2)} <span class="mj-tr-lupa">🔍</span></td>`
+                if (v){
+                  return `<td class="mj-tr-cell" data-tecnico="${l.tecnico}" data-dia="${d}" style="background:${cor.bg};color:${cor.texto}">${v.toFixed(2)} <span class="mj-tr-lupa">🔍</span></td>`;
+                }
+                const motivo = motivoDiaSemDado(l.colab, d);
+                return motivo
+                  ? `<td class="mj-tr-cell-vazia" title="${motivo}" style="color:var(--ink-faint);font-size:10.5px">${motivo === 'Folga' ? '🌴 Folga' : '🩺 Atestado'}</td>`
                   : `<td class="mj-tr-cell-vazia">·</td>`;
               }).join('')}
               <td style="font-weight:700">${l.total.toFixed(2)}</td>
@@ -2276,10 +2296,14 @@ async function initPage(){
   const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
   // Mundo Jira agora vem do Supabase; Pessoas/Frotas continuam no Google
   // Sheets (Apps Script), sem mudança nenhuma nessa parte
-  const [sharedPessoas, sharedFrotas] = await Promise.all([
+  const [sharedPessoas, sharedFrotas, sharedAusencias, sharedAtestados] = await Promise.all([
     OPS.syncPull('PessoasData'),
     OPS.syncPull('FrotasData'),
+    OPS.syncPull('AusenciasData'),
+    OPS.syncPull('AtestadosData'),
   ]);
+  if (sharedAusencias) ausencias = sharedAusencias;
+  if (sharedAtestados) atestados = sharedAtestados;
   let supabaseFuncionou = true;
   try{
     const [rowsTickets, rowsComentarios, rowsHistoricos] = await Promise.all([

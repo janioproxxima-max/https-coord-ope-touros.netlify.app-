@@ -6,6 +6,7 @@
 <title>Gestão Operacional · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -13,19 +14,27 @@
 <div class="page">
   <div class="page-head">
     <p class="eyebrow">Gestão operacional</p>
-    <h1 class="page-title">Histórico de Atendimentos Encerrados</h1>
-    <p class="page-sub">Produtividade, TMA e volume por cidade/tipo de serviço — direto da base de encerrados (Supabase).</p>
+    <h1 class="page-title">Área da Gestão Operacional</h1>
+    <p class="page-sub">Histórico de atendimentos encerrados, recorrência, tickets, absenteísmo e frotas — Unidade Touros.</p>
+  </div>
+
+  <div class="qf-tiles" id="go-abas" style="margin-bottom:14px">
+    <button type="button" class="qf-tile active" data-aba="servicos">🔧 Serviços</button>
+    <button type="button" class="qf-tile" data-aba="recorrencia">🔁 Recorrência</button>
+    <button type="button" class="qf-tile" data-aba="improdutividade">📉 Improdutividade</button>
+    <button type="button" class="qf-tile" data-aba="tickets">🎫 Tickets</button>
+    <button type="button" class="qf-tile" data-aba="absenteismo">🧑‍⚕️ Absenteísmo</button>
+    <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
   </div>
 
   <div class="panel toolbar">
     <div class="field">
-      <label for="go-f-periodo">Período</label>
-      <select id="go-f-periodo">
-        <option value="3">Últimos 3 meses</option>
-        <option value="6" selected>Últimos 6 meses</option>
-        <option value="12">Últimos 12 meses</option>
-        <option value="all">Tudo</option>
-      </select>
+      <label for="go-f-inicio">De</label>
+      <input class="input" type="date" id="go-f-inicio">
+    </div>
+    <div class="field">
+      <label for="go-f-fim">Até</label>
+      <input class="input" type="date" id="go-f-fim">
     </div>
     <div class="field">
       <label for="go-f-supervisor">Supervisor</label>
@@ -39,70 +48,141 @@
     <span class="page-sub" id="go-status-info" style="margin:0"></span>
   </div>
 
-  <div class="sla-grid" id="go-cards-gerais"></div>
+  <!-- ================= ABA: SERVIÇOS ================= -->
+  <div id="go-aba-servicos">
+    <div class="sla-grid" id="go-cards-gerais"></div>
 
-  <div class="card" style="margin-bottom:18px">
-    <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
-    <div class="table-wrap" style="max-height:320px">
-      <table class="services" id="go-table-cidade-tipo"></table>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services" id="go-table-cidade-tipo"></table>
+      </div>
     </div>
-  </div>
 
-  <div class="two-col">
-    <div class="card">
-      <div class="card-head"><h3>✅ Produtivos × Improdutivos</h3></div>
-      <div class="chart-box"><canvas id="go-chart-donut"></canvas></div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>✅ Produtivos × Improdutivos</h3></div>
+        <div class="chart-box"><canvas id="go-chart-donut"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>⏱ TMA médio</h3></div>
+        <div style="padding:20px 18px;text-align:center">
+          <div style="font-family:var(--f-display);font-size:30px;font-weight:800" id="go-tma-valor">—</div>
+          <p class="page-sub" style="margin:6px 0 0">tempo médio por encerramento</p>
+        </div>
+      </div>
     </div>
+
+    <div class="two-col" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <div class="card-head"><h3>📍 Aberturas por cidade</h3></div>
+        <div class="chart-box"><canvas id="go-chart-cidades"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>🏆 Top 5 tipos de serviço</h3></div>
+        <div class="table-wrap" style="max-height:280px">
+          <table class="services"><thead><tr><th>#</th><th>Tipo</th><th>Qtd.</th></tr></thead><tbody id="go-top5-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📈 Evolução da produtividade (%)</h3></div>
+      <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas></div>
+    </div>
+
     <div class="card">
-      <div class="card-head"><h3>⏱ TMA médio</h3></div>
-      <div style="padding:20px 18px;text-align:center">
-        <div style="font-family:var(--f-display);font-size:30px;font-weight:800" id="go-tma-valor">—</div>
-        <p class="page-sub" style="margin:6px 0 0">tempo médio por encerramento</p>
+      <div class="card-head"><h3>📦 Resumo do período</h3></div>
+      <div class="stat-row" style="padding:18px;margin-bottom:0">
+        <div class="stat-card ok"><div class="label">Produtivos</div><div class="value" id="go-resumo-produtivos">—</div></div>
+        <div class="stat-card crit"><div class="label">Improdutivos</div><div class="value" id="go-resumo-improdutivos">—</div></div>
+        <div class="stat-card brand"><div class="label">Total de pontos</div><div class="value" id="go-resumo-pontos">—</div></div>
       </div>
     </div>
   </div>
 
-  <div class="two-col" style="grid-template-columns:1fr 1fr">
-    <div class="card">
-      <div class="card-head"><h3>📍 Aberturas por cidade</h3></div>
-      <div class="chart-box"><canvas id="go-chart-cidades"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h3>🏆 Top 5 tipos de serviço</h3></div>
-      <div class="table-wrap" style="max-height:280px">
-        <table class="services"><thead><tr><th>#</th><th>Tipo</th><th>Qtd.</th></tr></thead><tbody id="go-top5-tbody"></tbody></table>
+  <!-- ================= ABA: RECORRÊNCIA ================= -->
+  <div id="go-aba-recorrencia" style="display:none">
+    <div class="stat-row" id="go-rec-cards"></div>
+    <div class="two-col" style="grid-template-columns:1fr 320px">
+      <div class="card">
+        <div class="card-head"><h3>🔁 Recorrência Log</h3><span class="cnt-badge" id="go-rec-log-badge">—</span></div>
+        <p class="page-sub" style="padding:0 16px;margin:10px 0">Mesmo técnico atendeu o mesmo cliente de novo (reparo produtivo) em até 30 dias.</p>
+        <div class="table-wrap" style="max-height:380px">
+          <table class="services">
+            <thead><tr><th>Técnico</th><th>Tipo</th><th>Protocolo anterior</th><th>Data anterior</th><th>Protocolo atual</th><th>Data atual</th><th>Dias</th><th>Cidade</th></tr></thead>
+            <tbody id="go-rec-log-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>👤 Recorrência por responsável</h3></div>
+        <div class="qf-tiles" id="go-rec-resp-tiles" style="margin:12px 16px 0">
+          <button type="button" class="qf-tile active" data-resp="tecnico">Técnico</button>
+          <button type="button" class="qf-tile" data-resp="supervisor">Supervisor</button>
+        </div>
+        <div class="table-wrap" style="max-height:320px">
+          <table class="services"><thead><tr><th>Resp.</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-rec-resp-tbody"></tbody></table>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:18px">
-    <div class="card-head"><h3>📈 Evolução da produtividade (%)</h3></div>
-    <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas></div>
-  </div>
-
-  <div class="sec-hdr">Desempenho por equipe</div>
-
-  <div class="two-col" style="grid-template-columns:1fr 320px">
+  <!-- ================= ABA: IMPRODUTIVIDADE ================= -->
+  <div id="go-aba-improdutividade" style="display:none">
+    <div class="stat-row" id="go-improd-cards"></div>
     <div class="card">
       <div class="card-head">
-        <h3>📉 Improdutividade por responsável</h3>
-        <div class="qf-tiles" id="go-resp-tiles" style="margin-left:auto">
+        <h3>📉 Improdutividade (%) e quantidade por responsável</h3>
+        <div class="qf-tiles" id="go-improd-resp-tiles" style="margin-left:auto">
           <button type="button" class="qf-tile active" data-resp="tecnico">Por Técnico</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Por Supervisor</button>
         </div>
       </div>
-      <div class="table-wrap" style="max-height:340px">
+      <div class="table-wrap" style="max-height:420px">
         <table class="services"><thead><tr><th>Responsável</th><th>Improdutividade (%)</th><th>Qtd.</th></tr></thead><tbody id="go-improd-tbody"></tbody></table>
       </div>
     </div>
+  </div>
+
+  <!-- ================= ABA: TICKETS ================= -->
+  <div id="go-aba-tickets" style="display:none">
+    <div class="stat-row" id="go-tickets-cards"></div>
     <div class="card">
-      <div class="card-head"><h3>📦 Resumo do período</h3></div>
-      <div style="padding:18px">
-        <div class="stat-row" style="grid-template-columns:1fr;gap:10px;margin-bottom:0">
-          <div class="stat-card ok"><div class="label">Produtivos</div><div class="value" id="go-resumo-produtivos">—</div></div>
-          <div class="stat-card crit"><div class="label">Improdutivos</div><div class="value" id="go-resumo-improdutivos">—</div></div>
-          <div class="stat-card brand"><div class="label">Total de pontos</div><div class="value" id="go-resumo-pontos">—</div></div>
-        </div>
+      <div class="card-head"><h3>🎫 Chamados no período</h3><span class="cnt-badge" id="go-tickets-badge">—</span></div>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Nº</th><th>Módulo</th><th>Colaborador</th><th>Responsável atual</th><th>Aberto em</th><th>Dias em aberto</th><th>Status</th></tr></thead>
+          <tbody id="go-tickets-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: ABSENTEÍSMO ================= -->
+  <div id="go-aba-absenteismo" style="display:none">
+    <div class="stat-row" id="go-abs-cards"></div>
+    <div class="card">
+      <div class="card-head"><h3>🧑‍⚕️ Ausências e atestados por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span></div>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Total dias fora</th></tr></thead>
+          <tbody id="go-abs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: FROTAS ================= -->
+  <div id="go-aba-frotas" style="display:none">
+    <div class="stat-row" id="go-frotas-cards"></div>
+    <div class="card">
+      <div class="card-head"><h3>🚚 Lavagem e manutenção por veículo</h3><span class="cnt-badge" id="go-frotas-badge">—</span></div>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Placa</th><th>Veículo</th><th>Lavagens no período</th><th>Manutenções no período</th><th>Manutenção aberta agora</th></tr></thead>
+          <tbody id="go-frotas-tbody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -114,51 +194,90 @@
 requireAuthThenInit('gestao-operacional.html', 'Gestão Operacional');
 
 // ============================================================
-// Área da Gestão Operacional — histórico de encerrados
-// Fonte: Supabase (produtividade_registros + produtividade_historico),
-// via OPS_SUPABASE (supabase-client.js) — mesma base usada pelo
-// Mundo Jira / Painel do Colaborador.
+// Área da Gestão Operacional
+// Fontes: Supabase (produtividade_registros, produtividade_historico,
+// produtividade_pares_recorrencia, mundo_jira_tickets) via OPS_SUPABASE,
+// e Google Sheets (PessoasData, AusenciasData, AtestadosData, FrotasData,
+// LavagensData, ManutencoesData) via OPS.syncPull — mesmas fontes que
+// Mundo Jira, Gestão de Pessoas e Frotas já usam.
 // ============================================================
 
 const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c','#5eead4','#f472b6','#818cf8','#facc15'];
 const commonChartOpts = { responsive:true, maintainAspectRatio:false };
-const META_PRODUTIVIDADE = 85; // mesma referência usada na Premiação Semanal / Painel do Colaborador
+const META_PRODUTIVIDADE = 85;
 
-let goRegistros = [];
-let goHistorico = [];
+const MJ_STATUS_LABEL = {
+  aberto: 'Aberto', em_analise: 'Em Análise', aguardando_informacoes: 'Aguardando Informações',
+  aguardando_setor: 'Aguardando Setor', validado_inspetor: 'Validado p/ Substituição',
+  aguardando_aprovacao_coordenacao: 'Aguardando Aprovação', em_atendimento: 'Em Atendimento',
+  rejeitado: 'Rejeitado', resolvido: 'Resolvido', cancelado: 'Cancelado',
+};
+const MJ_STATUS_COR = {
+  aberto: 'neutral', em_analise: 'neutral', aguardando_informacoes: 'warn', aguardando_setor: 'warn',
+  validado_inspetor: 'neutral', aguardando_aprovacao_coordenacao: 'warn', em_atendimento: 'neutral',
+  rejeitado: 'crit', resolvido: 'ok', cancelado: 'neutral',
+};
+const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'Reclamação' };
+const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardando_setor','validado_inspetor','aguardando_aprovacao_coordenacao','em_atendimento'];
+
+let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
+let goPessoas = null, goAusencias = null, goAtestados = null;
+let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
-let goRespView = 'tecnico';
+let goRespImprod = 'tecnico', goRespRec = 'tecnico';
 let goCharts = {};
+let goAbaAtiva = 'servicos';
 
 function goDestroyCharts(){ Object.values(goCharts).forEach(c => c && c.destroy()); goCharts = {}; }
-
 function isProdutivo(r){ return r.produtivo === true || r.produtivo === 'true'; }
 function fmtPct(n){ return isFinite(n) ? n.toFixed(2).replace('.', ',') + '%' : '—'; }
 function fmtPct1(n){ return isFinite(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
 function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
-function fmtHoras(horasDecimal){
-  if (!isFinite(horasDecimal)) return '—';
-  const totalMin = Math.round(horasDecimal * 60);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h${String(m).padStart(2,'0')}m`;
+function fmtHoras(h){
+  if (!isFinite(h)) return '—';
+  const totalMin = Math.round(h * 60);
+  return `${Math.floor(totalMin/60)}h${String(totalMin%60).padStart(2,'0')}m`;
 }
 function tituloCase(s){ return String(s).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+function diaKey(v){ return v ? String(v).slice(0,10) : ''; }
+function diffDias(a, b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+// ---------------- período padrão: últimos 6 meses ----------------
+(function setDefaultDates(){
+  const hoje = new Date();
+  const seisAtras = new Date(); seisAtras.setMonth(seisAtras.getMonth() - 6);
+  document.getElementById('go-f-fim').value = hoje.toISOString().slice(0,10);
+  document.getElementById('go-f-inicio').value = seisAtras.toISOString().slice(0,10);
+})();
+
+function periodoAtual(){
+  return { inicio: document.getElementById('go-f-inicio').value || null, fim: document.getElementById('go-f-fim').value || null };
+}
+function dentroPeriodo(dataStr){
+  const { inicio, fim } = periodoAtual();
+  const d = diaKey(dataStr);
+  if (!d) return false;
+  if (inicio && d < inicio) return false;
+  if (fim && d > fim) return false;
+  return true;
+}
 
 async function initPage(){
   document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
   try{
-    const [regs, hist] = await Promise.all([
+    const [regs, hist, pares] = await Promise.all([
       OPS_SUPABASE.select('produtividade_registros'),
       OPS_SUPABASE.select('produtividade_historico'),
+      OPS_SUPABASE.select('produtividade_pares_recorrencia'),
     ]);
-    goRegistros = regs || [];
+    goRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
     goHistorico = hist || [];
+    goPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
     document.getElementById('go-status-info').textContent = `${fmtNum(goRegistros.length)} registros carregados`;
     popularFiltros();
-    goRender();
+    goRenderAbaAtiva();
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';
@@ -175,47 +294,74 @@ function popularFiltros(){
   cidades.forEach(c => selCidade.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
   supervisores.forEach(s => selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`));
 
-  ['go-f-periodo','go-f-supervisor','go-f-cidade'].forEach(id => {
-    document.getElementById(id).addEventListener('change', goRender);
+  ['go-f-inicio','go-f-fim','go-f-supervisor','go-f-cidade'].forEach(id => {
+    document.getElementById(id).addEventListener('change', goRenderAbaAtiva);
   });
-  document.querySelectorAll('#go-resp-tiles .qf-tile').forEach(btn => {
+
+  document.querySelectorAll('#go-abas .qf-tile').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#go-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      goRespView = btn.dataset.resp;
-      renderImprodutividadeResp(goFiltrados());
+      goAbaAtiva = btn.dataset.aba;
+      ['servicos','recorrencia','improdutividade','tickets','absenteismo','frotas'].forEach(k => {
+        document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
+      });
+      goRenderAbaAtiva();
+    });
+  });
+
+  document.querySelectorAll('#go-rec-resp-tiles .qf-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#go-rec-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      goRespRec = btn.dataset.resp;
+      renderRecorrenciaResp(goRegistrosFiltrados(), goParesFiltrados());
+    });
+  });
+  document.querySelectorAll('#go-improd-resp-tiles .qf-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#go-improd-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      goRespImprod = btn.dataset.resp;
+      renderImprodutividade(goRegistrosFiltrados());
     });
   });
 }
 
-function goFiltrados(){
-  const periodo = document.getElementById('go-f-periodo').value;
+function goRegistrosFiltrados(){
   const supervisor = document.getElementById('go-f-supervisor').value;
   const cidade = document.getElementById('go-f-cidade').value;
-
-  let mesLimite = null;
-  if (periodo !== 'all'){
-    const d = new Date();
-    d.setMonth(d.getMonth() - parseInt(periodo, 10));
-    mesLimite = d.toISOString().slice(0, 7);
-  }
-
   return goRegistros.filter(r => {
-    if (mesLimite && r.mes_key < mesLimite) return false;
+    if (!dentroPeriodo(r.data_encerramento)) return false;
     if (supervisor && goTecnicoSupervisor[r.tecnico] !== supervisor) return false;
     if (cidade && r.area !== cidade) return false;
     return true;
   });
 }
+function goParesFiltrados(){
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const cidade = document.getElementById('go-f-cidade').value;
+  return goPares.filter(p => {
+    if (!dentroPeriodo(p.data_atual)) return false;
+    if (supervisor && goTecnicoSupervisor[p.tecnico] !== supervisor) return false;
+    if (cidade && p.area !== cidade) return false;
+    return true;
+  });
+}
+function pctProdutivo(arr){ return arr.length ? (arr.filter(isProdutivo).length / arr.length) * 100 : 0; }
 
-function pctProdutivo(arr){
-  if (!arr.length) return 0;
-  return (arr.filter(isProdutivo).length / arr.length) * 100;
+function goRenderAbaAtiva(){
+  goDestroyCharts();
+  if (goAbaAtiva === 'servicos') renderAbaServicos(goRegistrosFiltrados());
+  else if (goAbaAtiva === 'recorrencia') renderAbaRecorrencia(goRegistrosFiltrados(), goParesFiltrados());
+  else if (goAbaAtiva === 'improdutividade') renderImprodutividade(goRegistrosFiltrados());
+  else if (goAbaAtiva === 'tickets') renderAbaTickets();
+  else if (goAbaAtiva === 'absenteismo') renderAbaAbsenteismo();
+  else if (goAbaAtiva === 'frotas') renderAbaFrotas();
 }
 
-function goRender(){
-  goDestroyCharts();
-  const data = goFiltrados();
+// ================= ABA SERVIÇOS =================
+function renderAbaServicos(data){
   renderCardsGerais(data);
   renderTabelaCidadeTipo(data);
   renderDonut(data);
@@ -223,160 +369,305 @@ function goRender(){
   renderChartCidades(data);
   renderTop5(data);
   renderEvolucao(data);
-  renderImprodutividadeResp(data);
   renderResumo(data);
 }
 
-// ---------------- sla-grid: produtividade geral + top 4 tipos ----------------
 function renderCardsGerais(data){
-  const total = data.length;
   const pctGeral = pctProdutivo(data);
   const corGeral = pctGeral >= META_PRODUTIVIDADE ? 'ok' : (pctGeral >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
-
   const counts = {};
   data.forEach(r => { counts[r.tipo] = (counts[r.tipo] || 0) + 1; });
-  const topTipos = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 4).map(([t]) => t);
-
+  const topTipos = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,4).map(([t]) => t);
   const cardsTipos = topTipos.map(tipo => {
     const arr = data.filter(r => r.tipo === tipo);
     const pct = pctProdutivo(arr);
     const cor = pct >= META_PRODUTIVIDADE ? 'ok' : (pct >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
     return `<div class="sla-card ${cor}">
-      <div class="sla-label">${tipo}</div>
-      <div class="sla-value">${fmtPct(pct)}</div>
+      <div class="sla-label">${tipo}</div><div class="sla-value">${fmtPct(pct)}</div>
       <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(arr.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
     </div>`;
   }).join('');
-
   document.getElementById('go-cards-gerais').innerHTML = `
     <div class="sla-card ${corGeral}">
-      <div class="sla-label">Produtividade Geral</div>
-      <div class="sla-value">${fmtPct(pctGeral)}</div>
-      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(total)} encerrados</div>
+      <div class="sla-label">Produtividade Geral</div><div class="sla-value">${fmtPct(pctGeral)}</div>
+      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(data.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
-    </div>
-    ${cardsTipos}
-  `;
+    </div>${cardsTipos}`;
 }
 
-// ---------------- tabela cidade x tipo ----------------
 function renderTabelaCidadeTipo(data){
   const tipos = [...new Set(data.map(r => r.tipo))].sort();
   const cidadesTodas = [...new Set(data.map(r => r.area))];
   const matriz = {};
   cidadesTodas.forEach(c => { matriz[c] = {}; tipos.forEach(t => matriz[c][t] = 0); });
   data.forEach(r => { if (matriz[r.area]) matriz[r.area][r.tipo]++; });
-
   const totalPorCidade = c => tipos.reduce((acc,t) => acc + matriz[c][t], 0);
   const totalPorTipo = t => cidadesTodas.reduce((acc,c) => acc + matriz[c][t], 0);
   const cidades = cidadesTodas.sort((a,b) => totalPorCidade(b) - totalPorCidade(a));
-
   const thead = `<thead><tr><th>Cidade</th>${tipos.map(t => `<th>${t}</th>`).join('')}<th>Total</th></tr></thead>`;
-  const rows = cidades.map(c => {
-    const cells = tipos.map(t => `<td>${matriz[c][t] || '-'}</td>`).join('');
-    return `<tr><td>${c}</td>${cells}<td style="font-weight:700">${totalPorCidade(c)}</td></tr>`;
-  }).join('');
+  const rows = cidades.map(c => `<tr><td>${c}</td>${tipos.map(t => `<td>${matriz[c][t]||'-'}</td>`).join('')}<td style="font-weight:700">${totalPorCidade(c)}</td></tr>`).join('');
   const totalRow = `<tr style="font-weight:800;color:var(--brand)"><td>Total</td>${tipos.map(t => `<td>${totalPorTipo(t)}</td>`).join('')}<td>${data.length}</td></tr>`;
-
   document.getElementById('go-table-cidade-tipo').innerHTML = `${thead}<tbody>${rows}${totalRow}</tbody>`;
   document.getElementById('go-total-badge').textContent = `${fmtNum(data.length)} encerrados`;
 }
 
-// ---------------- donut produtivos x improdutivos ----------------
 function renderDonut(data){
   const produtivos = data.filter(isProdutivo).length;
   const improdutivos = data.length - produtivos;
   goCharts.donut = new Chart(document.getElementById('go-chart-donut'), {
     type: 'doughnut',
-    data: {
-      labels: ['Produtivos', 'Improdutivos'],
-      datasets: [{ data: [produtivos, improdutivos], backgroundColor: ['#00e5a0', '#ff4d6d'] }],
-    },
-    options: { ...commonChartOpts, plugins: { legend: { position: 'bottom', labels: { color: '#e2eaf5', boxWidth: 12 } } } },
+    data: { labels: ['Produtivos','Improdutivos'], datasets: [{ data: [produtivos, improdutivos], backgroundColor: ['#00e5a0','#ff4d6d'] }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#e2eaf5', boxWidth: 12 } },
+        datalabels: { color: '#0b0f1a', font: { weight: '800', size: 13 },
+          formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return total ? `${fmtNum(v)}\n(${(v/total*100).toFixed(1)}%)` : fmtNum(v); } },
+      } },
   });
 }
-
-// ---------------- TMA médio ----------------
 function renderTMA(data){
   const validos = data.map(r => parseFloat(r.tma)).filter(v => isFinite(v));
-  const media = validos.length ? validos.reduce((a,b) => a+b, 0) / validos.length : NaN;
+  const media = validos.length ? validos.reduce((a,b) => a+b,0)/validos.length : NaN;
   document.getElementById('go-tma-valor').textContent = fmtHoras(media);
 }
-
-// ---------------- aberturas por cidade ----------------
 function renderChartCidades(data){
   const counts = {};
-  data.forEach(r => { counts[r.area] = (counts[r.area] || 0) + 1; });
-  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  data.forEach(r => { counts[r.area] = (counts[r.area]||0) + 1; });
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,10);
   goCharts.cidades = new Chart(document.getElementById('go-chart-cidades'), {
     type: 'bar',
-    data: { labels: entries.map(([c]) => c), datasets: [{ label: 'Encerrados', data: entries.map(([,v]) => v), backgroundColor: CHART_COLORS }] },
-    options: { ...commonChartOpts, indexAxis: 'y',
-      scales: { x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } }, y: { ticks: { color: '#e2eaf5' }, grid: { display: false } } },
-      plugins: { legend: { display: false } },
-    },
+    data: { labels: entries.map(([c])=>c), datasets: [{ label:'Encerrados', data: entries.map(([,v])=>v), backgroundColor: CHART_COLORS }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts, indexAxis:'y',
+      scales: { x:{ beginAtZero:true, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, y:{ ticks:{color:'#e2eaf5'}, grid:{display:false} } },
+      plugins: { legend:{ display:false },
+        datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{ weight:'700', size:11.5 }, formatter: v => fmtNum(v) } } },
   });
 }
-
-// ---------------- top 5 tipos ----------------
 function renderTop5(data){
   const counts = {};
-  data.forEach(r => { counts[r.tipo] = (counts[r.tipo] || 0) + 1; });
-  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 5);
-  document.getElementById('go-top5-tbody').innerHTML = entries.map(([tipo, n], i) => `
-    <tr><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>
-  `).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+  data.forEach(r => { counts[r.tipo] = (counts[r.tipo]||0) + 1; });
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,5);
+  document.getElementById('go-top5-tbody').innerHTML = entries.map(([tipo,n],i) =>
+    `<tr><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>`
+  ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
-
-// ---------------- evolução mensal ----------------
 function renderEvolucao(data){
   const porMes = {};
   data.forEach(r => {
-    if (!porMes[r.mes_key]) porMes[r.mes_key] = { total: 0, produtivos: 0 };
+    if (!porMes[r.mes_key]) porMes[r.mes_key] = { total:0, produtivos:0 };
     porMes[r.mes_key].total++;
     if (isProdutivo(r)) porMes[r.mes_key].produtivos++;
   });
   const meses = Object.keys(porMes).sort();
   const pontos = meses.map(m => (porMes[m].produtivos / porMes[m].total) * 100);
-
   goCharts.evolucao = new Chart(document.getElementById('go-chart-evolucao'), {
     type: 'line',
-    data: { labels: meses, datasets: [{ label: 'Produtividade (%)', data: pontos, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.12)', fill: true, tension: 0.25 }] },
+    data: { labels: meses, datasets: [{ label:'Produtividade (%)', data: pontos, borderColor:'#00d4ff', backgroundColor:'rgba(0,212,255,0.12)', fill:true, tension:0.25 }] },
+    plugins: [ChartDataLabels],
     options: { ...commonChartOpts,
-      scales: { y: { min: 0, max: 100, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } }, x: { ticks: { color: '#8a97ab' }, grid: { display: false } } },
-      plugins: { legend: { labels: { color: '#e2eaf5' } } },
-    },
+      scales: { y:{ min:0, max:100, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, x:{ ticks:{color:'#8a97ab'}, grid:{display:false} } },
+      plugins: { legend:{ labels:{ color:'#e2eaf5' } },
+        datalabels: { color:'#e2eaf5', align:'top', anchor:'end', font:{ weight:'700', size:11 }, formatter: v => v.toFixed(1).replace('.', ',') + '%' } } },
   });
 }
+function renderResumo(data){
+  const produtivos = data.filter(isProdutivo).length;
+  const improdutivos = data.length - produtivos;
+  const totalPontos = data.reduce((acc,r) => acc + (parseFloat(r.pontos)||0), 0);
+  document.getElementById('go-resumo-produtivos').textContent = fmtNum(produtivos);
+  document.getElementById('go-resumo-improdutivos').textContent = fmtNum(improdutivos);
+  document.getElementById('go-resumo-pontos').textContent = totalPontos.toFixed(1).replace('.', ',');
+}
 
-// ---------------- improdutividade por responsável ----------------
-function renderImprodutividadeResp(data){
+// ================= ABA RECORRÊNCIA =================
+function renderAbaRecorrencia(data, pares){
+  const produtivos = data.filter(isProdutivo).length;
+  const pct = produtivos ? (pares.length / produtivos) * 100 : 0;
+  const cor = pct <= 3 ? 'ok' : (pct <= 6 ? 'crit' : 'crit');
+  document.getElementById('go-rec-cards').innerHTML = `
+    <div class="stat-card ${pct <= 3 ? 'ok' : 'crit'}"><div class="label">Recorrência geral</div><div class="value">${fmtPct1(pct)}</div></div>
+    <div class="stat-card brand"><div class="label">Pares detectados</div><div class="value">${fmtNum(pares.length)}</div></div>
+    <div class="stat-card"><div class="label">Reparos produtivos no período</div><div class="value">${fmtNum(produtivos)}</div></div>
+  `;
+  document.getElementById('go-rec-log-badge').textContent = `${fmtNum(pares.length)} recorrência(s)`;
+  document.getElementById('go-rec-log-tbody').innerHTML = pares
+    .sort((a,b) => new Date(b.data_atual) - new Date(a.data_atual))
+    .slice(0, 300)
+    .map(p => `<tr>
+      <td>${tituloCase(p.tecnico)}</td><td>${p.tipo}</td>
+      <td>${p.protocolo_anterior || '—'}</td><td>${diaKey(p.data_anterior)}</td>
+      <td>${p.protocolo_atual || '—'}</td><td>${diaKey(p.data_atual)}</td>
+      <td>${diffDias(p.data_anterior, p.data_atual)}</td>
+      <td>${p.area || '—'}${p.localidade ? ' · ' + p.localidade : ''}</td>
+    </tr>`).join('') || `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
+
+  renderRecorrenciaResp(data, pares);
+}
+function renderRecorrenciaResp(data, pares){
+  const produtivosPorResp = {};
+  data.filter(isProdutivo).forEach(r => {
+    const chave = goRespRec === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
+    produtivosPorResp[chave] = (produtivosPorResp[chave] || 0) + 1;
+  });
+  const paresPorResp = {};
+  pares.forEach(p => {
+    const chave = goRespRec === 'supervisor' ? (goTecnicoSupervisor[p.tecnico] || '—') : p.tecnico;
+    paresPorResp[chave] = (paresPorResp[chave] || 0) + 1;
+  });
+  const linhas = Object.keys(produtivosPorResp).map(nome => {
+    const qtd = paresPorResp[nome] || 0;
+    return { nome, qtd, pct: produtivosPorResp[nome] ? (qtd / produtivosPorResp[nome]) * 100 : 0 };
+  }).sort((a,b) => b.pct - a.pct);
+  document.getElementById('go-rec-resp-tbody').innerHTML = linhas.map(l =>
+    `<tr><td>${tituloCase(l.nome)}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
+  ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+}
+
+// ================= ABA IMPRODUTIVIDADE =================
+function renderImprodutividade(data){
+  const produtivos = data.filter(isProdutivo).length;
+  const improdutivos = data.length - produtivos;
+  const pct = data.length ? (improdutivos / data.length) * 100 : 0;
+  document.getElementById('go-improd-cards').innerHTML = `
+    <div class="stat-card ${pct <= 10 ? 'ok' : 'crit'}"><div class="label">Improdutividade geral</div><div class="value">${fmtPct1(pct)}</div></div>
+    <div class="stat-card ok"><div class="label">Produtivos</div><div class="value">${fmtNum(produtivos)}</div></div>
+    <div class="stat-card crit"><div class="label">Improdutivos</div><div class="value">${fmtNum(improdutivos)}</div></div>
+  `;
   const grupos = {};
   data.forEach(r => {
-    const chave = goRespView === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
-    if (!grupos[chave]) grupos[chave] = { total: 0, improd: 0 };
+    const chave = goRespImprod === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
+    if (!grupos[chave]) grupos[chave] = { total:0, improd:0 };
     grupos[chave].total++;
     if (!isProdutivo(r)) grupos[chave].improd++;
   });
-  const linhas = Object.entries(grupos)
-    .map(([nome, v]) => ({ nome, pct: v.total ? (v.improd / v.total) * 100 : 0, qtd: v.improd }))
-    .sort((a,b) => b.pct - a.pct);
-
+  const linhas = Object.entries(grupos).map(([nome,v]) => ({ nome, pct: v.total ? (v.improd/v.total)*100 : 0, qtd: v.improd })).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-improd-tbody').innerHTML = linhas.map(l => {
     const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
     return `<tr><td>${tituloCase(l.nome)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
   }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
 
-// ---------------- resumo do período ----------------
-function renderResumo(data){
-  const produtivos = data.filter(isProdutivo).length;
-  const improdutivos = data.length - produtivos;
-  const totalPontos = data.reduce((acc, r) => acc + (parseFloat(r.pontos) || 0), 0);
-  document.getElementById('go-resumo-produtivos').textContent = fmtNum(produtivos);
-  document.getElementById('go-resumo-improdutivos').textContent = fmtNum(improdutivos);
-  document.getElementById('go-resumo-pontos').textContent = totalPontos.toFixed(1).replace('.', ',');
+// ================= ABA TICKETS =================
+async function renderAbaTickets(){
+  const container = document.getElementById('go-tickets-tbody');
+  if (!goTickets.length){
+    container.innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando chamados...</td></tr>`;
+    try{ goTickets = await OPS_SUPABASE.select('mundo_jira_tickets'); }
+    catch(err){
+      console.error('Falha ao buscar tickets', err);
+      container.innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os chamados. ${err.message}</td></tr>`;
+      return;
+    }
+  }
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const lista = goTickets.filter(t => {
+    if (!dentroPeriodo(t.criado_em)) return false;
+    if (supervisor && t.supervisor !== supervisor) return false;
+    return true;
+  });
+  const abertos = lista.filter(t => STATUS_ABERTOS.includes(t.status));
+  const contarStatus = key => lista.filter(t => t.status === key).length;
+  document.getElementById('go-tickets-cards').innerHTML = `
+    <div class="stat-card brand"><div class="label">Total no período</div><div class="value">${fmtNum(lista.length)}</div></div>
+    <div class="stat-card crit"><div class="label">Em aberto agora</div><div class="value">${fmtNum(abertos.length)}</div></div>
+    <div class="stat-card ok"><div class="label">Resolvidos</div><div class="value">${fmtNum(contarStatus('resolvido'))}</div></div>
+    <div class="stat-card"><div class="label">Cancelados/Rejeitados</div><div class="value">${fmtNum(contarStatus('cancelado')+contarStatus('rejeitado'))}</div></div>
+  `;
+  document.getElementById('go-tickets-badge').textContent = `${fmtNum(lista.length)} chamado(s)`;
+  container.innerHTML = lista
+    .sort((a,b) => new Date(b.criado_em) - new Date(a.criado_em))
+    .slice(0, 300)
+    .map(t => {
+      const diasAberto = STATUS_ABERTOS.includes(t.status) ? diffDias(t.criado_em, new Date().toISOString()) : '—';
+      return `<tr>
+        <td>#${t.numero}</td><td>${MJ_MODULO_LABEL[t.modulo] || t.modulo}</td>
+        <td>${t.colaborador_nome || '—'}</td><td>${t.responsavel_atual_nome || 'Ninguém ainda'}</td>
+        <td>${diaKey(t.criado_em)}</td><td>${diasAberto}</td>
+        <td><span class="badge ${MJ_STATUS_COR[t.status]||'neutral'}"><span class="dot"></span>${MJ_STATUS_LABEL[t.status]||t.status}</span></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhum chamado no período.</td></tr>`;
+}
+
+// ================= ABA ABSENTEÍSMO =================
+async function renderAbaAbsenteismo(){
+  const container = document.getElementById('go-abs-tbody');
+  if (goPessoas === null){
+    container.innerHTML = `<tr><td colspan="6" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
+    try{
+      const [p, a, at] = await Promise.all([OPS.syncPull('PessoasData'), OPS.syncPull('AusenciasData'), OPS.syncPull('AtestadosData')]);
+      goPessoas = p || []; goAusencias = a || []; goAtestados = at || [];
+    }catch(err){
+      console.error('Falha ao buscar dados de absenteísmo', err);
+      container.innerHTML = `<tr><td colspan="6" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      return;
+    }
+  }
+  const cidade = document.getElementById('go-f-cidade').value;
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const pessoasFiltradas = goPessoas.filter(p => {
+    if (cidade && p.cidade !== cidade) return false;
+    if (supervisor && !nomesEq(p.gestor, supervisor)) return false;
+    return true;
+  });
+
+  const ausenciasPeriodo = goAusencias.filter(a => dentroPeriodo(a.data));
+  const atestadosPeriodo = goAtestados.filter(a => dentroPeriodo(a.dataInicio) || dentroPeriodo(a.dataFim));
+
+  const linhas = pessoasFiltradas.map(p => {
+    const minhasAusencias = ausenciasPeriodo.filter(a => a.colaboradorId === p.id).length;
+    const meusAtestados = atestadosPeriodo.filter(a => a.colaboradorId === p.id);
+    const diasAtestado = meusAtestados.reduce((acc,a) => acc + Math.max(1, diffDias(a.dataInicio, a.dataFim) + 1), 0);
+    return { nome: p.nome, cidade: p.cidade, supervisor: p.gestor, ausencias: minhasAusencias, diasAtestado, total: minhasAusencias + diasAtestado };
+  }).filter(l => l.total > 0).sort((a,b) => b.total - a.total);
+
+  document.getElementById('go-abs-cards').innerHTML = `
+    <div class="stat-card crit"><div class="label">Ausências no período</div><div class="value">${fmtNum(ausenciasPeriodo.length)}</div></div>
+    <div class="stat-card crit"><div class="label">Atestados no período</div><div class="value">${fmtNum(atestadosPeriodo.length)}</div></div>
+    <div class="stat-card"><div class="label">Colaboradores afetados</div><div class="value">${fmtNum(linhas.length)}</div></div>
+  `;
+  document.getElementById('go-abs-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
+  container.innerHTML = linhas.map(l =>
+    `<tr><td>${l.nome}</td><td>${l.cidade||'—'}</td><td>${l.supervisor||'—'}</td><td>${l.ausencias}</td><td>${l.diasAtestado}</td><td style="font-weight:700">${l.total}</td></tr>`
+  ).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Nenhuma ausência/atestado no período.</td></tr>`;
+}
+function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
+
+// ================= ABA FROTAS =================
+async function renderAbaFrotas(){
+  const container = document.getElementById('go-frotas-tbody');
+  if (goVeiculos === null){
+    container.innerHTML = `<tr><td colspan="5" style="color:var(--ink-faint)">Carregando dados de frotas...</td></tr>`;
+    try{
+      const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
+      goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
+    }catch(err){
+      console.error('Falha ao buscar dados de frotas', err);
+      container.innerHTML = `<tr><td colspan="5" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      return;
+    }
+  }
+  const lavagensPeriodo = goLavagens.filter(l => dentroPeriodo(l.data));
+  const manutencoesPeriodo = goManutencoes.filter(m => dentroPeriodo(m.dataAbertura));
+  const manutencoesAbertasAgora = goManutencoes.filter(m => m.status === 'aberta');
+
+  document.getElementById('go-frotas-cards').innerHTML = `
+    <div class="stat-card brand"><div class="label">Lavagens no período</div><div class="value">${fmtNum(lavagensPeriodo.length)}</div></div>
+    <div class="stat-card"><div class="label">Manutenções abertas no período</div><div class="value">${fmtNum(manutencoesPeriodo.length)}</div></div>
+    <div class="stat-card crit"><div class="label">Em manutenção agora</div><div class="value">${fmtNum(manutencoesAbertasAgora.length)}</div></div>
+  `;
+  const linhas = goVeiculos.map(v => {
+    const lav = lavagensPeriodo.filter(l => l.placa === v.placa).length;
+    const man = manutencoesPeriodo.filter(m => m.placa === v.placa).length;
+    const abertaAgora = manutencoesAbertasAgora.some(m => m.placa === v.placa);
+    return { placa: v.placa, veiculo: v.veiculo || '—', lav, man, abertaAgora };
+  }).sort((a,b) => (b.lav + b.man) - (a.lav + a.man));
+  document.getElementById('go-frotas-badge').textContent = `${fmtNum(goVeiculos.length)} veículo(s)`;
+  container.innerHTML = linhas.map(l =>
+    `<tr><td>${l.placa}</td><td>${l.veiculo}</td><td>${l.lav}</td><td>${l.man}</td><td>${l.abertaAgora ? '<span class="badge crit"><span class="dot"></span>Sim</span>' : '<span class="badge ok"><span class="dot"></span>Não</span>'}</td></tr>`
+  ).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum veículo cadastrado.</td></tr>`;
 }
 
 window.OPS_ON_REFRESH = initPage;
