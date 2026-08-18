@@ -249,18 +249,8 @@ OPS.loadMunicipioPolygons().then(ok => { if (ok) renderAll(); }); // recalcula q
 const STORAGE_KEY = OPS.STORAGE_KEY;
 let records = OPS.load();
 if (!records){
-  // Pode ser a primeira vez de verdade, OU pode ser que uma importação
-  // grande demais pro localStorage tenha caído pra reserva no IndexedDB -
-  // confere lá antes de assumir que não tem nada salvo.
-  records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() })); // valor temporário até a checagem terminar
-  OPS.loadFallbackFromIdb().then(doReserva => {
-    if (doReserva && doReserva.length){
-      records = doReserva;
-      renderAll();
-    } else {
-      OPS.save(records);
-    }
-  });
+  records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() }));
+  OPS.save(records);
 }
 
 // -------- sincronização compartilhada (Planilha Google via Apps Script) --------

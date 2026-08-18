@@ -2333,8 +2333,27 @@ window.OPS_ON_REFRESH = initPage;
 initPage();
 
 if ('serviceWorker' in navigator){
+  let swRegistration = null;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw-mundo-jira.js').catch(err => console.warn('Service worker não registrado:', err));
+    navigator.serviceWorker.register('sw-mundo-jira.js')
+      .then(reg => { swRegistration = reg; })
+      .catch(err => console.warn('Service worker não registrado:', err));
+  });
+  // quando uma versão nova do app assume o controle (ex: eu publiquei uma
+  // correção), recarrega a página sozinho — sem isso, especialmente no
+  // Android, o app instalado pode ficar "preso" numa versão antiga em
+  // cache até alguém fechar e abrir de novo manualmente
+  let jaRecarregou = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (jaRecarregou) return;
+    jaRecarregou = true;
+    window.location.reload();
+  });
+  // checa se tem versão nova toda vez que o app volta pra frente (ex: a
+  // pessoa trocou de app no celular e voltou) — o navegador não faz isso
+  // sozinho com frequência suficiente num app que fica muito tempo aberto
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && swRegistration) swRegistration.update();
   });
 }
 </script>

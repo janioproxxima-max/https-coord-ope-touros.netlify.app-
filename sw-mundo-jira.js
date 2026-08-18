@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mundo-jira-v2';
+const CACHE_NAME = 'mundo-jira-v3';
 const ARQUIVOS_ESSENCIAIS = [
   'mundo-jira.html',
   'common.js',
