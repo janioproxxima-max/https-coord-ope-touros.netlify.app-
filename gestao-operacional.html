@@ -51,9 +51,8 @@
   <!-- ================= ABA: SERVIÇOS ================= -->
   <div id="go-aba-servicos">
     <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</div>
-    <div class="panel toolbar" style="margin-bottom:14px">
-      <span class="page-sub" id="go-fechamento-info" style="margin:0">Nenhuma planilha de fechamento importada ainda.</span>
-      <div style="flex:1"></div>
+    <div class="panel toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+      <span class="page-sub" id="go-fechamento-info" style="margin:0;flex:1;min-width:280px;line-height:1.6">Nenhuma planilha de fechamento importada ainda.</span>
       <button class="btn primary" id="go-btn-importar-fechamento">⇪ Importar planilha de fechamento</button>
       <input type="file" id="go-input-fechamento" accept=".csv,.xlsx,.xls" style="display:none">
     </div>
@@ -455,9 +454,13 @@ async function renderCardsSLA(){
   if (goAbaAtiva !== 'servicos') return; // aba trocou enquanto buscava
 
   const elegiveis = fechamentoFiltrado();
-  info.textContent = goFechamento.length
-    ? `${fmtNum(goFechamento.length)} registro(s) na planilha de fechamento · ${fmtNum(elegiveis.length)} elegível(is) no período/filtros atuais`
-    : 'Nenhuma planilha de fechamento importada ainda — clique em "Importar" acima.';
+  if (goFechamento.length && !elegiveis.length){
+    info.innerHTML = diagnosticoFechamentoVazio();
+  } else {
+    info.textContent = goFechamento.length
+      ? `${fmtNum(goFechamento.length)} registro(s) na planilha de fechamento · ${fmtNum(elegiveis.length)} produtivo(s) em cidades de Touros`
+      : 'Nenhuma planilha de fechamento importada ainda — clique em "Importar" acima.';
+  }
 
   const dentro = elegiveis.filter(r => horasFechamento(r) <= horasLimiteFechamento(r));
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
@@ -485,7 +488,25 @@ async function renderCardsSLA(){
     </div>${cardsPorGrupo}`;
 }
 
-// tempo real do protocolo: abertura (criadoEm) até fechamento (dataFimAtendimento) — é o que de fato define "dentro do prazo"
+// se o filtro zerar tudo, mostra em qual etapa os registros foram
+// descartados — evita ficar adivinhando (cidade não reconhecida? tipo fora
+// dos grupos de SLA? nada bateu como produtivo no catálogo?)
+function diagnosticoFechamentoVazio(){
+  const total = goFechamento.length;
+  const comDatas = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm).length;
+  const comGrupoSla = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto)).length;
+  const comCidadeTouros = goFechamento.filter(r => r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto) && OPS.isTourosUnitCity(r.cidade)).length;
+  const produtivos = goFechamento.filter(r => {
+    if (!(r.dataFimAtendimento && r.criadoEm && grupoSlaDoTipo(r.tipoCurto) && OPS.isTourosUnitCity(r.cidade))) return false;
+    return OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto).produtivo === true;
+  }).length;
+  const cidadesVistas = [...new Set(goFechamento.map(r => r.cidade))].filter(Boolean).slice(0, 6).join(', ');
+  return `⚠️ ${fmtNum(total)} registros na planilha, mas 0 sobraram depois dos filtros. Onde travou:
+    <br>· Com data de abertura e fim válidas: ${fmtNum(comDatas)}
+    <br>· ...e tipo dentro dos grupos de SLA (não é Recolhimento nem outro fora da lista): ${fmtNum(comGrupoSla)}
+    <br>· ...e cidade reconhecida como Unidade Touros: ${fmtNum(comCidadeTouros)} <span style="color:var(--ink-faint)">(cidades na planilha: ${cidadesVistas || '—'})</span>
+    <br>· ...e classificado como produtivo no catálogo: ${fmtNum(produtivos)}`;
+}
 function horasFechamento(r){ return (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000; }
 function horasLimiteFechamento(r){ const g = grupoSlaDoTipo(r.tipoCurto); return g ? SLA_GROUPS[g].horas : Infinity; }
 
@@ -493,11 +514,13 @@ function fechamentoFiltrado(){
   if (!goFechamento || !goFechamento.length) return [];
   const supervisor = document.getElementById('go-f-supervisor').value;
   const cidade = document.getElementById('go-f-cidade').value;
+  // SLA não depende do filtro De/Até — considera TUDO que a equipe fechou
+  // produtivo nas cidades de Touros, ponto. Supervisor/cidade continuam
+  // filtráveis se o usuário escolher.
   return goFechamento.filter(r => {
     if (!r.dataFimAtendimento || !r.criadoEm) return false;
     if (!grupoSlaDoTipo(r.tipoCurto)) return false; // fora dos grupos de SLA (ex: Recolhimento)
     if (!OPS.isTourosUnitCity(r.cidade)) return false;
-    if (!dentroPeriodo(r.dataFimAtendimento)) return false;
     if (cidade && r.cidade !== cidade) return false;
     if (supervisor && goTecnicoSupervisor[r.responsavel] !== supervisor) return false;
     const prod = OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto);
