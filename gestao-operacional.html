@@ -50,7 +50,13 @@
 
   <!-- ================= ABA: SERVIÇOS ================= -->
   <div id="go-aba-servicos">
-    <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo)</div>
+    <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</div>
+    <div class="panel toolbar" style="margin-bottom:14px">
+      <span class="page-sub" id="go-fechamento-info" style="margin:0">Nenhuma planilha de fechamento importada ainda.</span>
+      <div style="flex:1"></div>
+      <button class="btn primary" id="go-btn-importar-fechamento">⇪ Importar planilha de fechamento</button>
+      <input type="file" id="go-input-fechamento" accept=".csv,.xlsx,.xls" style="display:none">
+    </div>
     <div class="sla-grid" id="go-cards-sla"></div>
 
     <div class="sec-hdr">Produtividade — só o que a equipe fechou como produtivo</div>
@@ -217,7 +223,7 @@ const META_PRODUTIVIDADE = 85;
 // separada, só data_encerramento). Recolhimento fica fora do cálculo de
 // SLA por pedido explícito.
 const SLA_GROUPS = {
-  reparo:    { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS'] },
+  reparo:    { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO'] },
   sa:        { label: 'SLA Serviço Adicional (48h)', horas: 48, meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
   ativacao:  { label: 'SLA Ativação (72h)', horas: 72, meta: 95, tipos: ['ATIVAÇÃO'] },
   mde:       { label: 'SLA Mud. de Endereço (72h)', horas: 72, meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
@@ -232,16 +238,6 @@ function grupoSlaDoTipo(tipo){
     if (cfg.tipos.includes(t)) return chave;
   }
   return null; // Recolhimento (e qualquer tipo não mapeado) fica fora do SLA
-}
-function horasLimiteDoTipo(tipo){
-  const g = grupoSlaDoTipo(tipo);
-  return g ? SLA_GROUPS[g].horas : null;
-}
-function dentroDoPrazo(r){
-  const limite = horasLimiteDoTipo(r.tipo);
-  const tma = parseFloat(r.tma);
-  if (limite == null || !isFinite(tma)) return null; // não entra no cálculo
-  return tma <= limite;
 }
 
 const MJ_STATUS_LABEL = {
@@ -260,6 +256,8 @@ const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardan
 
 let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
 let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Reparo"
+let goFechamento = null;   // lazy-load: planilha de fechamento (abertura real → SLA)
+const FECHAMENTO_SYNC = 'FechamentoData';
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
@@ -431,7 +429,7 @@ function goRenderAbaAtiva(){
 
 // ================= ABA SERVIÇOS =================
 function renderAbaServicos(data){
-  renderCardsSLA(data);
+  renderCardsSLA();
   renderCardsGerais(data);
   renderTabelaCidadeTipo(data);
   renderDonut(data);
@@ -442,17 +440,32 @@ function renderAbaServicos(data){
   renderResumo(data);
 }
 
-function renderCardsSLA(data){
-  // SLA agora conta só o que é produtivo (mesma regra da Produtividade) —
-  // reduz o volume pra só o que realmente vale como serviço concluído
-  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
-  const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
+async function renderCardsSLA(){
+  const info = document.getElementById('go-fechamento-info');
+  if (goFechamento === null){
+    info.textContent = 'Carregando planilha de fechamento...';
+    try{
+      goFechamento = (await OPS.syncPull(FECHAMENTO_SYNC)) || [];
+    }catch(err){
+      console.error('Falha ao buscar planilha de fechamento', err);
+      goFechamento = [];
+      info.textContent = `⚠️ Não consegui buscar a planilha de fechamento. ${err.message}`;
+    }
+  }
+  if (goAbaAtiva !== 'servicos') return; // aba trocou enquanto buscava
+
+  const elegiveis = fechamentoFiltrado();
+  info.textContent = goFechamento.length
+    ? `${fmtNum(goFechamento.length)} registro(s) na planilha de fechamento · ${fmtNum(elegiveis.length)} elegível(is) no período/filtros atuais`
+    : 'Nenhuma planilha de fechamento importada ainda — clique em "Importar" acima.';
+
+  const dentro = elegiveis.filter(r => horasFechamento(r) <= horasLimiteFechamento(r));
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
   const corGeral = pctGeral >= META_SLA_GERAL ? 'ok' : (pctGeral >= META_SLA_GERAL - 10 ? 'warn' : 'crit');
 
   const cardsPorGrupo = Object.entries(SLA_GROUPS).map(([chave, cfg]) => {
-    const arr = elegiveis.filter(r => grupoSlaDoTipo(r.tipo) === chave);
-    const dentroGrupo = arr.filter(r => dentroDoPrazo(r) === true).length;
+    const arr = elegiveis.filter(r => grupoSlaDoTipo(r.tipoCurto) === chave);
+    const dentroGrupo = arr.filter(r => horasFechamento(r) <= cfg.horas).length;
     const pct = arr.length ? (dentroGrupo / arr.length) * 100 : null;
     const cor = pct == null ? 'neutral' : (pct >= cfg.meta ? 'ok' : (pct >= cfg.meta - 10 ? 'warn' : 'crit'));
     return `<div class="sla-card ${cor}">
@@ -471,6 +484,102 @@ function renderCardsSLA(data){
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
     </div>${cardsPorGrupo}`;
 }
+
+// tempo real do protocolo: abertura (criadoEm) até fechamento (dataFimAtendimento) — é o que de fato define "dentro do prazo"
+function horasFechamento(r){ return (new Date(r.dataFimAtendimento) - new Date(r.criadoEm)) / 3600000; }
+function horasLimiteFechamento(r){ const g = grupoSlaDoTipo(r.tipoCurto); return g ? SLA_GROUPS[g].horas : Infinity; }
+
+function fechamentoFiltrado(){
+  if (!goFechamento || !goFechamento.length) return [];
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const cidade = document.getElementById('go-f-cidade').value;
+  return goFechamento.filter(r => {
+    if (!r.dataFimAtendimento || !r.criadoEm) return false;
+    if (!grupoSlaDoTipo(r.tipoCurto)) return false; // fora dos grupos de SLA (ex: Recolhimento)
+    if (!OPS.isTourosUnitCity(r.cidade)) return false;
+    if (!dentroPeriodo(r.dataFimAtendimento)) return false;
+    if (cidade && r.cidade !== cidade) return false;
+    if (supervisor && goTecnicoSupervisor[r.responsavel] !== supervisor) return false;
+    const prod = OPS.lookupProdutividade(r.descricaoEncerramento, r.tipoCurto, r.planoProduto);
+    return prod.produtivo === true;
+  });
+}
+
+// ---------------- importar planilha de fechamento (mesma lógica que existia no antigo Indicadores) ----------------
+function mapHeaderFechamento(h){
+  const n = OPS.normalize(h);
+  if (n.includes('ordem servico') || n === 'protocolo') return 'protocolo';
+  if (n === 'tipo de servico') return 'tituloCompleto';
+  if (n.includes('titulo') && !n.includes('subtipo')) return 'tituloCompleto';
+  if (n === 'area') return 'cidade';
+  if (n === 'cidade') return 'cidade';
+  if (n.includes('descricao') && n.includes('encerramento')) return 'descricaoEncerramento';
+  if (n.includes('fim do atendimento') || (n.includes('data') && n.includes('fim'))) return 'dataFimAtendimento';
+  if (n.includes('plano') || n.includes('produto')) return 'planoProduto';
+  if (n.includes('tecnico auxiliar')) return 'tecnicoAuxiliar';
+  if (n === 'responsavel') return 'responsavel';
+  if (n.includes('data') && n.includes('criacao')) return 'dataCriacao';
+  if (n.includes('abertura original')) return 'dataAberturaOriginal';
+  return null;
+}
+
+document.getElementById('go-btn-importar-fechamento').onclick = () => document.getElementById('go-input-fechamento').click();
+document.getElementById('go-input-fechamento').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  OPS.readSpreadsheetFile(file, async (rows) => {
+    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
+
+    let headerRowIdx = -1, bestScore = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++){
+      const mapped = rows[i].map(mapHeaderFechamento);
+      if (!mapped.includes('protocolo')) continue;
+      const score = mapped.filter(Boolean).length;
+      if (score > bestScore){ bestScore = score; headerRowIdx = i; }
+    }
+    if (headerRowIdx === -1) headerRowIdx = rows.length > 1 ? 1 : 0;
+    const headers = rows[headerRowIdx].map(mapHeaderFechamento);
+
+    const imported = rows.slice(headerRowIdx + 1).map(cols => {
+      const row = {};
+      headers.forEach((key, idx) => { if (key) row[key] = (cols[idx] ?? '').toString().trim(); });
+      if (!row.protocolo) return null;
+
+      const tituloCompleto = row.tituloCompleto || '';
+      const svc = OPS.lookupService(tituloCompleto);
+      const cidade = OPS.canonicalCity(row.cidade || '');
+
+      const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
+      const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+      const dtCriacao = OPS.parseBRDateTime(row.dataCriacao);
+      const dtOriginal = OPS.parseBRDateTime(row.dataAberturaOriginal);
+      const baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
+      const dtFim = OPS.parseBRDateTime(row.dataFimAtendimento);
+
+      return {
+        id: OPS.uid(),
+        protocolo: row.protocolo,
+        tituloCompleto,
+        tipoCurto: svc.catalogado ? svc.tipoCurto : tituloCompleto,
+        cidade,
+        descricaoEncerramento: row.descricaoEncerramento || '',
+        planoProduto: row.planoProduto || '',
+        responsavel: row.responsavel || '',
+        tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
+        criadoEm: baseDt ? baseDt.toISOString() : null,
+        dataFimAtendimento: dtFim ? dtFim.toISOString() : null,
+      };
+    }).filter(Boolean);
+
+    if (!imported.length){ alert('Não encontrei registros válidos nessa planilha de fechamento.'); return; }
+
+    const mode = confirm(`Foram lidos ${imported.length} registros de fechamento.\nOK = substituir a base atual.\nCancelar = adicionar aos registros existentes.`);
+    goFechamento = mode ? imported : [...(goFechamento || []), ...imported];
+    await OPS.syncPushWithToast(FECHAMENTO_SYNC, goFechamento);
+    e.target.value = '';
+    if (goAbaAtiva === 'servicos') renderCardsSLA();
+  });
+});
 
 function renderCardsGerais(data){
   const pctGeral = pctProdutivo(data);
