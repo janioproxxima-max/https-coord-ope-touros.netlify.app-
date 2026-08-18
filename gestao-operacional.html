@@ -52,6 +52,7 @@
   <div id="go-aba-servicos">
     <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</div>
     <div class="sla-grid" id="go-cards-sla"></div>
+    <p class="page-sub" id="go-sla-aviso" style="display:none;margin:10px 2px 4px"></p>
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
@@ -221,11 +222,14 @@ OPS.SERVICE_CATALOG.forEach(c => {
   if (c.tipo === 'RECOLHIMENTO' || c.tipo === 'REDES' || c.tipo === 'RETRABALHO' || c.tipo === 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO') return;
   if (!(c.tipo in HORAS_SLA_POR_TIPO)) HORAS_SLA_POR_TIPO[c.tipo] = c.tempo;
 });
+// AJUSTE DE REGRA DE NEGÓCIO: no catálogo, Ações Preventivas está marcada
+// como 48h — mas na prática de vocês ela é tratada como VT (Reparo), 24h.
+// Sobrescrevendo aqui pra refletir isso.
+HORAS_SLA_POR_TIPO['AÇÕES PREVENTIVAS'] = 24;
 // agrupamento pros 5 cards pedidos: Reparo (VT), Serviço Adicional,
 // Ativação, Mudança de Endereço — cada um usa as horas reais do catálogo
 const SLA_GROUPS = {
-  reparo:    { label: 'SLA Reparo (VT)', meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO'] },
-  preventiva:{ label: 'SLA Ações Preventivas', meta: 90, tipos: ['AÇÕES PREVENTIVAS'] },
+  reparo:    { label: 'SLA Reparo (VT)', meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO','AÇÕES PREVENTIVAS'] },
   sa:        { label: 'SLA Serviço Adicional', meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
   ativacao:  { label: 'SLA Ativação', meta: 95, tipos: ['ATIVAÇÃO'] },
   mde:       { label: 'SLA Mud. de Endereço', meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
@@ -443,8 +447,11 @@ function renderCardsSLA(data){
   // SLA usa a mesma base de encerrados (produtividade_registros, já
   // alimentada automaticamente desde novembro) — filtrada a produtivo=true
   // + tipo dentro dos grupos de SLA (Recolhimento fica de fora).
-  // "Dentro do prazo" = tma (horas) <= limite do grupo.
-  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
+  // "Dentro do prazo" = (data_encerramento − data_criacao) em horas <= limite do tipo.
+  // Registros importados antes da coluna data_criacao existir ficam de fora
+  // do cálculo (não têm como saber a abertura deles).
+  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const semDataCriacao = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && (!r.data_criacao || !r.data_encerramento)).length;
   const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
   const corGeral = pctGeral >= META_SLA_GERAL ? 'ok' : (pctGeral >= META_SLA_GERAL - 10 ? 'warn' : 'crit');
@@ -470,16 +477,25 @@ function renderCardsSLA(data){
       <div class="sla-meta">Meta: ${META_SLA_GERAL}% · ${fmtNum(elegiveis.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
     </div>${cardsPorGrupo}`;
+
+  const avisoEl = document.getElementById('go-sla-aviso');
+  if (semDataCriacao > 0){
+    avisoEl.style.display = 'block';
+    avisoEl.textContent = `ℹ️ ${fmtNum(semDataCriacao)} encerrado(s) produtivo(s) no período ficaram fora do cálculo de SLA por não terem data de criação registrada (importados antes desse campo existir).`;
+  } else {
+    avisoEl.style.display = 'none';
+  }
 }
-function horasLimiteDoTipo(tipo){
-  const t = (tipo || '').toUpperCase();
-  return t in HORAS_SLA_POR_TIPO ? HORAS_SLA_POR_TIPO[t] : null;
+function horasAbertura(r){
+  return (new Date(r.data_encerramento) - new Date(r.data_criacao)) / 3600000;
 }
 function dentroDoPrazo(r){
-  const limite = horasLimiteDoTipo(r.tipo);
-  const tma = parseFloat(r.tma);
-  if (limite == null || !isFinite(tma)) return null;
-  return tma <= limite;
+  const t = (r.tipo || '').toUpperCase();
+  const limite = t in HORAS_SLA_POR_TIPO ? HORAS_SLA_POR_TIPO[t] : null;
+  if (limite == null) return null;
+  const horas = horasAbertura(r);
+  if (!isFinite(horas)) return null;
+  return horas <= limite;
 }
 
 function renderTabelaCidadeTipo(data){
