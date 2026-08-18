@@ -115,21 +115,23 @@
   </div>
 
   <div class="panel toolbar">
-    <div class="field">
-      <label for="mj-prod-f-supervisor">Supervisor</label>
-      <select id="mj-prod-f-supervisor">
-        <option value="">Todos</option>
-        <option value="JOEL DIAS TAVARES">Joel Tavares</option>
-        <option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="mj-prod-f-tecnico">Técnico</label>
-      <select id="mj-prod-f-tecnico"><option value="">Todos</option></select>
-    </div>
-    <div class="field">
-      <label for="mj-prod-f-tipo">Tipo de serviço (gráficos)</label>
-      <select id="mj-prod-f-tipo"><option value="">Todos</option></select>
+    <div id="mj-prod-filtros-gestao" style="display:contents">
+      <div class="field">
+        <label for="mj-prod-f-supervisor">Supervisor</label>
+        <select id="mj-prod-f-supervisor">
+          <option value="">Todos</option>
+          <option value="JOEL DIAS TAVARES">Joel Tavares</option>
+          <option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="mj-prod-f-tecnico">Técnico</label>
+        <select id="mj-prod-f-tecnico"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="mj-prod-f-tipo">Tipo de serviço (gráficos)</label>
+        <select id="mj-prod-f-tipo"><option value="">Todos</option></select>
+      </div>
     </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="mj-btn-importar-produtividade">⇪ Importar planilha de produtividade</button>
@@ -987,6 +989,17 @@ function mostrarColaborador(){
   document.getElementById('mj-view-colaborador').style.display = 'block';
   const podeImportar = getCurrentAccess() === 'TOTAL';
   document.getElementById('mj-btn-importar-produtividade').style.display = podeImportar ? '' : 'none';
+  // Supervisor/Técnico/Tipo de serviço são filtros de gestão — não fazem
+  // sentido pra um técnico, que só vê o próprio histórico de qualquer jeito
+  const ehTecnico = papelAtual() === 'tecnico';
+  document.getElementById('mj-prod-filtros-gestao').style.display = ehTecnico ? 'none' : 'contents';
+  // pro técnico, abre direto em "Produtividade Tempo Real" — é onde ele
+  // acompanha a pontuação da semana (Bronze/Prata/Ouro fica logo abaixo)
+  if (ehTecnico && !window.__mjTecnicoJaAbriu){
+    window.__mjTecnicoJaAbriu = true;
+    mjAbaProdutividade = 'tempo_real';
+  }
+  document.querySelectorAll('#mj-prod-abas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.aba === mjAbaProdutividade));
   renderPainelColaborador();
 }
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
@@ -1628,6 +1641,7 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
 
 // ---------- Produtividade Tempo Real (últimos 15 dias, por Data de Encerramento) ----------
 const TEMPO_REAL_DIAS = 15;
+let mjChart3Meses = null;
 
 function listaDiasTempoReal(){
   const dias = [];
@@ -1645,6 +1659,36 @@ function corCelulaTempoReal(valor){
   if (valor >= 5) return { bg: 'rgba(255,176,32,0.28)', texto: '#ffb020' };
   if (valor >= 2) return { bg: 'rgba(255,90,64,0.24)', texto: '#ff6b52' };
   return { bg: 'rgba(255,64,64,0.32)', texto: '#ff4040' };
+}
+
+// segunda a domingo da semana atual — segunda é o índice 0, domingo o 6
+function limitesSemanaAtual(){
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const diaSemana = hoje.getDay(); // 0=domingo, 1=segunda...6=sábado
+  const diffParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+  const segunda = new Date(hoje); segunda.setDate(segunda.getDate() - diffParaSegunda);
+  const diasDaSemana = [];
+  for (let i = 0; i < 7; i++){
+    const d = new Date(segunda); d.setDate(d.getDate() + i);
+    diasDaSemana.push(d.toISOString().slice(0, 10));
+  }
+  return diasDaSemana;
+}
+
+function tierDoDia(pontos){
+  if (!pontos) return null;
+  if (pontos >= 10) return { nome: 'Ouro', emoji: '🥇', cor: '#ffd700' };
+  if (pontos >= 9) return { nome: 'Prata', emoji: '🥈', cor: '#c0c0c0' };
+  if (pontos >= 8) return { nome: 'Bronze', emoji: '🥉', cor: '#cd7f32' };
+  return null;
+}
+
+function faltaParaProximoNivel(pontos){
+  const p = pontos || 0;
+  if (p >= 10) return null;
+  if (p >= 9) return { faltam: (10 - p), nivel: 'Ouro' };
+  if (p >= 8) return { faltam: (9 - p), nivel: 'Prata' };
+  return { faltam: (8 - p), nivel: 'Bronze' };
 }
 
 async function renderProdutividadeTempoReal(papel, colab, container){
@@ -1708,6 +1752,45 @@ async function renderProdutividadeTempoReal(papel, colab, container){
     return `${dia}/${mes}`;
   };
 
+  // ---------- bloco extra pro técnico: sua semana em Bronze/Prata/Ouro ----------
+  let blocoSemanal = '';
+  if (papel === 'tecnico' && colab){
+    const diasSemana = limitesSemanaAtual();
+    const NOMES_DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const chaveTecnico = tecnicosComDado.find(t => nomesEquivalentes(t, colab.nome))
+      || tecnicosComDado.find(t => nomesParecidos(t, colab.nome));
+    const dadosDoTecnico = chaveTecnico ? porTecnicoDia[chaveTecnico] : {};
+    const totalMeta = diasSemana.slice(0, 6).reduce((s, d) => s + (dadosDoTecnico[d] || 0), 0); // seg a sáb
+    const pontosDomingo = dadosDoTecnico[diasSemana[6]] || 0; // domingo é extra, não entra na meta
+
+    const cardsDias = diasSemana.map((d, i) => {
+      const pontos = dadosDoTecnico[d] || 0;
+      const tier = tierDoDia(pontos);
+      const falta = faltaParaProximoNivel(pontos);
+      const ehDomingo = i === 6;
+      const [, mm, dd] = d.split('-');
+      return `
+        <div class="mj-semana-dia${ehDomingo ? ' mj-semana-extra' : ''}" style="${tier ? `border-color:${tier.cor}` : ''}">
+          <div class="mj-semana-dia-label">${NOMES_DIAS_SEMANA[i]} ${dd}/${mm}${ehDomingo ? ' · extra' : ''}</div>
+          <div class="mj-semana-dia-pontos">${pontos ? pontos.toFixed(2) : '—'}</div>
+          ${tier ? `<div class="mj-semana-dia-tier" style="color:${tier.cor}">${tier.emoji} ${tier.nome}</div>`
+                 : (pontos ? `<div class="mj-semana-dia-falta">faltam ${falta.faltam.toFixed(2)} p/ ${falta.nivel}</div>` : '<div class="mj-semana-dia-falta">—</div>')}
+        </div>
+      `;
+    }).join('');
+
+    blocoSemanal = `
+      <div class="panel" style="margin-top:16px">
+        <div class="qf-label" style="margin-bottom:10px">🏅 Sua semana <span style="font-weight:400;color:var(--ink-faint)">(segunda a sábado vale meta · domingo é extra)</span></div>
+        <div class="mj-semana-grid">${cardsDias}</div>
+        <div class="mj-semana-legenda">🥉 8 pts = Bronze &nbsp;·&nbsp; 🥈 9 pts = Prata &nbsp;·&nbsp; 🥇 10 pts = Ouro</div>
+        <div class="mj-semana-total">Total da semana (seg–sáb): <b>${totalMeta.toFixed(2)} pts</b>${pontosDomingo ? ` &nbsp;+&nbsp; <span style="color:var(--ok)">domingo: ${pontosDomingo.toFixed(2)} pts extra</span>` : ''}</div>
+        <div class="qf-label" style="margin:16px 0 6px">📈 Média dos últimos 3 meses</div>
+        <div style="position:relative;height:160px"><canvas id="mj-semana-3meses-canvas"></canvas></div>
+      </div>
+    `;
+  }
+
   container.innerHTML = `
     <div class="panel" style="overflow-x:auto">
       <table class="mj-tempo-real-table">
@@ -1737,12 +1820,37 @@ async function renderProdutividadeTempoReal(papel, colab, container){
         </tbody>
       </table>
     </div>
+    ${blocoSemanal}
   `;
 
   container.querySelectorAll('.mj-tr-cell').forEach(td => {
     td.style.cursor = 'pointer';
     td.addEventListener('click', () => abrirDetalheDia(td.dataset.tecnico, td.dataset.dia));
   });
+
+  // gráfico dos últimos 3 meses — só depois do innerHTML, pro canvas já existir
+  if (papel === 'tecnico' && colab && document.getElementById('mj-semana-3meses-canvas')){
+    const registroTec = produtividade.find(p => nomesEquivalentes(p.tecnico, colab.nome) || nomesParecidos(p.tecnico, colab.nome));
+    const ultimosMeses = registroTec ? (registroTec.historicoMensal || []).slice(-3) : [];
+    if (mjChart3Meses) mjChart3Meses.destroy();
+    if (ultimosMeses.length){
+      mjChart3Meses = new Chart(document.getElementById('mj-semana-3meses-canvas'), {
+        type: 'bar',
+        data: {
+          labels: ultimosMeses.map(m => m.mes || m.mesKey),
+          datasets: [{ label: 'Média de pontos/dia', data: ultimosMeses.map(m => m.media || 0), backgroundColor: '#00d4ff' }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+          },
+          plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
+        },
+      });
+    }
+  }
 }
 
 let mjChartDia = null;
@@ -1797,7 +1905,7 @@ async function abrirDetalheDia(tecnico, diaKey){
         x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
         y: { ticks: { color: '#8a97ab' }, grid: { display: false } },
       },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
     },
   });
   detalheEl.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Clique numa barra pra ver os protocolos daquele tipo.</p>';
@@ -1903,7 +2011,7 @@ function renderGraficoTipo(){
         x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
         y: { ticks: { color: '#8a97ab' }, grid: { display: false } },
       },
-      plugins: { legend: { display: false }, title: { display: true, text: METRICA_LABEL[metrica].titulo, color: '#e6ebf2' } },
+      plugins: { legend: { display: true, labels: { color: '#8a97ab' } }, title: { display: true, text: METRICA_LABEL[metrica].titulo, color: '#e6ebf2' } },
     },
     plugins: [plugRotulosSempreVisiveis],
   });

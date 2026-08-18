@@ -738,3 +738,16 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .mj-tr-cell:hover{ filter:brightness(1.25); }
 .mj-tr-cell-vazia{ color:var(--ink-faint); opacity:.35; }
 .mj-tr-lupa{ font-size:10px; opacity:.7; margin-left:2px; }
+
+.mj-semana-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+.mj-semana-dia{ background:var(--bg-raised); border:1px solid var(--line); border-radius:10px; padding:10px 6px; text-align:center; }
+.mj-semana-dia.mj-semana-extra{ background:rgba(52,199,89,0.08); }
+.mj-semana-dia-label{ font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.02em; margin-bottom:6px; }
+.mj-semana-dia-pontos{ font-size:18px; font-weight:800; }
+.mj-semana-dia-tier{ font-size:11px; font-weight:700; margin-top:4px; }
+.mj-semana-dia-falta{ font-size:10px; color:var(--ink-faint); margin-top:4px; }
+.mj-semana-legenda{ font-size:11.5px; color:var(--ink-dim); margin-top:10px; text-align:center; }
+.mj-semana-total{ font-size:13px; color:var(--ink); margin-top:8px; text-align:center; }
+@media (max-width:640px){
+  .mj-semana-grid{ grid-template-columns:repeat(4,1fr); }
+}

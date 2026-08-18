@@ -682,7 +682,7 @@ function renderAusenciasChart(){
         x: { ticks: { color: '#8a97ab', maxRotation: 60, minRotation: 30 }, grid: { display: false } },
         y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
       },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
     },
   });
 }
@@ -715,7 +715,7 @@ function renderEscalaSemanaChart(){
         x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
         y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
       },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
     },
   });
 }
@@ -748,7 +748,7 @@ function renderRodizioFDSChart(){
         x: { ticks: { color: '#8a97ab' }, grid: { display: false } },
         y: { beginAtZero: true, ticks: { color: '#8a97ab', precision: 0 }, grid: { color: '#1e2d47' } },
       },
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { color: '#8a97ab' } } },
     },
   });
 }
