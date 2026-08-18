@@ -1640,15 +1640,18 @@ function renderPainelColaboradorConteudo(papel, colab, conteudo){
 
 
 // ---------- Produtividade Tempo Real (últimos 15 dias, por Data de Encerramento) ----------
-const TEMPO_REAL_DIAS = 15;
 let mjChart3Meses = null;
 
+// dias do mês atual, do dia 1 até hoje (antes era uma janela fixa de 15
+// dias — trocado por pedido, agora acompanha o mês corrente inteiro)
 function listaDiasTempoReal(){
   const dias = [];
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  for (let i = TEMPO_REAL_DIAS - 1; i >= 0; i--){
-    const d = new Date(hoje); d.setDate(d.getDate() - i);
-    dias.push(d.toISOString().slice(0, 10));
+  const primeiroDiaDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const cursor = new Date(primeiroDiaDoMes);
+  while (cursor <= hoje){
+    dias.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
   }
   return dias;
 }
@@ -1704,7 +1707,7 @@ function faltasParaTodosNiveis(pontos){
 }
 
 async function renderProdutividadeTempoReal(papel, colab, container){
-  container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Buscando produtividade dos últimos ' + TEMPO_REAL_DIAS + ' dias...</p>';
+  container.innerHTML = '<p style="color:var(--ink-faint);font-size:12px">Buscando produtividade do mês atual...</p>';
 
   const dias = listaDiasTempoReal();
   const inicio = dias[0] + 'T00:00:00.000Z';
@@ -1747,7 +1750,7 @@ async function renderProdutividadeTempoReal(papel, colab, container){
 
   const tecnicosComDado = Object.keys(porTecnicoDia);
   if (!tecnicosComDado.length){
-    container.innerHTML = `<div class="empty-state"><div class="glyph">⚡</div><h3>Nenhum serviço encerrado nos últimos ${TEMPO_REAL_DIAS} dias</h3><p>Essa visão usa a Data de Encerramento (não a Data de Criação) — precisa ter protocolo importado com essa coluna preenchida.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="glyph">⚡</div><h3>Nenhum serviço encerrado neste mês ainda</h3><p>Essa visão usa a Data de Encerramento (não a Data de Criação) — precisa ter protocolo importado com essa coluna preenchida.</p></div>`;
     return;
   }
 
