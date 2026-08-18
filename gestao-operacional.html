@@ -93,7 +93,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>📈 Abertura de Reparo</h3><span class="cnt-badge" id="go-reparo-badge">—</span></div>
       <p class="page-sub" style="padding:0 16px;margin:10px 0">Coluna = reparos (VT) encerrados por dia · Linha = estimativa (200 serviços / 2 dias = 100/dia)</p>
-      <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas></div>
+      <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas><p id="go-reparo-vazio" class="page-sub" style="display:none;text-align:center;padding-top:40px">Nenhuma abertura de reparo (VT) no período selecionado.</p></div>
     </div>
 
     <div class="card">
@@ -217,9 +217,10 @@ const META_PRODUTIVIDADE = 85;
 // separada, só data_encerramento). Recolhimento fica fora do cálculo de
 // SLA por pedido explícito.
 const SLA_GROUPS = {
-  reparo: { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS'] },
-  sa:     { label: 'SLA Serviço Adicional (48h)', horas: 48, meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
-  atmde:  { label: 'SLA Ativação/Mud. Endereço (72h)', horas: 72, meta: 95, tipos: ['ATIVAÇÃO','TROCA DE ENDEREÇO'] },
+  reparo:    { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS'] },
+  sa:        { label: 'SLA Serviço Adicional (48h)', horas: 48, meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
+  ativacao:  { label: 'SLA Ativação (72h)', horas: 72, meta: 95, tipos: ['ATIVAÇÃO'] },
+  mde:       { label: 'SLA Mud. de Endereço (72h)', horas: 72, meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
 };
 const META_SLA_GERAL = 80;
 // estimativa de reparos/dia: 200 serviços a cada 2 dias = 100/dia
@@ -258,6 +259,7 @@ const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'R
 const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardando_setor','validado_inspetor','aguardando_aprovacao_coordenacao','em_atendimento'];
 
 let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
+let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Reparo"
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
@@ -279,12 +281,12 @@ function tituloCase(s){ return String(s).toLowerCase().replace(/(^|\s)\S/g, c =>
 function diaKey(v){ return v ? String(v).slice(0,10) : ''; }
 function diffDias(a, b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
-// ---------------- período padrão: últimos 6 meses ----------------
+// ---------------- período padrão: mês atual (dia 1 até hoje) ----------------
 (function setDefaultDates(){
   const hoje = new Date();
-  const seisAtras = new Date(); seisAtras.setMonth(seisAtras.getMonth() - 6);
+  const primeiroDiaDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   document.getElementById('go-f-fim').value = hoje.toISOString().slice(0,10);
-  document.getElementById('go-f-inicio').value = seisAtras.toISOString().slice(0,10);
+  document.getElementById('go-f-inicio').value = primeiroDiaDoMes.toISOString().slice(0,10);
 })();
 
 function periodoAtual(){
@@ -436,14 +438,14 @@ function renderAbaServicos(data){
   renderTMA(data);
   renderChartCidades(data);
   renderTop5(data);
-  renderEvolucao(data);
+  renderAberturaReparo();
   renderResumo(data);
 }
 
 function renderCardsSLA(data){
-  // SLA usa TODOS os encerrados elegíveis (não só produtivo) — é uma
-  // métrica diferente de Produtividade
-  const elegiveis = data.filter(r => grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
+  // SLA agora conta só o que é produtivo (mesma regra da Produtividade) —
+  // reduz o volume pra só o que realmente vale como serviço concluído
+  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
   const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
   const corGeral = pctGeral >= META_SLA_GERAL ? 'ok' : (pctGeral >= META_SLA_GERAL - 10 ? 'warn' : 'crit');
@@ -552,28 +554,62 @@ function renderTop5(data){
     `<tr><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
-function renderEvolucao(data){
-  // reparos (grupo VT) encerrados, agrupados por dia, dentro do período
-  // filtrado — coluna = quantidade real, linha = estimativa (100/dia)
-  const reparos = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo');
-  const porDia = {};
-  reparos.forEach(r => {
-    const d = diaKey(r.data_encerramento);
-    if (!d) return;
-    porDia[d] = (porDia[d] || 0) + 1;
+async function renderAberturaReparo(){
+  const badge = document.getElementById('go-reparo-badge');
+  badge.textContent = 'Carregando Mapa de Serviços...';
+
+  if (goMapaServicos === null){
+    try{
+      goMapaServicos = (await OPS.syncPull('MapaServicosData')) || [];
+    }catch(err){
+      console.error('Falha ao buscar Mapa de Serviços', err);
+      badge.textContent = '';
+      document.getElementById('go-chart-evolucao').style.display = 'none';
+      const vazioEl = document.getElementById('go-reparo-vazio');
+      vazioEl.textContent = `⚠️ Não consegui buscar o Mapa de Serviços. ${err.message}`;
+      vazioEl.style.color = 'var(--crit)';
+      vazioEl.style.display = 'block';
+      return;
+    }
+  }
+  // se a aba trocou enquanto a busca rodava, não desenha em cima de outra tela
+  if (goAbaAtiva !== 'servicos') return;
+
+  // mesmo agrupamento VT (reparo) já usado no site pra SLA do Mapa de Serviços
+  const VT_TIPOS = ['SEM ACESSO','CABO BAIXO','PROBLEMA RECORRENTE','DIFICULDADE DE ACESSO','RETENÇÃO CLIENTE CRITICO','AÇÕES PREVENTIVAS'];
+  const { inicio, fim } = periodoAtual();
+  const reparosAbertos = goMapaServicos.filter(r => {
+    if (!r.criadoEm) return false;
+    if (!VT_TIPOS.includes((r.tipoCurto || '').toUpperCase())) return false;
+    if (!OPS.isTourosUnitCity(r.cidade)) return false;
+    const d = diaKey(r.criadoEm);
+    if (inicio && d < inicio) return false;
+    if (fim && d > fim) return false;
+    return true;
   });
+
+  const porDia = {};
+  reparosAbertos.forEach(r => { const d = diaKey(r.criadoEm); porDia[d] = (porDia[d] || 0) + 1; });
   const dias = Object.keys(porDia).sort();
   const valores = dias.map(d => porDia[d]);
   const linhaMeta = dias.map(() => META_REPARO_POR_DIA);
-  const totalReparos = valores.reduce((a,b) => a+b, 0);
-  document.getElementById('go-reparo-badge').textContent = `${fmtNum(totalReparos)} reparo(s) no período`;
+  badge.textContent = `${fmtNum(reparosAbertos.length)} reparo(s) aberto(s) no período`;
 
-  const denso = dias.length > 31; // mais de ~1 mês de dias: some com os rótulos numéricos pra não poluir
-  goCharts.evolucao = new Chart(document.getElementById('go-chart-evolucao'), {
+  const chartEl = document.getElementById('go-chart-evolucao');
+  const vazioEl = document.getElementById('go-reparo-vazio');
+  if (!dias.length){
+    chartEl.style.display = 'none';
+    vazioEl.style.display = 'block';
+    return;
+  }
+  chartEl.style.display = 'block';
+  vazioEl.style.display = 'none';
+  const denso = dias.length > 31;
+  goCharts.evolucao = new Chart(chartEl, {
     data: {
       labels: dias.map(d => { const [,m,dd] = d.split('-'); return `${dd}/${m}`; }),
       datasets: [
-        { type:'bar', label:'Reparos encerrados', data: valores, backgroundColor:'#00d4ff', order:2 },
+        { type:'bar', label:'Reparos abertos', data: valores, backgroundColor:'#00d4ff', order:2 },
         { type:'line', label:'Estimativa (100/dia)', data: linhaMeta, borderColor:'#ffd166', backgroundColor:'#ffd166', pointRadius:0, borderDash:[6,4], order:1, tension:0 },
       ],
     },
