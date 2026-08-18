@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão Operacional · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Gestão operacional</p>
+    <h1 class="page-title">Histórico de Atendimentos Encerrados</h1>
+    <p class="page-sub">Produtividade, TMA e volume por cidade/tipo de serviço — direto da base de encerrados (Supabase).</p>
+  </div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="go-f-periodo">Período</label>
+      <select id="go-f-periodo">
+        <option value="3">Últimos 3 meses</option>
+        <option value="6" selected>Últimos 6 meses</option>
+        <option value="12">Últimos 12 meses</option>
+        <option value="all">Tudo</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="go-f-supervisor">Supervisor</label>
+      <select id="go-f-supervisor"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="go-f-cidade">Cidade</label>
+      <select id="go-f-cidade"><option value="">Todas</option></select>
+    </div>
+    <div style="flex:1"></div>
+    <span class="page-sub" id="go-status-info" style="margin:0"></span>
+  </div>
+
+  <div class="sla-grid" id="go-cards-gerais"></div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
+    <div class="table-wrap" style="max-height:320px">
+      <table class="services" id="go-table-cidade-tipo"></table>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>✅ Produtivos × Improdutivos</h3></div>
+      <div class="chart-box"><canvas id="go-chart-donut"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>⏱ TMA médio</h3></div>
+      <div style="padding:20px 18px;text-align:center">
+        <div style="font-family:var(--f-display);font-size:30px;font-weight:800" id="go-tma-valor">—</div>
+        <p class="page-sub" style="margin:6px 0 0">tempo médio por encerramento</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col" style="grid-template-columns:1fr 1fr">
+    <div class="card">
+      <div class="card-head"><h3>📍 Aberturas por cidade</h3></div>
+      <div class="chart-box"><canvas id="go-chart-cidades"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>🏆 Top 5 tipos de serviço</h3></div>
+      <div class="table-wrap" style="max-height:280px">
+        <table class="services"><thead><tr><th>#</th><th>Tipo</th><th>Qtd.</th></tr></thead><tbody id="go-top5-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>📈 Evolução da produtividade (%)</h3></div>
+    <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas></div>
+  </div>
+
+  <div class="sec-hdr">Desempenho por equipe</div>
+
+  <div class="two-col" style="grid-template-columns:1fr 320px">
+    <div class="card">
+      <div class="card-head">
+        <h3>📉 Improdutividade por responsável</h3>
+        <div class="qf-tiles" id="go-resp-tiles" style="margin-left:auto">
+          <button type="button" class="qf-tile active" data-resp="tecnico">Por Técnico</button>
+          <button type="button" class="qf-tile" data-resp="supervisor">Por Supervisor</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="max-height:340px">
+        <table class="services"><thead><tr><th>Responsável</th><th>Improdutividade (%)</th><th>Qtd.</th></tr></thead><tbody id="go-improd-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>📦 Resumo do período</h3></div>
+      <div style="padding:18px">
+        <div class="stat-row" style="grid-template-columns:1fr;gap:10px;margin-bottom:0">
+          <div class="stat-card ok"><div class="label">Produtivos</div><div class="value" id="go-resumo-produtivos">—</div></div>
+          <div class="stat-card crit"><div class="label">Improdutivos</div><div class="value" id="go-resumo-improdutivos">—</div></div>
+          <div class="stat-card brand"><div class="label">Total de pontos</div><div class="value" id="go-resumo-pontos">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('gestao-operacional.html', 'Gestão Operacional');
+
+// ============================================================
+// Área da Gestão Operacional — histórico de encerrados
+// Fonte: Supabase (produtividade_registros + produtividade_historico),
+// via OPS_SUPABASE (supabase-client.js) — mesma base usada pelo
+// Mundo Jira / Painel do Colaborador.
+// ============================================================
+
+const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c','#5eead4','#f472b6','#818cf8','#facc15'];
+const commonChartOpts = { responsive:true, maintainAspectRatio:false };
+const META_PRODUTIVIDADE = 85; // mesma referência usada na Premiação Semanal / Painel do Colaborador
+
+let goRegistros = [];
+let goHistorico = [];
+let goTecnicoSupervisor = {};
+let goRespView = 'tecnico';
+let goCharts = {};
+
+function goDestroyCharts(){ Object.values(goCharts).forEach(c => c && c.destroy()); goCharts = {}; }
+
+function isProdutivo(r){ return r.produtivo === true || r.produtivo === 'true'; }
+function fmtPct(n){ return isFinite(n) ? n.toFixed(2).replace('.', ',') + '%' : '—'; }
+function fmtPct1(n){ return isFinite(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
+function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
+function fmtHoras(horasDecimal){
+  if (!isFinite(horasDecimal)) return '—';
+  const totalMin = Math.round(horasDecimal * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h${String(m).padStart(2,'0')}m`;
+}
+function tituloCase(s){ return String(s).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+
+async function initPage(){
+  document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
+  try{
+    const [regs, hist] = await Promise.all([
+      OPS_SUPABASE.select('produtividade_registros'),
+      OPS_SUPABASE.select('produtividade_historico'),
+    ]);
+    goRegistros = regs || [];
+    goHistorico = hist || [];
+    goTecnicoSupervisor = {};
+    goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
+    document.getElementById('go-status-info').textContent = `${fmtNum(goRegistros.length)} registros carregados`;
+    popularFiltros();
+    goRender();
+  }catch(err){
+    console.error('Falha ao buscar dados da Gestão Operacional', err);
+    document.getElementById('go-status-info').textContent = '';
+    document.getElementById('go-cards-gerais').innerHTML =
+      `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--crit);font-size:13px">⚠️ Não consegui buscar os dados no Supabase. Motivo técnico: ${err.message}</div></div>`;
+  }
+}
+
+function popularFiltros(){
+  const cidades = [...new Set(goRegistros.map(r => r.area))].filter(Boolean).sort();
+  const supervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(Boolean).sort();
+  const selCidade = document.getElementById('go-f-cidade');
+  const selSupervisor = document.getElementById('go-f-supervisor');
+  cidades.forEach(c => selCidade.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
+  supervisores.forEach(s => selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`));
+
+  ['go-f-periodo','go-f-supervisor','go-f-cidade'].forEach(id => {
+    document.getElementById(id).addEventListener('change', goRender);
+  });
+  document.querySelectorAll('#go-resp-tiles .qf-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#go-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      goRespView = btn.dataset.resp;
+      renderImprodutividadeResp(goFiltrados());
+    });
+  });
+}
+
+function goFiltrados(){
+  const periodo = document.getElementById('go-f-periodo').value;
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const cidade = document.getElementById('go-f-cidade').value;
+
+  let mesLimite = null;
+  if (periodo !== 'all'){
+    const d = new Date();
+    d.setMonth(d.getMonth() - parseInt(periodo, 10));
+    mesLimite = d.toISOString().slice(0, 7);
+  }
+
+  return goRegistros.filter(r => {
+    if (mesLimite && r.mes_key < mesLimite) return false;
+    if (supervisor && goTecnicoSupervisor[r.tecnico] !== supervisor) return false;
+    if (cidade && r.area !== cidade) return false;
+    return true;
+  });
+}
+
+function pctProdutivo(arr){
+  if (!arr.length) return 0;
+  return (arr.filter(isProdutivo).length / arr.length) * 100;
+}
+
+function goRender(){
+  goDestroyCharts();
+  const data = goFiltrados();
+  renderCardsGerais(data);
+  renderTabelaCidadeTipo(data);
+  renderDonut(data);
+  renderTMA(data);
+  renderChartCidades(data);
+  renderTop5(data);
+  renderEvolucao(data);
+  renderImprodutividadeResp(data);
+  renderResumo(data);
+}
+
+// ---------------- sla-grid: produtividade geral + top 4 tipos ----------------
+function renderCardsGerais(data){
+  const total = data.length;
+  const pctGeral = pctProdutivo(data);
+  const corGeral = pctGeral >= META_PRODUTIVIDADE ? 'ok' : (pctGeral >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
+
+  const counts = {};
+  data.forEach(r => { counts[r.tipo] = (counts[r.tipo] || 0) + 1; });
+  const topTipos = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 4).map(([t]) => t);
+
+  const cardsTipos = topTipos.map(tipo => {
+    const arr = data.filter(r => r.tipo === tipo);
+    const pct = pctProdutivo(arr);
+    const cor = pct >= META_PRODUTIVIDADE ? 'ok' : (pct >= META_PRODUTIVIDADE - 10 ? 'warn' : 'crit');
+    return `<div class="sla-card ${cor}">
+      <div class="sla-label">${tipo}</div>
+      <div class="sla-value">${fmtPct(pct)}</div>
+      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(arr.length)} encerrados</div>
+      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('go-cards-gerais').innerHTML = `
+    <div class="sla-card ${corGeral}">
+      <div class="sla-label">Produtividade Geral</div>
+      <div class="sla-value">${fmtPct(pctGeral)}</div>
+      <div class="sla-meta">Meta: ${META_PRODUTIVIDADE}% · ${fmtNum(total)} encerrados</div>
+      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
+    </div>
+    ${cardsTipos}
+  `;
+}
+
+// ---------------- tabela cidade x tipo ----------------
+function renderTabelaCidadeTipo(data){
+  const tipos = [...new Set(data.map(r => r.tipo))].sort();
+  const cidadesTodas = [...new Set(data.map(r => r.area))];
+  const matriz = {};
+  cidadesTodas.forEach(c => { matriz[c] = {}; tipos.forEach(t => matriz[c][t] = 0); });
+  data.forEach(r => { if (matriz[r.area]) matriz[r.area][r.tipo]++; });
+
+  const totalPorCidade = c => tipos.reduce((acc,t) => acc + matriz[c][t], 0);
+  const totalPorTipo = t => cidadesTodas.reduce((acc,c) => acc + matriz[c][t], 0);
+  const cidades = cidadesTodas.sort((a,b) => totalPorCidade(b) - totalPorCidade(a));
+
+  const thead = `<thead><tr><th>Cidade</th>${tipos.map(t => `<th>${t}</th>`).join('')}<th>Total</th></tr></thead>`;
+  const rows = cidades.map(c => {
+    const cells = tipos.map(t => `<td>${matriz[c][t] || '-'}</td>`).join('');
+    return `<tr><td>${c}</td>${cells}<td style="font-weight:700">${totalPorCidade(c)}</td></tr>`;
+  }).join('');
+  const totalRow = `<tr style="font-weight:800;color:var(--brand)"><td>Total</td>${tipos.map(t => `<td>${totalPorTipo(t)}</td>`).join('')}<td>${data.length}</td></tr>`;
+
+  document.getElementById('go-table-cidade-tipo').innerHTML = `${thead}<tbody>${rows}${totalRow}</tbody>`;
+  document.getElementById('go-total-badge').textContent = `${fmtNum(data.length)} encerrados`;
+}
+
+// ---------------- donut produtivos x improdutivos ----------------
+function renderDonut(data){
+  const produtivos = data.filter(isProdutivo).length;
+  const improdutivos = data.length - produtivos;
+  goCharts.donut = new Chart(document.getElementById('go-chart-donut'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Produtivos', 'Improdutivos'],
+      datasets: [{ data: [produtivos, improdutivos], backgroundColor: ['#00e5a0', '#ff4d6d'] }],
+    },
+    options: { ...commonChartOpts, plugins: { legend: { position: 'bottom', labels: { color: '#e2eaf5', boxWidth: 12 } } } },
+  });
+}
+
+// ---------------- TMA médio ----------------
+function renderTMA(data){
+  const validos = data.map(r => parseFloat(r.tma)).filter(v => isFinite(v));
+  const media = validos.length ? validos.reduce((a,b) => a+b, 0) / validos.length : NaN;
+  document.getElementById('go-tma-valor').textContent = fmtHoras(media);
+}
+
+// ---------------- aberturas por cidade ----------------
+function renderChartCidades(data){
+  const counts = {};
+  data.forEach(r => { counts[r.area] = (counts[r.area] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  goCharts.cidades = new Chart(document.getElementById('go-chart-cidades'), {
+    type: 'bar',
+    data: { labels: entries.map(([c]) => c), datasets: [{ label: 'Encerrados', data: entries.map(([,v]) => v), backgroundColor: CHART_COLORS }] },
+    options: { ...commonChartOpts, indexAxis: 'y',
+      scales: { x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } }, y: { ticks: { color: '#e2eaf5' }, grid: { display: false } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+// ---------------- top 5 tipos ----------------
+function renderTop5(data){
+  const counts = {};
+  data.forEach(r => { counts[r.tipo] = (counts[r.tipo] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 5);
+  document.getElementById('go-top5-tbody').innerHTML = entries.map(([tipo, n], i) => `
+    <tr><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>
+  `).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+}
+
+// ---------------- evolução mensal ----------------
+function renderEvolucao(data){
+  const porMes = {};
+  data.forEach(r => {
+    if (!porMes[r.mes_key]) porMes[r.mes_key] = { total: 0, produtivos: 0 };
+    porMes[r.mes_key].total++;
+    if (isProdutivo(r)) porMes[r.mes_key].produtivos++;
+  });
+  const meses = Object.keys(porMes).sort();
+  const pontos = meses.map(m => (porMes[m].produtivos / porMes[m].total) * 100);
+
+  goCharts.evolucao = new Chart(document.getElementById('go-chart-evolucao'), {
+    type: 'line',
+    data: { labels: meses, datasets: [{ label: 'Produtividade (%)', data: pontos, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.12)', fill: true, tension: 0.25 }] },
+    options: { ...commonChartOpts,
+      scales: { y: { min: 0, max: 100, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } }, x: { ticks: { color: '#8a97ab' }, grid: { display: false } } },
+      plugins: { legend: { labels: { color: '#e2eaf5' } } },
+    },
+  });
+}
+
+// ---------------- improdutividade por responsável ----------------
+function renderImprodutividadeResp(data){
+  const grupos = {};
+  data.forEach(r => {
+    const chave = goRespView === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
+    if (!grupos[chave]) grupos[chave] = { total: 0, improd: 0 };
+    grupos[chave].total++;
+    if (!isProdutivo(r)) grupos[chave].improd++;
+  });
+  const linhas = Object.entries(grupos)
+    .map(([nome, v]) => ({ nome, pct: v.total ? (v.improd / v.total) * 100 : 0, qtd: v.improd }))
+    .sort((a,b) => b.pct - a.pct);
+
+  document.getElementById('go-improd-tbody').innerHTML = linhas.map(l => {
+    const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
+    return `<tr><td>${tituloCase(l.nome)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+}
+
+// ---------------- resumo do período ----------------
+function renderResumo(data){
+  const produtivos = data.filter(isProdutivo).length;
+  const improdutivos = data.length - produtivos;
+  const totalPontos = data.reduce((acc, r) => acc + (parseFloat(r.pontos) || 0), 0);
+  document.getElementById('go-resumo-produtivos').textContent = fmtNum(produtivos);
+  document.getElementById('go-resumo-improdutivos').textContent = fmtNum(improdutivos);
+  document.getElementById('go-resumo-pontos').textContent = totalPontos.toFixed(1).replace('.', ',');
+}
+
+window.OPS_ON_REFRESH = initPage;
+initPage();
+</script>
+</body>
+</html>

@@ -8,55 +8,6 @@ const OPS = (() => {
 
   const STORAGE_KEY = 'ops_touros_mapa_servicos_v1';
 
-  // -------- reserva em IndexedDB (bem maior que o localStorage) --------
-  // O localStorage tem um limite pequeno (uns 5-10MB) e volumes grandes de
-  // protocolos (import de um mês inteiro, por exemplo) podem estourar isso e
-  // travar a importação com "QuotaExceededError". Em vez de reescrever toda
-  // a inicialização da página pra ser assíncrona, usamos o IndexedDB só como
-  // uma RESERVA: o caminho normal (localStorage) continua exatamente igual
-  // pro dia a dia; só quando ele não couber é que caímos pro IndexedDB.
-  const IDB_DB_NAME = 'ops_touros_fallback';
-  const IDB_STORE = 'kv';
-  function idbAbrir(){
-    return new Promise((resolve, reject) => {
-      if (!window.indexedDB){ reject(new Error('IndexedDB indisponível')); return; }
-      const req = indexedDB.open(IDB_DB_NAME, 1);
-      req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  async function idbSet(key, val){
-    const db = await idbAbrir();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(val, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-  async function idbGet(key){
-    const db = await idbAbrir();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const req = tx.objectStore(IDB_STORE).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  async function idbDelete(key){
-    const db = await idbAbrir();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-  function ehErroDeCota(e){
-    return e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
-  }
-
   // Registro de cidades da região: nome canônico (pra corrigir grafia/maiúsculas
   // inconsistentes vindas da planilha) + coordenada central de fallback.
   const CITY_REGISTRY = {
@@ -805,26 +756,10 @@ const OPS = (() => {
     }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
   }
   function save(records){
-    try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-      // coube no localStorage de novo - se tinha uma reserva antiga no
-      // IndexedDB de uma importação grande anterior, não precisa mais dela.
-      idbDelete(STORAGE_KEY).catch(() => {});
-    }catch(e){
-      if (!ehErroDeCota(e)) throw e;
-      console.warn('localStorage cheio pra "' + STORAGE_KEY + '" (' + records.length + ' registros) - salvando via IndexedDB como reserva.');
-      idbSet(STORAGE_KEY, records).catch(err => console.error('Falha ao salvar em IndexedDB', err));
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }
   function clearAll(){
     localStorage.removeItem(STORAGE_KEY);
-    idbDelete(STORAGE_KEY).catch(() => {});
-  }
-  // Chamar depois de load() retornar null, pra checar se os dados de
-  // verdade estão na reserva do IndexedDB (caso de um import grande demais
-  // pro localStorage). Retorna null se também não achar nada lá.
-  function loadFallbackFromIdb(){
-    return idbGet(STORAGE_KEY).catch(() => null);
   }
 
   // -------- storage genérico (usado por outros módulos: pessoas, frotas, desligamentos) --------
@@ -836,17 +771,7 @@ const OPS = (() => {
     }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
   }
   function saveData(key, val){
-    try{
-      localStorage.setItem(key, JSON.stringify(val));
-      idbDelete(key).catch(() => {});
-    }catch(e){
-      if (!ehErroDeCota(e)) throw e;
-      console.warn('localStorage cheio pra "' + key + '" - salvando via IndexedDB como reserva.');
-      idbSet(key, val).catch(err => console.error('Falha ao salvar em IndexedDB', err));
-    }
-  }
-  function loadDataFallbackFromIdb(key){
-    return idbGet(key).catch(() => null);
+    localStorage.setItem(key, JSON.stringify(val));
   }
 
   // -------- CSV --------
@@ -1365,8 +1290,8 @@ const OPS = (() => {
     normalize, cityCenter, canonicalCity, haversineKm, resolveCoords, corrigirCamposPessoa,
     ensureCityGeocoded, loadGeocodeCache,
     classifyType, allTypes, TYPE_OTHER,
-    load, save, clearAll, uid, loadFallbackFromIdb,
-    loadData, saveData, loadDataFallbackFromIdb, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
+    load, save, clearAll, uid,
+    loadData, saveData, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
@@ -1432,6 +1357,7 @@ const OPS_NAV_LINKS = [
   { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
   { href: 'sla.html',             label: 'SLA',                icon: '⏱️' },
   { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
+  { href: 'gestao-operacional.html', label: 'Gestão Operacional', icon: '🧭' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
   { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },
