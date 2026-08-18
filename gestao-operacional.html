@@ -50,6 +50,10 @@
 
   <!-- ================= ABA: SERVIÇOS ================= -->
   <div id="go-aba-servicos">
+    <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo)</div>
+    <div class="sla-grid" id="go-cards-sla"></div>
+
+    <div class="sec-hdr">Produtividade — só o que a equipe fechou como produtivo</div>
     <div class="sla-grid" id="go-cards-gerais"></div>
 
     <div class="card" style="margin-bottom:18px">
@@ -87,7 +91,8 @@
     </div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>📈 Evolução da produtividade (%)</h3></div>
+      <div class="card-head"><h3>📈 Abertura de Reparo</h3><span class="cnt-badge" id="go-reparo-badge">—</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Coluna = reparos (VT) encerrados por dia · Linha = estimativa (200 serviços / 2 dias = 100/dia)</p>
       <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas></div>
     </div>
 
@@ -206,6 +211,38 @@ const CHART_COLORS = ['#00d4ff','#00e5a0','#ffd166','#ff4d6d','#a78bfa','#ff9a3c
 const commonChartOpts = { responsive:true, maintainAspectRatio:false };
 const META_PRODUTIVIDADE = 85;
 
+// ---------------- SLA por tipo de serviço ----------------
+// "dentro do prazo" = tma (horas) <= limite do grupo — é o único dado de
+// tempo que existe em produtividade_registros (não tem data de abertura
+// separada, só data_encerramento). Recolhimento fica fora do cálculo de
+// SLA por pedido explícito.
+const SLA_GROUPS = {
+  reparo: { label: 'SLA Reparo (VT · 24h)', horas: 24, meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','AÇÕES PREVENTIVAS'] },
+  sa:     { label: 'SLA Serviço Adicional (48h)', horas: 48, meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
+  atmde:  { label: 'SLA Ativação/Mud. Endereço (72h)', horas: 72, meta: 95, tipos: ['ATIVAÇÃO','TROCA DE ENDEREÇO'] },
+};
+const META_SLA_GERAL = 80;
+// estimativa de reparos/dia: 200 serviços a cada 2 dias = 100/dia
+const META_REPARO_POR_DIA = 100;
+
+function grupoSlaDoTipo(tipo){
+  const t = (tipo || '').toUpperCase();
+  for (const [chave, cfg] of Object.entries(SLA_GROUPS)){
+    if (cfg.tipos.includes(t)) return chave;
+  }
+  return null; // Recolhimento (e qualquer tipo não mapeado) fica fora do SLA
+}
+function horasLimiteDoTipo(tipo){
+  const g = grupoSlaDoTipo(tipo);
+  return g ? SLA_GROUPS[g].horas : null;
+}
+function dentroDoPrazo(r){
+  const limite = horasLimiteDoTipo(r.tipo);
+  const tma = parseFloat(r.tma);
+  if (limite == null || !isFinite(tma)) return null; // não entra no cálculo
+  return tma <= limite;
+}
+
 const MJ_STATUS_LABEL = {
   aberto: 'Aberto', em_analise: 'Em Análise', aguardando_informacoes: 'Aguardando Informações',
   aguardando_setor: 'Aguardando Setor', validado_inspetor: 'Validado p/ Substituição',
@@ -265,19 +302,12 @@ function dentroPeriodo(dataStr){
 async function initPage(){
   document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
   try{
-    const [regs, hist, pares] = await Promise.all([
-      OPS_SUPABASE.select('produtividade_registros'),
-      OPS_SUPABASE.select('produtividade_historico'),
-      OPS_SUPABASE.select('produtividade_pares_recorrencia'),
-    ]);
-    goRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
-    goHistorico = hist || [];
-    goPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
+    // busca só uma vez: histórico por técnico (tabela pequena) — não depende do período
+    goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
-    document.getElementById('go-status-info').textContent = `${fmtNum(goRegistros.length)} registros carregados`;
+    await carregarPeriodo();
     popularFiltros();
-    goRenderAbaAtiva();
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';
@@ -286,17 +316,54 @@ async function initPage(){
   }
 }
 
-function popularFiltros(){
-  const cidades = [...new Set(goRegistros.map(r => r.area))].filter(Boolean).sort();
-  const supervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(Boolean).sort();
-  const selCidade = document.getElementById('go-f-cidade');
-  const selSupervisor = document.getElementById('go-f-supervisor');
-  cidades.forEach(c => selCidade.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
-  supervisores.forEach(s => selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`));
+// busca só o período selecionado — em vez do histórico inteiro — filtrando
+// direto no Supabase (bem mais rápido que trazer tudo e filtrar aqui)
+async function carregarPeriodo(){
+  const { inicio, fim } = periodoAtual();
+  const filtroData = [];
+  if (inicio) filtroData.push(`data_encerramento=gte.${inicio}T00:00:00.000Z`);
+  if (fim) filtroData.push(`data_encerramento=lte.${fim}T23:59:59.999Z`);
+  const filtroRegistros = filtroData.length ? filtroData.join('&') : null;
 
-  ['go-f-inicio','go-f-fim','go-f-supervisor','go-f-cidade'].forEach(id => {
-    document.getElementById(id).addEventListener('change', goRenderAbaAtiva);
+  const filtroPares = [];
+  if (inicio) filtroPares.push(`data_atual=gte.${inicio}T00:00:00.000Z`);
+  if (fim) filtroPares.push(`data_atual=lte.${fim}T23:59:59.999Z`);
+  const filtroParesStr = filtroPares.length ? filtroPares.join('&') : null;
+
+  document.getElementById('go-status-info').textContent = 'Carregando período selecionado...';
+  const [regs, pares] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_registros', filtroRegistros),
+    OPS_SUPABASE.select('produtividade_pares_recorrencia', filtroParesStr),
+  ]);
+  goRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
+  goPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
+  atualizarOpcoesCidade();
+  document.getElementById('go-status-info').textContent = `${fmtNum(goRegistros.length)} registros no período`;
+  goRenderAbaAtiva();
+  if (goAbaAtiva === 'tickets') { goTickets = []; renderAbaTickets(); }
+}
+
+// adiciona à lista de cidades qualquer uma nova vista no período atual, sem
+// apagar as que já apareciam antes (preserva a seleção do usuário)
+function atualizarOpcoesCidade(){
+  const sel = document.getElementById('go-f-cidade');
+  const existentes = new Set(Array.from(sel.options).map(o => o.value));
+  const vistas = [...new Set(goRegistros.map(r => r.area))].filter(Boolean).sort();
+  vistas.forEach(c => {
+    if (!existentes.has(c)) sel.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`);
   });
+}
+
+function popularFiltros(){
+  const supervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(Boolean).sort();
+  const selSupervisor = document.getElementById('go-f-supervisor');
+  supervisores.forEach(s => selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`));
+  atualizarOpcoesCidade();
+
+  document.getElementById('go-f-inicio').addEventListener('change', carregarPeriodo);
+  document.getElementById('go-f-fim').addEventListener('change', carregarPeriodo);
+  document.getElementById('go-f-supervisor').addEventListener('change', goRenderAbaAtiva);
+  document.getElementById('go-f-cidade').addEventListener('change', goRenderAbaAtiva);
 
   document.querySelectorAll('#go-abas .qf-tile').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -362,6 +429,7 @@ function goRenderAbaAtiva(){
 
 // ================= ABA SERVIÇOS =================
 function renderAbaServicos(data){
+  renderCardsSLA(data);
   renderCardsGerais(data);
   renderTabelaCidadeTipo(data);
   renderDonut(data);
@@ -370,6 +438,36 @@ function renderAbaServicos(data){
   renderTop5(data);
   renderEvolucao(data);
   renderResumo(data);
+}
+
+function renderCardsSLA(data){
+  // SLA usa TODOS os encerrados elegíveis (não só produtivo) — é uma
+  // métrica diferente de Produtividade
+  const elegiveis = data.filter(r => grupoSlaDoTipo(r.tipo) && isFinite(parseFloat(r.tma)));
+  const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
+  const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
+  const corGeral = pctGeral >= META_SLA_GERAL ? 'ok' : (pctGeral >= META_SLA_GERAL - 10 ? 'warn' : 'crit');
+
+  const cardsPorGrupo = Object.entries(SLA_GROUPS).map(([chave, cfg]) => {
+    const arr = elegiveis.filter(r => grupoSlaDoTipo(r.tipo) === chave);
+    const dentroGrupo = arr.filter(r => dentroDoPrazo(r) === true).length;
+    const pct = arr.length ? (dentroGrupo / arr.length) * 100 : null;
+    const cor = pct == null ? 'neutral' : (pct >= cfg.meta ? 'ok' : (pct >= cfg.meta - 10 ? 'warn' : 'crit'));
+    return `<div class="sla-card ${cor}">
+      <div class="sla-label">${cfg.label}</div>
+      <div class="sla-value">${pct == null ? '—' : fmtPct(pct)}</div>
+      <div class="sla-meta">Meta: ${cfg.meta}% · ${fmtNum(arr.length)} encerrados</div>
+      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${pct == null ? 0 : Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('go-cards-sla').innerHTML = `
+    <div class="sla-card ${corGeral}">
+      <div class="sla-label">SLA Geral</div>
+      <div class="sla-value">${fmtPct(pctGeral)}</div>
+      <div class="sla-meta">Meta: ${META_SLA_GERAL}% · ${fmtNum(elegiveis.length)} encerrados</div>
+      <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
+    </div>${cardsPorGrupo}`;
 }
 
 function renderCardsGerais(data){
@@ -455,22 +553,41 @@ function renderTop5(data){
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
 function renderEvolucao(data){
-  const porMes = {};
-  data.forEach(r => {
-    if (!porMes[r.mes_key]) porMes[r.mes_key] = { total:0, produtivos:0 };
-    porMes[r.mes_key].total++;
-    if (isProdutivo(r)) porMes[r.mes_key].produtivos++;
+  // reparos (grupo VT) encerrados, agrupados por dia, dentro do período
+  // filtrado — coluna = quantidade real, linha = estimativa (100/dia)
+  const reparos = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo');
+  const porDia = {};
+  reparos.forEach(r => {
+    const d = diaKey(r.data_encerramento);
+    if (!d) return;
+    porDia[d] = (porDia[d] || 0) + 1;
   });
-  const meses = Object.keys(porMes).sort();
-  const pontos = meses.map(m => (porMes[m].produtivos / porMes[m].total) * 100);
+  const dias = Object.keys(porDia).sort();
+  const valores = dias.map(d => porDia[d]);
+  const linhaMeta = dias.map(() => META_REPARO_POR_DIA);
+  const totalReparos = valores.reduce((a,b) => a+b, 0);
+  document.getElementById('go-reparo-badge').textContent = `${fmtNum(totalReparos)} reparo(s) no período`;
+
+  const denso = dias.length > 31; // mais de ~1 mês de dias: some com os rótulos numéricos pra não poluir
   goCharts.evolucao = new Chart(document.getElementById('go-chart-evolucao'), {
-    type: 'line',
-    data: { labels: meses, datasets: [{ label:'Produtividade (%)', data: pontos, borderColor:'#00d4ff', backgroundColor:'rgba(0,212,255,0.12)', fill:true, tension:0.25 }] },
-    plugins: [ChartDataLabels],
+    data: {
+      labels: dias.map(d => { const [,m,dd] = d.split('-'); return `${dd}/${m}`; }),
+      datasets: [
+        { type:'bar', label:'Reparos encerrados', data: valores, backgroundColor:'#00d4ff', order:2 },
+        { type:'line', label:'Estimativa (100/dia)', data: linhaMeta, borderColor:'#ffd166', backgroundColor:'#ffd166', pointRadius:0, borderDash:[6,4], order:1, tension:0 },
+      ],
+    },
+    plugins: denso ? [] : [ChartDataLabels],
     options: { ...commonChartOpts,
-      scales: { y:{ min:0, max:100, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, x:{ ticks:{color:'#8a97ab'}, grid:{display:false} } },
-      plugins: { legend:{ labels:{ color:'#e2eaf5' } },
-        datalabels: { color:'#e2eaf5', align:'top', anchor:'end', font:{ weight:'700', size:11 }, formatter: v => v.toFixed(1).replace('.', ',') + '%' } } },
+      scales: {
+        y: { beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
+        x: { ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30, autoSkip:true, maxTicksLimit: denso ? 20 : undefined }, grid:{ display:false } },
+      },
+      plugins: {
+        legend: { labels:{ color:'#e2eaf5' } },
+        datalabels: denso ? undefined : { display: ctx => ctx.dataset.type === 'bar', color:'#e2eaf5', anchor:'end', align:'top', font:{ weight:'700', size:10 }, formatter: v => fmtNum(v) },
+      },
+    },
   });
 }
 function renderResumo(data){
