@@ -18,6 +18,8 @@
     <p class="page-sub">Organograma, cargo, centro de custo, escala e histórico de feedback.</p>
   </div>
 
+  <div id="alerta-cadastros-incompletos"></div>
+
   <div class="stat-row" id="stat-row"></div>
 
   <div class="panel toolbar">
@@ -773,9 +775,13 @@ async function initPage(){
   // campo "nome" quando a planilha tem a coluna com um nome ligeiramente
   // diferente (ex: "Nome" com maiúscula) por ter sido editada direto nela.
   let precisaResync = false, precisaResyncFeedback = false, precisaResyncAusencias = false, precisaResyncAtestados = false;
+  let quemFoiReconstruido = [];
   records = records.map(r => {
     const corrigido = OPS.corrigirCamposPessoa(r);
-    if (corrigido.nome !== r.nome) precisaResync = true;
+    // "nome reconstruído" (chutado a partir do login) não salva sozinho —
+    // fica só na tela, marcado, pro coordenador confirmar/corrigir de verdade
+    if (corrigido.nomeReconstruido) quemFoiReconstruido.push(corrigido);
+    else if (corrigido.nome !== r.nome) precisaResync = true;
     if (corrigido.id) return corrigido;
     precisaResync = true;
     return { ...corrigido, id: OPS.uid() };
@@ -794,9 +800,35 @@ async function initPage(){
   if (precisaResyncAtestados) await OPS.syncPush(SYNC_COLLECTION_ATESTADOS, atestados);
   await OPS.pullRodizioConfig();
 
+  renderAuditoriaCadastros(records, quemFoiReconstruido);
   populateFilterOptions();
   renderAll();
   return !!(sharedPessoas || sharedFeedback || sharedAusencias || sharedAtestados);
+}
+
+// Mostra um alerta bem visível com todo mundo que tem algum problema de
+// cadastro (nome vazio, sem login, nome só "chutado" a partir do login) —
+// assim dá pra corrigir tudo de uma vez, em vez de descobrir um por um só
+// quando a pessoa reclama que não consegue ver o próprio histórico.
+function renderAuditoriaCadastros(lista, reconstruidos){
+  const el = document.getElementById('alerta-cadastros-incompletos');
+  const semNome = lista.filter(p => !p.nome && !reconstruidos.some(r => r.id === p.id));
+  const semLogin = lista.filter(p => p.nome && !p.usuarioLogin);
+  const problemas = [...semNome, ...reconstruidos, ...semLogin];
+  if (!problemas.length){ el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="panel" style="border:1px solid var(--warn);background:rgba(255,176,32,0.08);padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--warn);margin-bottom:8px">
+        ⚠️ ${problemas.length} cadastro(s) com informação incompleta — pode causar erro de login pra essas pessoas
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+        ${semNome.map(p => `<div>• <b>Sem nome</b> — login "${p.usuarioLogin || '(sem login também)'}" — precisa preencher o campo Nome</div>`).join('')}
+        ${reconstruidos.map(p => `<div>• <b>Nome "chutado" a partir do login</b> — "${p.nome}" (login: ${p.usuarioLogin}) — confira se está certo</div>`).join('')}
+        ${semLogin.map(p => `<div>• <b>Sem login</b> — ${p.nome} — sem isso, essa pessoa não consegue ver o próprio histórico no Mundo Jira</div>`).join('')}
+      </div>
+    </div>
+  `;
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();

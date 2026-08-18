@@ -289,9 +289,17 @@ const OPS = (() => {
     if (!p.nome){
       const chaveNome = Object.keys(p).find(k => {
         const kn = normalize(k).replace(/[^a-z]/g, '');
-        return kn === 'nome' || kn === 'nomecompleto' || kn === 'nomecolaborador';
+        return kn === 'nome' || kn === 'nomecompleto' || kn === 'nomecolaborador'
+          || kn === 'colaborador' || kn === 'funcionario' || kn === 'tecnico' || kn === 'nometecnico';
       });
       if (chaveNome && p[chaveNome]) p.nome = p[chaveNome];
+    }
+    // se ainda assim não tem nome, mas tem login no padrão "nome.sobrenome",
+    // usa isso como último recurso — melhor um nome aproximado (marcado como
+    // tal) do que ficar completamente sem aparecer em lugar nenhum
+    if (!p.nome && p.usuarioLogin && /^[a-z]+\.[a-z]+$/i.test(p.usuarioLogin.trim())){
+      p.nome = p.usuarioLogin.trim().split('.').map(parte => parte.charAt(0).toUpperCase() + parte.slice(1)).join(' ');
+      p.nomeReconstruido = true; // sinaliza que foi um "chute" a partir do login, não o dado real
     }
     return p;
   }
