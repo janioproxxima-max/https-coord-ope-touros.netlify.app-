@@ -250,7 +250,10 @@ const STORAGE_KEY = OPS.STORAGE_KEY;
 let records = OPS.load();
 if (!records){
   records = OPS_SEED_DATA.map(r => ({ ...r, id: OPS.uid() }));
-  OPS.save(records);
+  OPS.loadFallbackFromIdb().then(doReserva => {
+    if (doReserva && doReserva.length){ records = doReserva; renderAll(); }
+    else { OPS.save(records); }
+  });
 }
 
 // -------- sincronização compartilhada (Planilha Google via Apps Script) --------

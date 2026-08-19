@@ -734,6 +734,11 @@ body:not(.authed) > *:not(#login-wrap){ display:none !important; }
 .mj-tempo-real-table th{ padding:8px 10px; text-align:center; color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid var(--line); white-space:nowrap; }
 .mj-tempo-real-table td{ padding:8px 10px; text-align:center; border-bottom:1px solid var(--line); white-space:nowrap; }
 .mj-tempo-real-table tr:hover td{ background:rgba(255,255,255,0.02); }
+/* Técnico e Origem ficam fixos ao arrastar a tabela pra ver os dias mais distantes */
+.mj-tempo-real-table th:nth-child(1), .mj-tempo-real-table td:nth-child(1){ position:sticky; left:0; z-index:2; background:var(--bg-panel); }
+.mj-tempo-real-table th:nth-child(2), .mj-tempo-real-table td:nth-child(2){ position:sticky; left:110px; z-index:2; background:var(--bg-panel); box-shadow:2px 0 4px rgba(0,0,0,0.25); }
+.mj-tempo-real-table th:nth-child(1), .mj-tempo-real-table th:nth-child(2){ z-index:3; }
+.mj-tempo-real-table tr:hover td:nth-child(1), .mj-tempo-real-table tr:hover td:nth-child(2){ background:var(--bg-panel-2); }
 .mj-tr-cell{ border-radius:6px; font-weight:700; transition:filter .15s; }
 .mj-tr-cell:hover{ filter:brightness(1.25); }
 .mj-tr-cell-vazia{ color:var(--ink-faint); opacity:.35; }

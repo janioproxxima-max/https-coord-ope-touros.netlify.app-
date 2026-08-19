@@ -1109,9 +1109,11 @@ function processarLinhasProdutividade(rows){
       for (let i = headerRowIdx + 1; i < rows.length; i++){
         const row = rows[i];
         const responsavel = (row[idxResponsavel] || '').toString().trim();
-        // "18000144 - MURILO TENORIO TORRES" -> "MURILO TENORIO TORRES"
+        // remove o código numérico do início do nome - às vezes vem com
+        // traço ("18000144 - MURILO TENORIO TORRES"), às vezes só com espaço
+        // ("18000144 MURILO TENORIO TORRES") -> sempre "MURILO TENORIO TORRES"
         const tecnicoAuxiliar = idxTecnicoAuxiliar >= 0
-          ? (row[idxTecnicoAuxiliar] || '').toString().replace(/^\s*\d+\s*-\s*/, '').trim()
+          ? (row[idxTecnicoAuxiliar] || '').toString().replace(/^\s*\d+\s*-?\s*/, '').trim()
           : '';
         if (!responsavel && !tecnicoAuxiliar) continue;
 

@@ -748,6 +748,52 @@ const OPS = (() => {
   }
 
   // -------- storage --------
+  // localStorage tem uma cota pequena (~5-10MB) - volumes grandes de
+  // protocolos (import de semanas/mês inteiro) podem estourar isso. O
+  // caminho normal continua sendo localStorage (rápido, síncrono); quando
+  // não cabe, cai numa reserva em IndexedDB (bem maior) em vez de travar a
+  // importação ou perder dado.
+  const IDB_DB_NAME = 'ops_touros_fallback';
+  const IDB_STORE = 'kv';
+  function idbAbrir(){
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function idbSet(key, val){
+    const db = await idbAbrir();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function idbGet(key){
+    const db = await idbAbrir();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result === undefined ? null : req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function idbDelete(key){
+    const db = await idbAbrir();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  function ehErroDeCota(e){
+    return e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+  }
+
   function load(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -755,11 +801,21 @@ const OPS = (() => {
       return JSON.parse(raw);
     }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
   }
+  async function loadFallbackFromIdb(){
+    try{ return await idbGet(STORAGE_KEY); }catch(e){ return null; }
+  }
   function save(records){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      idbDelete(STORAGE_KEY).catch(() => {});
+    }catch(e){
+      if (!ehErroDeCota(e)) throw e;
+      idbSet(STORAGE_KEY, records).catch(err => console.error('Falha ao salvar na reserva IndexedDB', err));
+    }
   }
   function clearAll(){
     localStorage.removeItem(STORAGE_KEY);
+    idbDelete(STORAGE_KEY).catch(() => {});
   }
 
   // -------- storage genérico (usado por outros módulos: pessoas, frotas, desligamentos) --------
@@ -770,8 +826,17 @@ const OPS = (() => {
       return JSON.parse(raw);
     }catch(e){ console.error('Falha ao ler dados salvos', e); return null; }
   }
+  async function loadDataFallbackFromIdb(key){
+    try{ return await idbGet(key); }catch(e){ return null; }
+  }
   function saveData(key, val){
-    localStorage.setItem(key, JSON.stringify(val));
+    try{
+      localStorage.setItem(key, JSON.stringify(val));
+      idbDelete(key).catch(() => {});
+    }catch(e){
+      if (!ehErroDeCota(e)) throw e;
+      idbSet(key, val).catch(err => console.error('Falha ao salvar na reserva IndexedDB', err));
+    }
   }
 
   // -------- CSV --------
@@ -1290,8 +1355,8 @@ const OPS = (() => {
     normalize, cityCenter, canonicalCity, haversineKm, resolveCoords, corrigirCamposPessoa,
     ensureCityGeocoded, loadGeocodeCache,
     classifyType, allTypes, TYPE_OTHER,
-    load, save, clearAll, uid,
-    loadData, saveData, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
+    load, save, clearAll, uid, loadFallbackFromIdb,
+    loadData, saveData, loadDataFallbackFromIdb, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
