@@ -257,10 +257,12 @@ if (!records){
 }
 
 // -------- sincronização compartilhada (Planilha Google via Apps Script) --------
-// Quando alguém importa ou edita, os dados vão pra essa planilha; quando
-// qualquer pessoa abre a página, ela busca de lá — assim todo mundo vê a
-// mesma coisa, em vez de cada navegador ter sua própria cópia.
-const OPS_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzkAsAB4_iEMJB-XGCiVyWyi8Ftn0c7yH5wgRv45fnuS8lfbmFw2ufV47YgkQUrzkqP/exec';
+// Quando alguém importa ou edita, os dados vão pro Supabase (coleção
+// MapaServicosData, migrada pra lá em OPS.syncPull/syncPush - era a
+// coleção mais pesada do site e vinha estourando a cota diária do Apps
+// Script, compartilhada com todas as outras páginas); quando qualquer
+// pessoa abre a página, ela busca de lá — assim todo mundo vê a mesma
+// coisa, em vez de cada navegador ter sua própria cópia.
 
 function showToast(msg){
   const toast = document.createElement('div');
@@ -273,9 +275,7 @@ function showToast(msg){
 
 async function syncPull(){
   try{
-    const res = await fetch(OPS_SYNC_URL + '?cachebust=' + Date.now());
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await OPS.syncPull('MapaServicosData');
     if (!Array.isArray(data)) return null;
     return data.map(normalizeSyncedRecord);
   }catch(e){
@@ -286,13 +286,7 @@ async function syncPull(){
 
 async function syncPush(recs){
   try{
-    const res = await fetch(OPS_SYNC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ records: recs }),
-    });
-    const data = await res.json();
-    return !!(data && data.ok);
+    return await OPS.syncPush('MapaServicosData', recs);
   }catch(e){
     console.error('Falha ao sincronizar dados', e);
     return false;

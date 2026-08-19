@@ -1062,7 +1062,77 @@ const OPS = (() => {
   // dado (ex: 'PessoasData', 'FrotasData', 'LavagensData').
   const OPS_SYNC_BASE_URL = 'https://script.google.com/macros/s/AKfycbzkAsAB4_iEMJB-XGCiVyWyi8Ftn0c7yH5wgRv45fnuS8lfbmFw2ufV47YgkQUrzkqP/exec';
 
+  // -------- MapaServicosData migrou pro Supabase --------
+  // O Mapa de Serviços é de longe a coleção mais pesada (milhares de
+  // protocolos, atualizada a cada poucos minutos) e vinha derrubando o
+  // desempenho do Apps Script pra TODAS as outras coleções, que dividem a
+  // mesma cota diária de execução (conta Google pessoal, não Workspace).
+  // Só essa coleção foi movida pro banco de verdade - o resto (Pessoas,
+  // Frotas, SLA, Indicadores) continua no Google Sheets, sem mudança.
+  const MAPA_SUPABASE_URL = 'https://hkopoafzceczmmbjvogi.supabase.co';
+  const MAPA_SUPABASE_KEY = 'sb_publishable_pxL9kT16nTgq_UBcF3QQKg_YOqMiVxm';
+  const MAPA_SUPABASE_TABLE = 'mapa_servicos_registros';
+  const MAPA_SUPABASE_HEADERS = {
+    apikey: MAPA_SUPABASE_KEY,
+    Authorization: `Bearer ${MAPA_SUPABASE_KEY}`,
+  };
+
+  async function mapaSupabasePull(){
+    try{
+      const TAMANHO_PAGINA = 1000;
+      let todos = [];
+      let inicio = 0;
+      while (true){
+        const res = await fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?select=dados`, {
+          headers: Object.assign({ 'Range-Unit': 'items', Range: `${inicio}-${inicio + TAMANHO_PAGINA - 1}` }, MAPA_SUPABASE_HEADERS),
+        });
+        if (!res.ok) return null;
+        const pagina = await res.json();
+        todos = todos.concat((pagina || []).map(r => r.dados));
+        if (!pagina || pagina.length < TAMANHO_PAGINA) break;
+        inicio += TAMANHO_PAGINA;
+      }
+      return todos;
+    }catch(e){
+      console.error('Falha ao buscar dados do Mapa (Supabase)', e);
+      return null;
+    }
+  }
+
+  // "records" é sempre a lista completa e correta do estado atual (mesmo
+  // contrato que o Apps Script tinha) - insere/atualiza tudo primeiro, só
+  // depois apaga o que sobrou de desatualizado. Nessa ordem, se a
+  // sincronização falhar no meio do caminho, o Mapa nunca fica vazio - na
+  // pior das hipóteses fica com uma mistura de dado novo e velho até a
+  // próxima sincronização dar certo.
+  async function mapaSupabasePush(records){
+    try{
+      const inicioDaSincronizacao = new Date().toISOString();
+      const TAMANHO_LOTE = 500;
+      for (let i = 0; i < records.length; i += TAMANHO_LOTE){
+        const lote = records.slice(i, i + TAMANHO_LOTE).map(r => ({
+          protocolo: r.protocolo, dados: r, atualizado_em: inicioDaSincronizacao,
+        }));
+        const res = await fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?on_conflict=protocolo`, {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, MAPA_SUPABASE_HEADERS),
+          body: JSON.stringify(lote),
+        });
+        if (!res.ok) return false;
+      }
+      const del = await fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?atualizado_em=lt.${encodeURIComponent(inicioDaSincronizacao)}`, {
+        method: 'DELETE',
+        headers: MAPA_SUPABASE_HEADERS,
+      });
+      return del.ok;
+    }catch(e){
+      console.error('Falha ao sincronizar Mapa (Supabase)', e);
+      return false;
+    }
+  }
+
   async function syncPull(collection){
+    if (collection === 'MapaServicosData') return mapaSupabasePull();
     try{
       const res = await fetch(`${OPS_SYNC_BASE_URL}?collection=${encodeURIComponent(collection)}&cachebust=${Date.now()}`);
       if (!res.ok) return null;
@@ -1075,6 +1145,7 @@ const OPS = (() => {
   }
 
   async function syncPush(collection, records){
+    if (collection === 'MapaServicosData') return mapaSupabasePush(records);
     try{
       const res = await fetch(OPS_SYNC_BASE_URL, {
         method: 'POST',
@@ -1260,7 +1331,7 @@ const OPS = (() => {
             planoProduto: row.planoProduto || '',
             responsavel: row.responsavel || '',
             nomeCliente: row.nomeCliente || '',
-            tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-\s*/, '').trim(),
+            tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-?\s*/, '').trim(),
           };
         }).filter(Boolean);
 
