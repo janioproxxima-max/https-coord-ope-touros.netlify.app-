@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mundo-jira-v3';
+const CACHE_NAME = 'mundo-jira-v4';
 const ARQUIVOS_ESSENCIAIS = [
   'mundo-jira.html',
   'common.js',
@@ -29,8 +29,16 @@ self.addEventListener('activate', (event) => {
 // se estiver sem internet — ou a conexão estiver muito lenta/travada,
 // como às vezes acontece no 4G do celular — cai pro que estiver em cache
 // depois de um tempo limite, em vez de ficar esperando pra sempre.
+//
+// Só se aplica aos arquivos do próprio site (HTML/JS/CSS/ícones) - as
+// chamadas de API (Supabase, Apps Script) são de outra origem e passam
+// direto pra rede, sem cache. Sem essa distinção, uma chamada de API lenta
+// (comum no 4G) caía pro cache depois de 8s e mostrava dado velho (ou
+// nada, na primeira vez que o app é instalado e ainda não tem nada
+// salvo) em vez do histórico/produtividade de verdade da equipe.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     Promise.race([
       fetch(event.request).then((resposta) => {
