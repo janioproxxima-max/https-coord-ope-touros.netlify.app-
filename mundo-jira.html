@@ -1536,6 +1536,14 @@ document.getElementById('mj-prod-abas').addEventListener('click', (e) => {
   renderPainelColaborador();
 });
 
+// Produtividade Tempo Real não tinha atualização automática (só manual) -
+// atualiza sozinha a cada 30min, só quando essa aba está mesmo visível, pra
+// não gastar chamada à toa em quem está em outra tela do site.
+setInterval(() => {
+  const visivel = document.getElementById('mj-view-colaborador').style.display === 'block';
+  if (visivel && mjAbaProdutividade === 'tempo_real') renderPainelColaborador();
+}, 30 * 60 * 1000);
+
 function renderPainelColaboradorConteudo(papel, colab, conteudo){
   const produtividadeValida = produtividade.filter(p => ehInstaladorReparador(p.tecnico));
 

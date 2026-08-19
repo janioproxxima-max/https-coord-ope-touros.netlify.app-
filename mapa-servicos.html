@@ -1043,7 +1043,7 @@ async function pullAndRefresh(){
   if (typeof window.OPS_STAMP_UPDATE === 'function') window.OPS_STAMP_UPDATE();
   return !!shared;
 }
-setInterval(pullAndRefresh, 5 * 60 * 1000);
+setInterval(pullAndRefresh, 20 * 60 * 1000);
 
 const btnRefreshAgora = document.getElementById('btn-map-refresh');
 if (btnRefreshAgora){
