@@ -152,7 +152,10 @@
 </div>
 
 <div class="page" id="mj-view-colaborador" style="display:none">
-  <button type="button" class="btn ghost" id="mj-btn-voltar-portal-2" style="margin-bottom:14px">← Voltar aos portais</button>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+    <button type="button" class="btn ghost" id="mj-btn-voltar-portal-2">← Voltar aos portais</button>
+    <button type="button" class="btn ghost" id="mj-btn-forcar-atualizacao">🔄 Forçar atualização</button>
+  </div>
   <div class="page-head">
     <p class="eyebrow">Painel do Colaborador</p>
     <h1 class="page-title">Histórico de Produtividade</h1>
@@ -1105,6 +1108,30 @@ document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', most
 document.getElementById('mj-btn-voltar-portal-3').addEventListener('click', mostrarPortal);
 document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
 document.getElementById('mj-card-links').addEventListener('click', mostrarLinks);
+
+// Reset completo pro app instalado (PWA): desregistra o service worker,
+// apaga todo o cache dele e recarrega direto do servidor - sem isso, se o
+// app instalado ficar preso numa versão antiga (rede lenta no momento da
+// primeira instalação, por exemplo), a pessoa não tem como saber ou
+// resolver sozinha a não ser desinstalando e instalando de novo.
+document.getElementById('mj-btn-forcar-atualizacao').addEventListener('click', async () => {
+  const btn = document.getElementById('mj-btn-forcar-atualizacao');
+  btn.disabled = true;
+  btn.textContent = '🔄 Atualizando...';
+  try{
+    if ('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ('caches' in window){
+      const nomes = await caches.keys();
+      await Promise.all(nomes.map(n => caches.delete(n)));
+    }
+  }catch(e){
+    console.warn('Falha ao limpar cache/service worker', e);
+  }
+  window.location.href = window.location.pathname + '?forcado=' + Date.now();
+});
 
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
 const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
