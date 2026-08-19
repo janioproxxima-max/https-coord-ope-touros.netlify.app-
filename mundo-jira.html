@@ -38,6 +38,44 @@
         <p>Histórico de produtividade — média, quartil e tendência.</p>
       </div>
     </div>
+    <div class="mj-portal-card" id="mj-card-links">
+      <div class="mj-portal-card-ico">🔗</div>
+      <div>
+        <h3>Links</h3>
+        <p>Acesso rápido aos sistemas usados pela equipe.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="mj-view-links" style="display:none">
+  <button type="button" class="btn ghost" id="mj-btn-voltar-portal-3" style="margin-bottom:14px">← Voltar aos portais</button>
+  <div class="page-head">
+    <p class="eyebrow">Acesso rápido</p>
+    <h1 class="page-title">Links</h1>
+    <p class="page-sub">Sistemas usados pela equipe — abrem numa aba nova.</p>
+  </div>
+  <div class="mj-portal-grid">
+    <a class="mj-portal-card" style="text-decoration:none" href="https://186.232.194.141:8510/" target="_blank" rel="noopener">
+      <div class="mj-portal-card-ico">🔐</div>
+      <div><h3>Equipamentos</h3><p>Acesso aos equipamentos</p></div>
+    </a>
+    <a class="mj-portal-card" style="text-decoration:none" href="https://script.google.com/macros/s/AKfycbyBWhZBdKJSKYc1o8jufans1Nz-rsXoYnsqjfAKsKYS8POD2N1oiPADxwoUL7rrLRrp8Q/exec" target="_blank" rel="noopener">
+      <div class="mj-portal-card-ico">📚</div>
+      <div><h3>Wiki</h3><p>Documentação / Wiki</p></div>
+    </a>
+    <a class="mj-portal-card" style="text-decoration:none" href="https://mail.proxximatelecom.com.br/static/login/" target="_blank" rel="noopener">
+      <div class="mj-portal-card-ico">🖥️</div>
+      <div><h3>Carbônio</h3><p>Sistema Carbônio</p></div>
+    </a>
+    <a class="mj-portal-card" style="text-decoration:none" href="http://proxximatelecomunicacoes120809.protheus.cloudtotvs.com.br:4020/01/#/login" target="_blank" rel="noopener">
+      <div class="mj-portal-card-ico">👥</div>
+      <div><h3>Meu RH</h3><p>Sistema Meu RH — TOTVS</p></div>
+    </a>
+    <a class="mj-portal-card" style="text-decoration:none" href="https://analytics.totvs.com.br/" target="_blank" rel="noopener">
+      <div class="mj-portal-card-ico">📊</div>
+      <div><h3>B.I.</h3><p>BI — TOTVS Analytics</p></div>
+    </a>
   </div>
 </div>
 
@@ -63,6 +101,7 @@
         <option value="">Todos</option>
         <option value="material">Material</option>
         <option value="frotas">Frotas</option>
+        <option value="acesso">Problema com Acesso</option>
         <option value="reclamacao">Reclamação</option>
       </select>
     </div>
@@ -188,6 +227,7 @@
         <select id="mj-n-modulo" required>
           <option value="material">Material</option>
           <option value="frotas">Frotas</option>
+          <option value="acesso">Problema com Acesso</option>
           <option value="reclamacao">Reclamação</option>
         </select>
       </div>
@@ -265,6 +305,29 @@
         <div class="field">
           <label>Veículo / placa</label>
           <select id="mj-n-veiculo"><option value="">Selecione a placa...</option></select>
+        </div>
+        <div class="field">
+          <label>O que precisa?</label>
+          <select id="mj-n-frotas-categoria">
+            <option value="manutencao">Manutenção</option>
+            <option value="lavagem">Prioridade de Lavagem</option>
+            <option value="avarias">Avarias/Sinistro</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="mj-n-bloco-acesso" style="display:none">
+        <div class="field">
+          <label>Sistema com problema</label>
+          <select id="mj-n-acesso-sistema">
+            <option value="cliq">Cliq</option>
+            <option value="ahgora">Ahgora</option>
+            <option value="carbonio">Carbônio</option>
+            <option value="bi">BI</option>
+            <option value="aniel">Aniel</option>
+            <option value="wiki">Wiki</option>
+            <option value="outro">Outro</option>
+          </select>
         </div>
       </div>
 
@@ -352,8 +415,12 @@ const MJ_TRANSICOES = {
   resolvido: [],
   cancelado: [],
 };
-const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'Reclamação' };
-const MJ_CATEGORIA_LABEL = { equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT' };
+const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação' };
+const MJ_CATEGORIA_LABEL = {
+  equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT',
+  manutencao: 'Manutenção', lavagem: 'Prioridade de Lavagem', avarias: 'Avarias/Sinistro',
+  cliq: 'Cliq', ahgora: 'Ahgora', carbonio: 'Carbônio', bi: 'BI', aniel: 'Aniel', wiki: 'Wiki', outro: 'Outro',
+};
 const MJ_SLA_DIAS = 3;
 
 const STORAGE_KEY = 'ops_touros_mundo_jira_v1';
@@ -679,8 +746,10 @@ function atualizarCamposModulo(){
   const modulo = document.getElementById('mj-n-modulo').value;
   document.getElementById('mj-n-bloco-material').style.display = modulo === 'material' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-frotas').style.display = modulo === 'frotas' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-acesso').style.display = modulo === 'acesso' ? 'block' : 'none';
   document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
-  document.getElementById('mj-n-descricao-label').textContent = modulo === 'reclamacao' ? 'Descreva a reclamação' : 'Descrição da necessidade';
+  document.getElementById('mj-n-descricao-label').textContent =
+    modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' ? 'Observação' : 'Descrição da necessidade');
   atualizarCamposCategoria();
 }
 document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
@@ -732,7 +801,10 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     id: OPS.uid ? OPS.uid() : ('t' + Date.now() + Math.random().toString(36).slice(2)),
     numero: proximoNumero(),
     modulo,
-    categoria: modulo === 'material' ? categoria : null,
+    categoria: modulo === 'material' ? categoria
+      : modulo === 'frotas' ? document.getElementById('mj-n-frotas-categoria').value
+      : modulo === 'acesso' ? document.getElementById('mj-n-acesso-sistema').value
+      : null,
     item: modulo === 'material' ? itemFinal : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
     tamanho: tamanhoFinal,
     quantidade: document.getElementById('mj-n-quantidade').value || 1,
@@ -980,17 +1052,26 @@ function mostrarPortal(){
   document.getElementById('mj-view-portal').style.display = 'block';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'none';
+  document.getElementById('mj-view-links').style.display = 'none';
 }
 function mostrarSolicitacoes(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'block';
   document.getElementById('mj-view-colaborador').style.display = 'none';
+  document.getElementById('mj-view-links').style.display = 'none';
   renderAll();
+}
+function mostrarLinks(){
+  document.getElementById('mj-view-portal').style.display = 'none';
+  document.getElementById('mj-view-solicitacoes').style.display = 'none';
+  document.getElementById('mj-view-colaborador').style.display = 'none';
+  document.getElementById('mj-view-links').style.display = 'block';
 }
 function mostrarColaborador(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'block';
+  document.getElementById('mj-view-links').style.display = 'none';
   const podeImportar = getCurrentAccess() === 'TOTAL';
   document.getElementById('mj-btn-importar-produtividade').style.display = podeImportar ? '' : 'none';
   // Supervisor/Técnico/Tipo de serviço são filtros de gestão — não fazem
@@ -1009,7 +1090,9 @@ function mostrarColaborador(){
 document.getElementById('mj-card-solicitacoes').addEventListener('click', mostrarSolicitacoes);
 document.getElementById('mj-btn-voltar-portal').addEventListener('click', mostrarPortal);
 document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', mostrarPortal);
+document.getElementById('mj-btn-voltar-portal-3').addEventListener('click', mostrarPortal);
 document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
+document.getElementById('mj-card-links').addEventListener('click', mostrarLinks);
 
 // ---------- Painel do Colaborador: Histórico de Produtividade ----------
 const MES_NOMES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
