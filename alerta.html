@@ -82,6 +82,23 @@
   </div>
 </div>
 
+<!-- Modal: visitas do cliente (só visualização - clique em "Visitas" na
+     tabela de Recorrência LOG) -->
+<div class="modal-backdrop" id="al-visitas-modal" style="display:none">
+  <div class="modal">
+    <h3 id="al-visitas-titulo">Visitas do cliente</h3>
+    <div class="table-wrap" style="max-height:50vh">
+      <table class="services">
+        <thead><tr><th>Protocolo</th><th>Visita</th><th>Técnico</th><th>Problema</th><th>Data</th></tr></thead>
+        <tbody id="al-visitas-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="al-visitas-fechar">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: checklist genérico, usado pelas 4 abas -->
 <div class="modal-backdrop" id="al-modal" style="display:none">
   <div class="modal">
@@ -515,15 +532,18 @@ async function carregarRecorrenciaLog(){
   }
   tbody.innerHTML = com3Mais.map(c => {
     const tratado = tratamentos[c.clienteId];
-    return `<tr style="cursor:pointer" data-cliente="${c.clienteId}">
-      <td>${statusBadge(tratado)}</td><td>${c.clienteId}</td><td>${c.cidade||'—'}</td>
-      <td>${fmtNum(c.visitas.length)}</td><td>${[...c.tecnicos].map(tituloCase).join(', ')}</td>
+    return `<tr data-cliente="${c.clienteId}">
+      <td style="cursor:pointer" data-col="status" title="Clique pra tratar/justificar">${statusBadge(tratado)}</td>
+      <td>${c.clienteId}</td><td>${c.cidade||'—'}</td>
+      <td style="cursor:pointer;text-decoration:underline dotted" data-col="visitas" title="Clique pra ver as visitas">${fmtNum(c.visitas.length)}</td>
+      <td>${[...c.tecnicos].map(tituloCase).join(', ')}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum cliente com 3+ visitas de reparo no mês atual (com ID de cliente disponível).</td></tr>`;
 
   tbody.querySelectorAll('tr[data-cliente]').forEach(tr => {
-    tr.addEventListener('click', () => {
-      const c = com3Mais.find(x => x.clienteId === tr.dataset.cliente);
+    const c = com3Mais.find(x => x.clienteId === tr.dataset.cliente);
+    tr.querySelector('[data-col="visitas"]').addEventListener('click', () => abrirVisitasModal(c));
+    tr.querySelector('[data-col="status"]').addEventListener('click', () => {
       const visitasOrdenadas = c.visitas.slice().sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
       const detalhe = visitasOrdenadas.map((v,i) =>
         `${ordinal(i+1)} Visita: ${nomeCurto(v.tecnico)} — ${v.tipo || 'Sem tipo'}${v.descricao ? ' · ' + v.descricao : ''} (${diaKey(v.data_encerramento)})`
@@ -532,6 +552,22 @@ async function carregarRecorrenciaLog(){
     });
   });
 }
+
+function abrirVisitasModal(c){
+  document.getElementById('al-visitas-titulo').textContent = `Cliente ${c.clienteId} · ${c.cidade || '—'} · ${c.visitas.length} visitas`;
+  const visitasOrdenadas = c.visitas.slice().sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
+  document.getElementById('al-visitas-tbody').innerHTML = visitasOrdenadas.map((v,i) => `
+    <tr>
+      <td>${v.protocolo || '—'}</td>
+      <td>${ordinal(i+1)}</td>
+      <td>${nomeCurto(v.tecnico)}</td>
+      <td>${v.tipo || 'Sem tipo'}${v.descricao ? ' · ' + v.descricao : ''}</td>
+      <td>${diaKey(v.data_encerramento)}</td>
+    </tr>`).join('');
+  document.getElementById('al-visitas-modal').style.display = 'flex';
+}
+document.getElementById('al-visitas-fechar').addEventListener('click', () => { document.getElementById('al-visitas-modal').style.display = 'none'; });
+document.getElementById('al-visitas-modal').addEventListener('click', (e) => { if (e.target.id === 'al-visitas-modal') document.getElementById('al-visitas-modal').style.display = 'none'; });
 
 // ================= navegação entre abas =================
 let alAbaAtiva = 'recorrencia';
