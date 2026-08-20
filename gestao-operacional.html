@@ -29,6 +29,7 @@
     <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
     <button type="button" class="qf-tile" data-aba="premiacao">🏆 Premiação</button>
     <button type="button" class="qf-tile" data-aba="produtividade-tecnica">📊 Produtividade Técnica</button>
+    <button type="button" class="qf-tile" data-aba="inspetor">🕵️ Área do Inspetor</button>
   </div>
 
   <div class="panel toolbar">
@@ -396,6 +397,56 @@
     </div>
   </div>
 
+  <!-- ================= ABA: ÁREA DO INSPETOR ================= -->
+  <div id="go-aba-inspetor" style="display:none">
+    <p class="page-sub" style="margin:0 2px 14px">Mesmo filtro de período do topo da página, tudo agrupado por Inspetor (cadastro de Gestão de Pessoas).</p>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>🔁 Recorrência por Inspetor</h3>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-insp-rec-tbody" data-arquivo="inspetor-recorrencia" data-sheet="Recorrência" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <div class="table-wrap" style="max-height:300px">
+        <table class="services"><thead><tr><th>Inspetor</th><th>Cidade</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-insp-rec-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>📋 Recorrência LOG por Inspetor</h3><span class="cnt-badge" id="go-insp-log-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-insp-log-tbody" data-arquivo="inspetor-recorrencia-log" data-sheet="Recorrência LOG" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services"><thead><tr><th>Inspetor</th><th>Técnico</th><th>Tipo</th><th>Protocolo anterior</th><th>Protocolo atual</th><th>Data atual</th><th>Cidade</th></tr></thead><tbody id="go-insp-log-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>📉 Improdutividade por Inspetor</h3>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-insp-improd-tbody" data-arquivo="inspetor-improdutividade" data-sheet="Improdutividade" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <div class="table-wrap" style="max-height:300px">
+        <table class="services"><thead><tr><th>Inspetor</th><th>Cidade</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-insp-improd-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>🚚 Veículos e lavagens por Inspetor</h3></div>
+        <div class="table-wrap" style="max-height:320px">
+          <table class="services"><thead><tr><th>Inspetor</th><th>Veículos</th><th>Lavados no período</th><th>%</th></tr></thead><tbody id="go-insp-veic-tbody"></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>🔧 Veículos em manutenção por Inspetor</h3></div>
+        <div class="table-wrap" style="max-height:320px">
+          <table class="services"><thead><tr><th>Inspetor</th><th>Em manutenção agora</th></tr></thead><tbody id="go-insp-manut-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
@@ -604,7 +655,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica'].forEach(k => {
+      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -664,6 +715,7 @@ function goRenderAbaAtiva(){
   else if (goAbaAtiva === 'frotas') renderAbaFrotas();
   else if (goAbaAtiva === 'premiacao') renderAbaPremiacao();
   else if (goAbaAtiva === 'produtividade-tecnica') renderAbaProdutividadeTecnica();
+  else if (goAbaAtiva === 'inspetor') renderAbaInspetor();
 }
 
 // ================= ABA SERVIÇOS =================
@@ -2189,6 +2241,122 @@ async function renderAbaSlaFila(){
   goSlaLigarListeners();
   goSlaPopulateFilterOptions();
   goSlaRenderAll();
+}
+
+// ================= ABA ÁREA DO INSPETOR =================
+// Consolida em um só lugar o que já existe espalhado (Recorrência/
+// Improdutividade "por Inspetor") + veículos/lavagens/manutenção
+// cruzados via o responsável do veículo -> inspetor dele (Gestão de
+// Pessoas). Mesmo filtro de período/supervisor/cidade do topo da página.
+async function renderAbaInspetor(){
+  ['go-insp-rec-tbody','go-insp-log-tbody','go-insp-improd-tbody','go-insp-veic-tbody','go-insp-manut-tbody'].forEach(id => {
+    document.getElementById(id).innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  });
+  await carregarTecnicoInspetorSeNecessario();
+  if (goVeiculos === null){
+    try{
+      const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
+      goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
+    }catch(err){
+      console.error('Falha ao buscar dados de frotas', err);
+    }
+  }
+  if (goAbaAtiva !== 'inspetor') return; // trocou de aba enquanto buscava
+  desenharAbaInspetor();
+}
+function inspetorDoTecnico(nome){
+  return (goTecnicoInspetor && goTecnicoInspetor[OPS.normalize(nome)]) || 'Sem inspetor';
+}
+function desenharAbaInspetor(){
+  const data = goRegistrosFiltrados();
+  const pares = goParesFiltrados();
+
+  // -------- Recorrência por Inspetor --------
+  const produtivosPorInsp = {}, paresPorInsp = {}, cidadesPorInsp = {};
+  data.filter(isProdutivo).forEach(r => {
+    const insp = inspetorDoTecnico(r.tecnico);
+    produtivosPorInsp[insp] = (produtivosPorInsp[insp]||0)+1;
+  });
+  pares.forEach(p => {
+    const insp = inspetorDoTecnico(p.tecnico);
+    paresPorInsp[insp] = (paresPorInsp[insp]||0)+1;
+    const c = p.area || 'Sem informação';
+    cidadesPorInsp[insp] = cidadesPorInsp[insp] || {};
+    cidadesPorInsp[insp][c] = (cidadesPorInsp[insp][c]||0)+1;
+  });
+  const cidadeMaisFreqDe = (mapa, chave) => {
+    const c = mapa[chave];
+    if (!c) return '—';
+    return Object.entries(c).sort((a,b) => b[1]-a[1])[0][0];
+  };
+  const linhasRec = Object.keys(produtivosPorInsp).map(insp => {
+    const qtd = paresPorInsp[insp] || 0;
+    return { insp, cidade: cidadeMaisFreqDe(cidadesPorInsp, insp), qtd, pct: produtivosPorInsp[insp] ? (qtd/produtivosPorInsp[insp])*100 : 0 };
+  }).sort((a,b) => b.pct - a.pct);
+  document.getElementById('go-insp-rec-tbody').innerHTML = linhasRec.map(l =>
+    `<tr><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
+  ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+
+  // -------- Recorrência LOG por Inspetor --------
+  const logOrdenado = pares.slice().sort((a,b) => new Date(b.data_atual) - new Date(a.data_atual)).slice(0, 300);
+  document.getElementById('go-insp-log-badge').textContent = `${fmtNum(pares.length)} recorrência(s)`;
+  document.getElementById('go-insp-log-tbody').innerHTML = logOrdenado.map(p => `<tr>
+    <td>${tituloCase(inspetorDoTecnico(p.tecnico))}</td><td>${tituloCase(p.tecnico)}</td><td>${p.tipo}</td>
+    <td>${p.protocolo_anterior||'—'}</td><td>${p.protocolo_atual||'—'}</td><td>${diaKey(p.data_atual)}</td>
+    <td>${p.area||'—'}${p.localidade?' · '+p.localidade:''}</td>
+  </tr>`).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
+
+  // -------- Improdutividade por Inspetor --------
+  const gruposImprod = {};
+  data.forEach(r => {
+    const insp = inspetorDoTecnico(r.tecnico);
+    gruposImprod[insp] = gruposImprod[insp] || { total:0, improd:0, cidades:{} };
+    gruposImprod[insp].total++;
+    if (!isProdutivo(r)) gruposImprod[insp].improd++;
+    const c = r.area || 'Sem informação';
+    gruposImprod[insp].cidades[c] = (gruposImprod[insp].cidades[c]||0)+1;
+  });
+  const linhasImprod = Object.entries(gruposImprod).map(([insp,v]) => ({
+    insp, cidade: cidadeMaisFreqDe(Object.fromEntries([[insp, v.cidades]]), insp),
+    pct: v.total ? (v.improd/v.total)*100 : 0, qtd: v.improd,
+  })).sort((a,b) => b.pct - a.pct);
+  document.getElementById('go-insp-improd-tbody').innerHTML = linhasImprod.map(l => {
+    const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
+    return `<tr><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+
+  // -------- Veículos / lavagens por Inspetor (responsável do veículo -> inspetor dele) --------
+  const lavagensPeriodo = (goLavagens||[]).filter(l => dentroPeriodo(l.data));
+  const veicPorInsp = {};
+  (goVeiculos||[]).forEach(v => {
+    const insp = inspetorDoTecnico(v.responsavel);
+    veicPorInsp[insp] = veicPorInsp[insp] || { veiculos: 0, lavados: new Set() };
+    veicPorInsp[insp].veiculos++;
+  });
+  lavagensPeriodo.forEach(l => {
+    const veic = (goVeiculos||[]).find(v => v.placa === l.placa);
+    if (!veic) return;
+    const insp = inspetorDoTecnico(veic.responsavel);
+    veicPorInsp[insp] = veicPorInsp[insp] || { veiculos: 0, lavados: new Set() };
+    veicPorInsp[insp].lavados.add(l.placa);
+  });
+  const linhasVeic = Object.entries(veicPorInsp).map(([insp,v]) => ({
+    insp, veiculos: v.veiculos, lavados: v.lavados.size, pct: v.veiculos ? (v.lavados.size/v.veiculos)*100 : 0,
+  })).sort((a,b) => b.veiculos - a.veiculos);
+  document.getElementById('go-insp-veic-tbody').innerHTML = linhasVeic.map(l =>
+    `<tr><td>${tituloCase(l.insp)}</td><td>${fmtNum(l.veiculos)}</td><td>${fmtNum(l.lavados)}</td><td>${fmtPct1(l.pct)}</td></tr>`
+  ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados de frotas.</td></tr>`;
+
+  // -------- Veículos em manutenção por Inspetor --------
+  const manutPorInsp = {};
+  (goManutencoes||[]).filter(m => m.status === 'aberta').forEach(m => {
+    const veic = (goVeiculos||[]).find(v => v.placa === m.placa);
+    const insp = veic ? inspetorDoTecnico(veic.responsavel) : 'Sem inspetor';
+    manutPorInsp[insp] = (manutPorInsp[insp]||0)+1;
+  });
+  document.getElementById('go-insp-manut-tbody').innerHTML = Object.entries(manutPorInsp).sort((a,b) => b[1]-a[1]).map(([insp,qtd]) =>
+    `<tr><td>${tituloCase(insp)}</td><td>${fmtNum(qtd)}</td></tr>`
+  ).join('') || `<tr><td colspan="2" style="color:var(--ink-faint)">Nenhum veículo em manutenção agora.</td></tr>`;
 }
 
 window.OPS_ON_REFRESH = initPage;
