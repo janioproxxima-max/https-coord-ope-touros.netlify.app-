@@ -1187,7 +1187,17 @@ function processarLinhasProdutividade(rows){
       const idxTecnicoAuxiliar = idx('Técnico Auxiliar');
       const idxProtocolo = idx('Nº. Ordem Serviço');
       const idxArea = idx('Área');
+      const idxCidade = idx('Cidade');
       const idxLocalidade = idx('Localidade');
+      // Área vem em branco em alguns registros (falha da própria origem no
+      // Aniel) - quando isso acontece, cai pra coluna Cidade como reserva
+      // (mesma lógica que o Mapa de Serviços já usa: canonicalCity(area ||
+      // cidade)), em vez de deixar o registro sem cidade nenhuma.
+      function areaDaLinha(row){
+        const area = idxArea >= 0 ? (row[idxArea] || '').toString().trim() : '';
+        if (area) return area;
+        return idxCidade >= 0 ? (row[idxCidade] || '').toString().trim() : '';
+      }
       if (idxResponsavel === -1 || idxDescricao === -1){
         alert('Faltou alguma coluna esperada (Responsável / Descrição do Encerramento). Confere se essa é a planilha certa.');
         return null;
@@ -1284,7 +1294,7 @@ function processarLinhasProdutividade(rows){
           detalhesRegistros.push({
             tecnico, mesKey, tipo,
             protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
-            area: idxArea >= 0 ? (row[idxArea] || '').toString().trim() : '',
+            area: areaDaLinha(row),
             localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
             descricao: (row[idxDescricao] || '').toString().trim(),
             produtivo: prod.produtivo,
@@ -1308,7 +1318,7 @@ function processarLinhasProdutividade(rows){
               (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({
                 data: dt, mesKey, tipo,
                 protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
-                area: idxArea >= 0 ? (row[idxArea] || '').toString().trim() : '',
+                area: areaDaLinha(row),
                 localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
                 descricao: (row[idxDescricao] || '').toString().trim(),
               });
