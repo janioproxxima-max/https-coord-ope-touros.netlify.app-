@@ -365,13 +365,19 @@
   <!-- ================= ABA: PRODUTIVIDADE TÉCNICA ================= -->
   <div id="go-aba-produtividade-tecnica" style="display:none">
     <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3><span class="cnt-badge" id="go-pt-hoje-badge">—</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (quem tá de folga não aparece). Verde = pontos já feitos, vermelho = quanto falta pra bater a meta do dia.</p>
+      <div class="table-wrap" style="max-height:520px;padding:10px 16px 16px"><div id="go-chart-pt-hoje-inner" style="position:relative"><canvas id="go-chart-pt-hoje"></canvas></div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
       <div class="card-head">
         <h3>👥 Média por Supervisão</h3>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-pt-supervisao-tbody" data-arquivo="produtividade-supervisao" data-sheet="Por Supervisão" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
       <div class="table-wrap" style="max-height:320px">
         <table class="services">
-          <thead><tr><th>Supervisor</th><th>Técnicos</th><th>Pontos totais</th><th>Média pontos/dia</th></tr></thead>
+          <thead><tr><th>Supervisor</th><th>Técnicos</th><th>Pontos totais</th><th>Média pontos/dia</th><th>Quartil</th></tr></thead>
           <tbody id="go-pt-supervisao-tbody"></tbody>
         </table>
       </div>
@@ -1928,24 +1934,23 @@ async function renderAbaProdutividadeTecnica(){
   desenharProdutividadeTecnica();
 }
 
-// dias "trabalháveis" no período pra essa pessoa (domingo e folga fixa/FDS
-// dela ficam de fora) - mesma lógica de OPS.isFolgaNoDia já usada em
-// Gestão de Pessoas/indicadores pra calcular meta de pontos por dia.
-function diasTrabalhadosNoPeriodo(pessoa, inicio, fim){
-  if (!inicio || !fim) return 0;
-  let dias = 0;
-  const d = new Date(inicio + 'T00:00:00');
-  const fimDate = new Date(fim + 'T00:00:00');
-  for (; d <= fimDate; d.setDate(d.getDate() + 1)){
-    if (d.getDay() === 0) continue;
-    if (!OPS.isFolgaNoDia(pessoa, d)) dias++;
-  }
-  return dias;
-}
+const META_PONTOS_DIA = 8;
 
 function desenharProdutividadeTecnica(){
   const data = goRegistrosFiltrados();
-  const { inicio, fim } = periodoAtual();
+  renderChartPontosHoje();
+
+  // dias trabalhados = dias distintos em que o colaborador fechou algum
+  // atendimento no período, produtivo OU improdutivo, como responsável
+  // (equipe) ou como auxiliar - não é dia "trabalhável" pela escala dele,
+  // é dia que ele efetivamente encerrou alguma coisa.
+  const diasPorTecnico = {};
+  data.forEach(r => {
+    if (!r.tecnico) return;
+    const dia = diaKey(r.data_encerramento);
+    if (!dia) return;
+    (diasPorTecnico[r.tecnico] = diasPorTecnico[r.tecnico] || new Set()).add(dia);
+  });
 
   const pontosPorTecnico = {};
   data.forEach(r => {
@@ -1954,8 +1959,7 @@ function desenharProdutividadeTecnica(){
   });
 
   const linhas = Object.keys(pontosPorTecnico).map(tecnico => {
-    const pessoa = goPessoasCache.find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
-    const dias = pessoa ? diasTrabalhadosNoPeriodo(pessoa, inicio, fim) : 0;
+    const dias = diasPorTecnico[tecnico] ? diasPorTecnico[tecnico].size : 0;
     const pontos = pontosPorTecnico[tecnico];
     return { tecnico, supervisor: goTecnicoSupervisor[tecnico] || '—', pontos, dias, pontosDia: dias ? pontos / dias : null };
   }).sort((a,b) => b.pontos - a.pontos);
@@ -1987,10 +1991,16 @@ function desenharProdutividadeTecnica(){
   const linhasSupervisor = Object.entries(porSupervisor).map(([s,v]) => ({
     supervisor: s, tecnicos: v.tecnicos, pontos: v.pontos, media: v.comPontosDia ? v.somaPontosDia / v.comPontosDia : null,
   })).sort((a,b) => (b.media||0) - (a.media||0));
+  const ns = linhasSupervisor.length;
+  linhasSupervisor.forEach((l,i) => {
+    const posicao = ns > 1 ? i / (ns - 1) : 0;
+    l.quartil = posicao <= 0.25 ? 1 : posicao <= 0.5 ? 2 : posicao <= 0.75 ? 3 : 4;
+  });
 
   document.getElementById('go-pt-supervisao-tbody').innerHTML = linhasSupervisor.map(l => `<tr>
     <td>${tituloCase(l.supervisor)}</td><td>${fmtNum(l.tecnicos)}</td><td>${l.pontos.toFixed(2)}</td><td>${l.media == null ? '—' : l.media.toFixed(2)}</td>
-  </tr>`).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+    <td><span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º · ${QUARTIL_LABEL[l.quartil]}</span></td>
+  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
 
   if (goCharts.ptSupervisor) goCharts.ptSupervisor.destroy();
   goCharts.ptSupervisor = new Chart(document.getElementById('go-chart-pt-supervisor'), {
@@ -2000,6 +2010,53 @@ function desenharProdutividadeTecnica(){
     options: { ...commonChartOpts, indexAxis:'y',
       scales: { x:{ beginAtZero:true, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, y:{ ticks:{color:'#e2eaf5'}, grid:{display:false} } },
       plugins: { legend:{ display:false }, datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{weight:'700',size:11}, formatter: v => v.toFixed(2) } } },
+  });
+}
+
+// pontuação de HOJE × meta diária - independe do filtro de período do topo
+// (é sempre "hoje"). Só entra quem não tá de folga hoje: quem tem pessoa
+// cadastrada e OPS.isFolgaNoDia diz que é folga fica de fora; sem cadastro
+// (ainda carregando ou não achou o nome) entra por padrão, igual ao filtro
+// de Instalador/Reparador logo acima.
+function renderChartPontosHoje(){
+  const hoje = new Date();
+  const hojeStr = hoje.toISOString().slice(0,10);
+  const pontosHojePorTecnico = {};
+  goRegistros.forEach(r => {
+    if (!r.tecnico || diaKey(r.data_encerramento) !== hojeStr) return;
+    pontosHojePorTecnico[r.tecnico] = (pontosHojePorTecnico[r.tecnico] || 0) + (parseFloat(r.pontos) || 0);
+  });
+
+  const nomes = new Set([...Object.keys(pontosHojePorTecnico), ...(goPessoasCache || []).map(p => p.nome).filter(Boolean)]);
+  const linhas = [...nomes].map(tecnico => {
+    const pessoa = (goPessoasCache || []).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+    const deFolgaHoje = pessoa ? OPS.isFolgaNoDia(pessoa, hoje) : false;
+    return { tecnico, pontos: pontosHojePorTecnico[tecnico] || 0, deFolgaHoje };
+  }).filter(l => !l.deFolgaHoje).sort((a,b) => a.pontos - b.pontos);
+
+  document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
+
+  const canvas = document.getElementById('go-chart-pt-hoje');
+  document.getElementById('go-chart-pt-hoje-inner').style.height = Math.max(280, linhas.length * 24 + 40) + 'px';
+  if (goCharts.ptHoje) goCharts.ptHoje.destroy();
+  goCharts.ptHoje = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: linhas.map(l => tituloCase(l.tecnico)),
+      datasets: [
+        { label: 'Pontos hoje', data: linhas.map(l => Number(l.pontos.toFixed(2))), backgroundColor: '#00e5a0', stack: 's' },
+        { label: `Faltam pra meta (${META_PONTOS_DIA})`, data: linhas.map(l => Number(Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2))), backgroundColor: '#ff4d6d', stack: 's' },
+      ],
+    },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts, indexAxis: 'y',
+      scales: {
+        x: { beginAtZero:true, stacked:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
+        y: { stacked:true, ticks:{ color:'#e2eaf5', font:{size:10.5} }, grid:{ display:false } },
+      },
+      plugins: { legend: { labels:{ color:'#e2eaf5' } },
+        datalabels: { display: ctx => ctx.raw > 0, color:'#0a1220', anchor:'center', align:'center', font:{ weight:'700', size:9.5 }, formatter: v => v.toFixed(1) } },
+    },
   });
 }
 
