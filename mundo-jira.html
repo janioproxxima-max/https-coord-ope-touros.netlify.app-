@@ -1182,7 +1182,11 @@ function processarLinhasProdutividade(rows){
       // pode vir com grafia um pouco diferente conforme a exportação
       const idxDataCriacao = ['Data de Criação','Data/Hora Criação','Data Criação','Data/Hora de Criação','Data Criação do Chamado']
         .map(idx).find(i => i >= 0) ?? -1;
-      const idxNumeroCliente = idx('Nº Cliente');
+      // "Identificação do Cliente" é o identificador estável do cliente na
+      // base do Aniel - "Nº Cliente" é outra coisa (número de contrato/
+      // venda, não o cliente em si). Recorrência e Recorrência LOG usam
+      // esse campo pra saber se é o MESMO cliente sendo revisitado.
+      const idxNumeroCliente = idx('Identificação do Cliente');
       const idxSupervisor = idx('Supervisor');
       const idxTecnicoAuxiliar = idx('Técnico Auxiliar');
       const idxProtocolo = idx('Nº. Ordem Serviço');
