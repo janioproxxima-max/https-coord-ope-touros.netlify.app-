@@ -133,6 +133,7 @@
         <div class="qf-tiles" id="go-rec-resp-tiles" style="margin:12px 16px 0">
           <button type="button" class="qf-tile active" data-resp="tecnico">Técnico</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Supervisor</button>
+          <button type="button" class="qf-tile" data-resp="inspetor">Inspetor</button>
         </div>
         <div class="table-wrap" style="max-height:320px">
           <table class="services"><thead><tr><th>Resp.</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-rec-resp-tbody"></tbody></table>
@@ -150,6 +151,7 @@
         <div class="qf-tiles" id="go-improd-resp-tiles" style="margin-left:auto">
           <button type="button" class="qf-tile active" data-resp="tecnico">Por Técnico</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Por Supervisor</button>
+          <button type="button" class="qf-tile" data-resp="inspetor">Por Inspetor</button>
         </div>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-improd-tbody" data-arquivo="improdutividade" data-sheet="Improdutividade" style="font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
@@ -306,6 +308,7 @@ let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Repa
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
+let goTecnicoInspetor = {};
 let goRespImprod = 'tecnico', goRespRec = 'tecnico';
 let goCharts = {};
 let goAbaAtiva = 'servicos';
@@ -351,6 +354,18 @@ async function initPage(){
     goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
+    // Inspetor não tem coluna própria no histórico de produtividade - vem do
+    // cadastro de Gestão de Pessoas, casando o nome do técnico (normalizado,
+    // pra não quebrar por acento/maiúscula) com o campo "Inspetor" da pessoa.
+    try{
+      const pessoasParaInspetor = (await OPS.syncPull('PessoasData')) || [];
+      goTecnicoInspetor = {};
+      pessoasParaInspetor.forEach(p => {
+        if (p.nome && p.inspetor) goTecnicoInspetor[OPS.normalize(p.nome)] = p.inspetor;
+      });
+    }catch(err){
+      console.error('Falha ao buscar Inspetor de Gestão de Pessoas', err);
+    }
     await carregarPeriodo();
     popularFiltros();
   }catch(err){
@@ -786,12 +801,12 @@ function renderAbaRecorrencia(data, pares){
 function renderRecorrenciaResp(data, pares){
   const produtivosPorResp = {};
   data.filter(isProdutivo).forEach(r => {
-    const chave = goRespRec === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
+    const chave = respChave(goRespRec, r.tecnico);
     produtivosPorResp[chave] = (produtivosPorResp[chave] || 0) + 1;
   });
   const paresPorResp = {};
   pares.forEach(p => {
-    const chave = goRespRec === 'supervisor' ? (goTecnicoSupervisor[p.tecnico] || '—') : p.tecnico;
+    const chave = respChave(goRespRec, p.tecnico);
     paresPorResp[chave] = (paresPorResp[chave] || 0) + 1;
   });
   const linhas = Object.keys(produtivosPorResp).map(nome => {
@@ -815,7 +830,7 @@ function renderImprodutividade(data){
   `;
   const grupos = {};
   data.forEach(r => {
-    const chave = goRespImprod === 'supervisor' ? (goTecnicoSupervisor[r.tecnico] || '—') : r.tecnico;
+    const chave = respChave(goRespImprod, r.tecnico);
     if (!grupos[chave]) grupos[chave] = { total:0, improd:0 };
     grupos[chave].total++;
     if (!isProdutivo(r)) grupos[chave].improd++;
@@ -911,6 +926,12 @@ async function renderAbaAbsenteismo(){
   ).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Nenhuma ausência/atestado no período.</td></tr>`;
 }
 function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
+
+function respChave(modo, tecnico){
+  if (modo === 'supervisor') return goTecnicoSupervisor[tecnico] || '—';
+  if (modo === 'inspetor') return goTecnicoInspetor[OPS.normalize(tecnico)] || '—';
+  return tecnico;
+}
 
 // ================= ABA FROTAS =================
 async function renderAbaFrotas(){
