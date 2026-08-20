@@ -2014,10 +2014,10 @@ function desenharProdutividadeTecnica(){
 }
 
 // pontuação de HOJE × meta diária - independe do filtro de período do topo
-// (é sempre "hoje"). Só entra quem não tá de folga hoje: quem tem pessoa
-// cadastrada e OPS.isFolgaNoDia diz que é folga fica de fora; sem cadastro
-// (ainda carregando ou não achou o nome) entra por padrão, igual ao filtro
-// de Instalador/Reparador logo acima.
+// (é sempre "hoje"). Só entra quem tá ativo (status === 'ativo' no cadastro,
+// mesmo critério de gestao-pessoas.html/indicadores.html) e não tá de folga
+// hoje (OPS.isFolgaNoDia). Sem cadastro (ainda carregando ou não achou o
+// nome) entra por padrão, igual ao filtro de Instalador/Reparador acima.
 function renderChartPontosHoje(){
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
@@ -2030,9 +2030,10 @@ function renderChartPontosHoje(){
   const nomes = new Set([...Object.keys(pontosHojePorTecnico), ...(goPessoasCache || []).map(p => p.nome).filter(Boolean)]);
   const linhas = [...nomes].map(tecnico => {
     const pessoa = (goPessoasCache || []).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+    const inativo = pessoa && pessoa.status && pessoa.status !== 'ativo';
     const deFolgaHoje = pessoa ? OPS.isFolgaNoDia(pessoa, hoje) : false;
-    return { tecnico, pontos: pontosHojePorTecnico[tecnico] || 0, deFolgaHoje };
-  }).filter(l => !l.deFolgaHoje).sort((a,b) => a.pontos - b.pontos);
+    return { tecnico, pontos: pontosHojePorTecnico[tecnico] || 0, inativo, deFolgaHoje };
+  }).filter(l => !l.inativo && !l.deFolgaHoje).sort((a,b) => a.pontos - b.pontos);
 
   document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
 
