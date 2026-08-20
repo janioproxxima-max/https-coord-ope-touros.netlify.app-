@@ -208,13 +208,13 @@
     <div class="two-col" style="grid-template-columns:1fr 320px">
       <div class="card">
         <div class="card-head">
-          <h3>🔁 Recorrência Log</h3><span class="cnt-badge" id="go-rec-log-badge">—</span>
+          <h3>🔁 Recorrência</h3><span class="cnt-badge" id="go-rec-log-badge">—</span>
           <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-rec-log-tbody" data-arquivo="recorrencia-log" data-sheet="Recorrência" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
         </div>
-        <p class="page-sub" style="padding:0 16px;margin:10px 0">Mesmo técnico atendeu o mesmo cliente de novo (reparo produtivo) em até 30 dias.</p>
+        <p class="page-sub" style="padding:0 16px;margin:10px 0">Mesmo cliente precisou de outro reparo produtivo em até 30 dias (não precisa ser o mesmo técnico) - clique pra ver os protocolos.</p>
         <div class="table-wrap" style="max-height:380px">
           <table class="services">
-            <thead><tr><th>Técnico</th><th>Tipo</th><th>Protocolo anterior</th><th>Data anterior</th><th>Protocolo atual</th><th>Data atual</th><th>Dias</th><th>Cidade</th></tr></thead>
+            <thead><tr><th>Técnico</th><th>Quantidade</th><th>%</th></tr></thead>
             <tbody id="go-rec-log-tbody"></tbody>
           </table>
         </div>
@@ -1175,6 +1175,12 @@ document.getElementById('go-rec-resp-tbody').addEventListener('click', (e) => {
   const nome = tr.dataset.nome;
   abrirAnalitico('recorrencia', p => respChave(goRespRec, p.tecnico) === nome, tituloCase(nome));
 });
+document.getElementById('go-rec-log-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-tecnico]');
+  if (!tr) return;
+  const tecnico = tr.dataset.tecnico;
+  abrirAnalitico('recorrencia', p => p.tecnico === tecnico, tituloCase(tecnico));
+});
 document.getElementById('go-improd-tbody').addEventListener('click', (e) => {
   const tr = e.target.closest('tr[data-nome]');
   if (!tr) return;
@@ -1303,16 +1309,15 @@ async function renderAbaRecorrencia(data, pares){
     <div class="stat-card"><div class="label">Reparos produtivos no período</div><div class="value">${fmtNum(produtivos)}</div></div>
   `;
   document.getElementById('go-rec-log-badge').textContent = `${fmtNum(pares.length)} recorrência(s)`;
-  document.getElementById('go-rec-log-tbody').innerHTML = pares
-    .sort((a,b) => new Date(b.data_atual) - new Date(a.data_atual))
-    .slice(0, 300)
-    .map(p => `<tr>
-      <td>${tituloCase(p.tecnico)}</td><td>${p.tipo}</td>
-      <td>${p.protocolo_anterior || '—'}</td><td>${diaKey(p.data_anterior)}</td>
-      <td>${p.protocolo_atual || '—'}</td><td>${diaKey(p.data_atual)}</td>
-      <td>${diffDias(p.data_anterior, p.data_atual)}</td>
-      <td>${p.area || '—'}${p.localidade ? ' · ' + p.localidade : ''}</td>
-    </tr>`).join('') || `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
+  const produtivosPorTec = {}, paresPorTec = {};
+  data.filter(isProdutivo).forEach(r => { produtivosPorTec[r.tecnico] = (produtivosPorTec[r.tecnico]||0)+1; });
+  pares.forEach(p => { paresPorTec[p.tecnico] = (paresPorTec[p.tecnico]||0)+1; });
+  const linhasLog = Object.keys(paresPorTec).map(tecnico => ({
+    tecnico, qtd: paresPorTec[tecnico], pct: produtivosPorTec[tecnico] ? (paresPorTec[tecnico]/produtivosPorTec[tecnico])*100 : 0,
+  })).sort((a,b) => b.qtd - a.qtd);
+  document.getElementById('go-rec-log-tbody').innerHTML = linhasLog.map(l =>
+    `<tr style="cursor:pointer" data-tecnico="${l.tecnico}" title="Clique pra ver os protocolos"><td>${tituloCase(l.tecnico)}</td><td>${fmtNum(l.qtd)}</td><td>${fmtPct1(l.pct)}</td></tr>`
+  ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
 
   renderRecorrenciaResp(data, pares);
   renderRecorrenciaCidade(data, pares);
