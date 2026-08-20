@@ -74,6 +74,11 @@
         </table>
       </div>
     </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-head"><h3>🔧 Tipos de problema (clientes com 3+ visitas)</h3></div>
+      <div class="chart-box tall"><canvas id="al-log-chart-tipos"></canvas></div>
+    </div>
   </div>
 </div>
 
@@ -108,6 +113,13 @@ function diaKey(v){ return v ? String(v).slice(0,10) : ''; }
 function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
 function fmtPct1(n){ return isFinite(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
 function tituloCase(s){ return String(s||'').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+// primeiro + último nome só, pra não ficar gigante em listas de várias visitas
+function nomeCurto(nomeCompleto){
+  const partes = String(nomeCompleto||'').trim().split(/\s+/);
+  if (partes.length <= 2) return tituloCase(nomeCompleto);
+  return tituloCase(`${partes[0]} ${partes[partes.length-1]}`);
+}
+function ordinal(n){ return `${n}ª`; }
 function isProdutivo(r){ return r.produtivo === true || r.produtivo === 'true'; }
 function segundaFeiraDaSemana(data){
   const d = new Date(data); d.setHours(0,0,0,0);
@@ -231,12 +243,12 @@ function abrirChecklist(tipo, chave, subtitulo, referencia, onSalvo){
   const cfg = ALERTA_CONFIG[tipo];
   alModalContexto = { tipo, chave, referencia, onSalvo };
   document.getElementById('al-modal-titulo').textContent = cfg.titulo;
-  document.getElementById('al-modal-sub').textContent = subtitulo || '';
+  document.getElementById('al-modal-sub').innerHTML = subtitulo || '';
   carregarTratamentos(tipo).then(mapa => {
     const existente = mapa[chave];
     document.getElementById('al-modal-campos').innerHTML = cfg.campos.map(c => campoHtml(c, existente ? existente.respostas : {})).join('');
     if (existente){
-      document.getElementById('al-modal-sub').textContent = (subtitulo || '') + ` · já tratado por ${existente.tratado_por} em ${OPS.formatDateTimeBR ? OPS.formatDateTimeBR(existente.tratado_em) : diaKey(existente.tratado_em)}`;
+      document.getElementById('al-modal-sub').innerHTML = (subtitulo || '') + `<br><b>já tratado por ${existente.tratado_por} em ${OPS.formatDateTimeBR ? OPS.formatDateTimeBR(existente.tratado_em) : diaKey(existente.tratado_em)}</b>`;
     }
   });
   document.getElementById('al-modal').style.display = 'flex';
@@ -447,6 +459,27 @@ async function carregarJustificativaSla(){
 }
 
 // ================= ABA RECORRÊNCIA LOG (3+ visitas) =================
+let alLogChartTipos = null;
+function renderGraficoTiposProblema(clientes){
+  const porTipo = {};
+  clientes.forEach(c => c.visitas.forEach(v => {
+    const t = v.tipo || 'Sem tipo';
+    porTipo[t] = (porTipo[t]||0) + 1;
+  }));
+  const entries = Object.entries(porTipo).sort((a,b) => b[1]-a[1]);
+  if (alLogChartTipos) alLogChartTipos.destroy();
+  alLogChartTipos = new Chart(document.getElementById('al-log-chart-tipos'), {
+    type: 'bar',
+    data: { labels: entries.map(([t]) => t), datasets: [{ label: 'Visitas', data: entries.map(([,q]) => q), backgroundColor: '#ffd166' }] },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      scales: {
+        x: { beginAtZero: true, ticks: { color: '#8a97ab' }, grid: { color: '#1e2d47' } },
+        y: { ticks: { color: '#e2eaf5' }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false } } },
+  });
+}
+
 async function carregarRecorrenciaLog(){
   const tbody = document.getElementById('al-log-tbody');
   const aviso = document.getElementById('al-log-aviso');
@@ -471,6 +504,7 @@ async function carregarRecorrenciaLog(){
     porCliente[r.cliente_id].tecnicos.add(r.tecnico);
   });
   const com3Mais = Object.values(porCliente).filter(c => c.visitas.length >= 3).sort((a,b) => b.visitas.length - a.visitas.length);
+  renderGraficoTiposProblema(com3Mais);
 
   document.getElementById('al-log-badge').textContent = `${fmtNum(com3Mais.length)} cliente(s)`;
   if (semClienteId > 0){
@@ -490,8 +524,11 @@ async function carregarRecorrenciaLog(){
   tbody.querySelectorAll('tr[data-cliente]').forEach(tr => {
     tr.addEventListener('click', () => {
       const c = com3Mais.find(x => x.clienteId === tr.dataset.cliente);
-      const detalhe = c.visitas.map(v => `${v.protocolo} (${diaKey(v.data_encerramento)}, ${tituloCase(v.tecnico)})`).join(' · ');
-      abrirChecklist('recorrencia_log', c.clienteId, `Cliente ${c.clienteId} · ${c.visitas.length} visitas: ${detalhe}`, inicioStr, carregarRecorrenciaLog);
+      const visitasOrdenadas = c.visitas.slice().sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
+      const detalhe = visitasOrdenadas.map((v,i) =>
+        `${ordinal(i+1)} Visita: ${nomeCurto(v.tecnico)} — ${v.tipo || 'Sem tipo'}${v.descricao ? ' · ' + v.descricao : ''} (${diaKey(v.data_encerramento)})`
+      ).join('<br>');
+      abrirChecklist('recorrencia_log', c.clienteId, `<b>Cliente ${c.clienteId}</b> · ${c.cidade || '—'} · ${c.visitas.length} visitas<br>${detalhe}`, inicioStr, carregarRecorrenciaLog);
     });
   });
 }
