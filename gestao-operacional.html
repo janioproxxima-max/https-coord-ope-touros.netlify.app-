@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -50,7 +51,10 @@
 
   <!-- ================= ABA: SERVIÇOS ================= -->
   <div id="go-aba-servicos">
-    <div class="sec-hdr">SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</div>
+    <div class="sec-hdr" style="display:flex;align-items:center;gap:10px">
+      <span>SLA — meta por tipo de serviço (dentro do prazo, só produtivo)</span>
+      <button type="button" class="btn ghost" id="go-btn-analitico" style="margin-left:auto;font-size:12px;padding:5px 10px">📋 Ver analítico</button>
+    </div>
     <div class="sla-grid" id="go-cards-sla"></div>
     <p class="page-sub" id="go-sla-aviso" style="display:none;margin:10px 2px 4px"></p>
 
@@ -190,6 +194,27 @@
     </div>
   </div>
 
+</div>
+
+<!-- Modal: analítico de Serviços (linha a linha, pra validar os números agregados) -->
+<div class="modal-backdrop" id="go-modal-analitico" style="display:none">
+  <div class="modal" style="max-width:min(1100px,92vw)">
+    <h3>📋 Analítico de Serviços</h3>
+    <p class="modal-sub" id="go-analitico-sub"></p>
+    <div class="table-wrap" style="max-height:60vh">
+      <table class="services" id="go-analitico-tabela">
+        <thead><tr>
+          <th>Protocolo</th><th>Técnico</th><th>Tipo</th><th>Área</th><th>Localidade</th>
+          <th>Produtivo</th><th>Pontos</th><th>Data criação</th><th>Data encerramento</th><th>TMA (h)</th><th>Dentro do SLA</th>
+        </tr></thead>
+        <tbody id="go-analitico-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="go-btn-fechar-analitico">Fechar</button>
+      <button type="button" class="btn primary" id="go-btn-exportar-analitico">⇩ Exportar Excel</button>
+    </div>
+  </div>
 </div>
 
 <script src="common.js"></script>
@@ -636,6 +661,53 @@ function renderResumo(data){
   document.getElementById('go-resumo-improdutivos').textContent = fmtNum(improdutivos);
   document.getElementById('go-resumo-pontos').textContent = totalPontos.toFixed(1).replace('.', ',');
 }
+
+// -------- analítico de Serviços: mesma base linha a linha dos cartões/
+// gráficos acima, pra dar pra conferir manualmente que os números batem --------
+function linhasAnaliticoServicos(){
+  return goRegistrosFiltrados().map(r => {
+    const dp = dentroDoPrazo(r);
+    return {
+      protocolo: r.protocolo || '', tecnico: r.tecnico || '', tipo: r.tipo || '',
+      area: r.area || '', localidade: r.localidade || '',
+      produtivo: isProdutivo(r) ? 'Sim' : 'Não',
+      pontos: r.pontos != null ? r.pontos : '',
+      dataCriacao: r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
+      dataEncerramento: r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+      tma: isFinite(parseFloat(r.tma)) ? Number(r.tma).toFixed(2) : '',
+      dentroSla: dp == null ? '—' : (dp ? 'Sim' : 'Não'),
+    };
+  });
+}
+function linhaAnaliticoParaTr(l){
+  return `<tr><td>${l.protocolo}</td><td>${l.tecnico}</td><td>${l.tipo}</td><td>${l.area}</td><td>${l.localidade}</td>` +
+    `<td>${l.produtivo}</td><td>${l.pontos}</td><td>${l.dataCriacao}</td><td>${l.dataEncerramento}</td><td>${l.tma}</td><td>${l.dentroSla}</td></tr>`;
+}
+function abrirAnaliticoServicos(){
+  const linhas = linhasAnaliticoServicos();
+  const LIMITE_TELA = 1000;
+  document.getElementById('go-analitico-sub').textContent =
+    `${fmtNum(linhas.length)} registro(s) no período/filtro atual — a mesma base que alimenta os cartões e gráficos acima.`;
+  const tbody = document.getElementById('go-analitico-tbody');
+  tbody.innerHTML = linhas.slice(0, LIMITE_TELA).map(linhaAnaliticoParaTr).join('') +
+    (linhas.length > LIMITE_TELA
+      ? `<tr><td colspan="11" style="text-align:center;color:var(--ink-faint)">Mostrando os primeiros ${fmtNum(LIMITE_TELA)} de ${fmtNum(linhas.length)} — exporte pra Excel pra ver todos.</td></tr>`
+      : '');
+  document.getElementById('go-modal-analitico').style.display = 'flex';
+}
+document.getElementById('go-btn-analitico').addEventListener('click', abrirAnaliticoServicos);
+document.getElementById('go-btn-fechar-analitico').addEventListener('click', () => {
+  document.getElementById('go-modal-analitico').style.display = 'none';
+});
+document.getElementById('go-modal-analitico').addEventListener('click', (e) => {
+  if (e.target.id === 'go-modal-analitico') document.getElementById('go-modal-analitico').style.display = 'none';
+});
+document.getElementById('go-btn-exportar-analitico').addEventListener('click', () => {
+  const linhas = linhasAnaliticoServicos();
+  const headers = ['Protocolo','Técnico','Tipo','Área','Localidade','Produtivo','Pontos','Data criação','Data encerramento','TMA (h)','Dentro do SLA'];
+  const rows = linhas.map(l => [l.protocolo, l.tecnico, l.tipo, l.area, l.localidade, l.produtivo, l.pontos, l.dataCriacao, l.dataEncerramento, l.tma, l.dentroSla]);
+  OPS.downloadXLSX(`gestao-operacional-servicos-analitico-${new Date().toISOString().slice(0,10)}.xlsx`, headers, rows, 'Serviços');
+});
 
 // ================= ABA RECORRÊNCIA =================
 function renderAbaRecorrencia(data, pares){
