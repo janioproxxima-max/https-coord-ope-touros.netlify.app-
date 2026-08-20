@@ -399,7 +399,18 @@
 
   <!-- ================= ABA: ÁREA DO INSPETOR ================= -->
   <div id="go-aba-inspetor" style="display:none">
-    <p class="page-sub" style="margin:0 2px 14px">Mesmo filtro de período do topo da página, tudo agrupado por Inspetor (cadastro de Gestão de Pessoas).</p>
+    <div class="panel toolbar" style="margin-bottom:14px" id="go-insp-seletor-wrap">
+      <div class="field">
+        <label for="go-insp-seletor">Inspetor</label>
+        <select id="go-insp-seletor"></select>
+      </div>
+      <div style="flex:1"></div>
+      <span class="page-sub" id="go-insp-semana-label" style="margin:0"></span>
+    </div>
+
+    <div class="sla-grid" id="go-insp-tarefas-cards" style="margin-bottom:18px"></div>
+
+    <p class="page-sub" style="margin:0 2px 14px">Tabelas abaixo usam o filtro de período do topo da página (não a semana das tarefas acima), agrupadas por Inspetor.</p>
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-head">
@@ -447,6 +458,35 @@
     </div>
   </div>
 
+</div>
+
+<!-- Modal: registro de auditoria (Interna/Pós Atendimento/Durante o
+     Atendimento/Ferramental/SESMT) - genérico, config em INSP_TAREFAS -->
+<div class="modal-backdrop" id="go-insp-modal" style="display:none">
+  <div class="modal">
+    <h3 id="go-insp-modal-titulo">Registrar auditoria</h3>
+    <p class="modal-sub" id="go-insp-modal-sub"></p>
+    <div style="display:flex;flex-direction:column;gap:14px;margin:16px 0">
+      <div class="field"><label>Técnico auditado</label><input class="input" id="go-insp-modal-tecnico" placeholder="Nome do técnico"></div>
+      <div class="field"><label>Protocolo (se aplicável)</label><input class="input" id="go-insp-modal-protocolo" placeholder="Ex: 8784054/1"></div>
+      <div id="go-insp-modal-checklist" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="field"><label>Nota geral (1-5)</label>
+        <select class="input" id="go-insp-modal-nota">
+          <option value="">Selecione...</option>
+          <option value="1">1 - Insatisfatório</option>
+          <option value="2">2 - Regular</option>
+          <option value="3">3 - Bom</option>
+          <option value="4">4 - Muito bom</option>
+          <option value="5">5 - Excelente</option>
+        </select>
+      </div>
+      <div class="field"><label>Observações</label><textarea class="input" id="go-insp-modal-obs" rows="3" style="resize:vertical"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="go-insp-modal-fechar">Fechar</button>
+      <button type="button" class="btn primary" id="go-insp-modal-salvar">💾 Salvar</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
@@ -2248,10 +2288,15 @@ async function renderAbaSlaFila(){
 // Improdutividade "por Inspetor") + veículos/lavagens/manutenção
 // cruzados via o responsável do veículo -> inspetor dele (Gestão de
 // Pessoas). Mesmo filtro de período/supervisor/cidade do topo da página.
+let goInspSemanaSegunda = null, goInspSemanaInicioStr = '', goInspSemanaFimStr = '';
+let goInspRegistrosSemana = [], goInspParesSemana = [], goInspAuditorias = [];
+let goInspSelecionado = null;
+
 async function renderAbaInspetor(){
   ['go-insp-rec-tbody','go-insp-log-tbody','go-insp-improd-tbody','go-insp-veic-tbody','go-insp-manut-tbody'].forEach(id => {
     document.getElementById(id).innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando...</td></tr>`;
   });
+  document.getElementById('go-insp-tarefas-cards').innerHTML = `<div class="sla-card neutral"><div class="sla-label">Carregando tarefas da semana...</div></div>`;
   await carregarTecnicoInspetorSeNecessario();
   if (goVeiculos === null){
     try{
@@ -2261,12 +2306,162 @@ async function renderAbaInspetor(){
       console.error('Falha ao buscar dados de frotas', err);
     }
   }
+  if (!goInspSemanaSegunda) goInspSemanaSegunda = segundaFeiraDaSemana(new Date());
+  const domingo = domingoDaSemana(goInspSemanaSegunda);
+  goInspSemanaInicioStr = goInspSemanaSegunda.toISOString().slice(0,10);
+  goInspSemanaFimStr = domingo.toISOString().slice(0,10);
+  document.getElementById('go-insp-semana-label').textContent = `Tarefas da semana: ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingo)}`;
+  try{
+    const [regs, pares, auds] = await Promise.all([
+      OPS_SUPABASE.select('produtividade_registros', `data_encerramento=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data_encerramento=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
+      OPS_SUPABASE.select('produtividade_pares_recorrencia', `data_atual=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data_atual=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
+      OPS_SUPABASE.select('auditorias_registros', `data=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
+    ]);
+    goInspRegistrosSemana = (regs||[]).filter(r => OPS.isTourosUnitCity(r.area));
+    goInspParesSemana = (pares||[]).filter(p => OPS.isTourosUnitCity(p.area));
+    goInspAuditorias = auds || [];
+  }catch(err){
+    console.error('Falha ao buscar dados da semana do inspetor', err);
+  }
   if (goAbaAtiva !== 'inspetor') return; // trocou de aba enquanto buscava
+  popularSeletorInspetor();
   desenharAbaInspetor();
+  desenharTarefasInspetor();
 }
 function inspetorDoTecnico(nome){
   return (goTecnicoInspetor && goTecnicoInspetor[OPS.normalize(nome)]) || 'Sem inspetor';
 }
+function popularSeletorInspetor(){
+  const sel = document.getElementById('go-insp-seletor');
+  const todos = [...new Set(Object.values(goTecnicoInspetor || {}))].filter(Boolean).sort();
+  if (!goInspSelecionado) goInspSelecionado = inspetorLogado() || todos[0] || null;
+  sel.innerHTML = todos.length
+    ? todos.map(i => `<option value="${i}" ${i === goInspSelecionado ? 'selected' : ''}>${tituloCase(i)}</option>`).join('')
+    : `<option value="">Nenhum inspetor cadastrado</option>`;
+  if (!sel.dataset.ligado){
+    sel.dataset.ligado = '1';
+    sel.addEventListener('change', () => { goInspSelecionado = sel.value || null; desenharTarefasInspetor(); });
+  }
+}
+function inspetorLogado(){
+  const nome = nomeDoLogin();
+  if (!nome) return null;
+  const todos = [...new Set(Object.values(goTecnicoInspetor || {}))].filter(Boolean);
+  return todos.find(i => OPS.normalize(i) === OPS.normalize(nome)) || null;
+}
+
+// -------- 8 cards "tarefas do inspetor" (modelo ZaaZ) - metas fixas por
+// semana, independente do tamanho da equipe. 5 são registráveis por
+// formulário (auditorias_registros); Recorrência/Levagens/Manutenção
+// reaproveitam dados que já existem no site. --------
+const INSP_TAREFAS = [
+  { chave: 'interna', label: 'Auditorias Internas', icon: '✅', meta: 3, sufixo: 'por semana', tipo: 'log' },
+  { chave: 'pos_atendimento', label: 'Auditorias Pós Atendimento', icon: '✅', meta: 1, sufixo: 'por semana', tipo: 'log' },
+  { chave: 'durante_atendimento', label: 'Auditorias Durante o Atendimento', icon: '✅', meta: 1, sufixo: 'por semana', tipo: 'log' },
+  { chave: 'ferramental', label: 'Ferramental', icon: '🧰', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
+  { chave: 'sesmt', label: 'Medidas SESMT', icon: '🦺', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
+  { chave: 'recorrencia', label: 'Recorrência', icon: '🔁', meta: 7, sufixo: 'meta relativa', tipo: 'existente' },
+  { chave: 'lavagens', label: 'Levagens', icon: '💧', meta: 1, sufixo: 'por semana', tipo: 'existente' },
+  { chave: 'manutencao', label: 'Manutenção', icon: '🔧', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'existente' },
+];
+// Checklist inicial (proposta) pra cada tipo - dá pra ajustar os itens
+// depois, é só editar essas listas.
+const AUDITORIA_CHECKLIST = {
+  interna: ['Uniforme e identificação em dia', 'Ferramentas e EPIs completos', 'Documentação do serviço preenchida corretamente', 'Cliente foi orientado sobre o serviço prestado'],
+  pos_atendimento: ['Fotos/evidências anexadas corretamente', 'Descrição do encerramento condiz com o serviço realizado', 'Cliente confirma satisfação com o atendimento'],
+  durante_atendimento: ['Procedimento de segurança seguido', 'Comunicação com o cliente adequada', 'Execução técnica dentro do padrão'],
+  ferramental: ['Ferramentas básicas completas', 'Ferramentas em bom estado de conservação'],
+  sesmt: ['EPIs completos e em bom estado', 'Uso correto dos EPIs observado'],
+};
+const AUDITORIA_TITULOS = {
+  interna: '✅ Registrar Auditoria Interna', pos_atendimento: '✅ Registrar Auditoria Pós Atendimento',
+  durante_atendimento: '✅ Registrar Auditoria Durante o Atendimento', ferramental: '🧰 Registrar Ferramental', sesmt: '🦺 Registrar Medidas SESMT',
+};
+
+function desenharTarefasInspetor(){
+  const container = document.getElementById('go-insp-tarefas-cards');
+  if (!goInspSelecionado){
+    container.innerHTML = `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--ink-faint)">Nenhum inspetor cadastrado em Gestão de Pessoas ainda (campo "Inspetor" no cadastro do técnico).</div></div>`;
+    return;
+  }
+  const regsMeu = goInspRegistrosSemana.filter(r => inspetorDoTecnico(r.tecnico) === goInspSelecionado);
+  const paresMeu = goInspParesSemana.filter(p => inspetorDoTecnico(p.tecnico) === goInspSelecionado);
+  const produtivosMeu = regsMeu.filter(isProdutivo).length;
+  const pctRecorrencia = produtivosMeu ? (paresMeu.length / produtivosMeu) * 100 : 0;
+
+  const veiculosMeu = (goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === goInspSelecionado);
+  const placasMeu = new Set(veiculosMeu.map(v => v.placa));
+  const lavagensSemana = (goLavagens||[]).filter(l => placasMeu.has(l.placa) && diaKey(l.data) >= goInspSemanaInicioStr && diaKey(l.data) <= goInspSemanaFimStr).length;
+  const manutMeu = (goManutencoes||[]).filter(m => m.status === 'aberta' && placasMeu.has(m.placa)).length;
+
+  const contarAuditorias = tipo => goInspAuditorias.filter(a => a.tipo === tipo && a.inspetor === goInspSelecionado).length;
+  const valores = {
+    interna: contarAuditorias('interna'), pos_atendimento: contarAuditorias('pos_atendimento'),
+    durante_atendimento: contarAuditorias('durante_atendimento'), ferramental: contarAuditorias('ferramental'),
+    sesmt: contarAuditorias('sesmt'), recorrencia: pctRecorrencia, lavagens: lavagensSemana, manutencao: manutMeu,
+  };
+
+  container.innerHTML = INSP_TAREFAS.map(t => {
+    const valor = valores[t.chave];
+    const ehPct = t.chave === 'recorrencia';
+    const valorTexto = ehPct ? fmtPct1(valor) : fmtNum(valor);
+    const cor = t.meta == null ? 'neutral' : (ehPct ? (valor <= t.meta ? 'ok' : 'crit') : (valor >= t.meta ? 'ok' : 'crit'));
+    const metaTexto = t.meta == null ? 'Sem meta' : `Meta: ${ehPct ? '≤' : '≥'}${t.meta}${ehPct ? '%' : ''}`;
+    return `<div class="sla-card ${cor}" ${t.tipo === 'log' ? `style="cursor:pointer" data-tarefa="${t.chave}" title="Clique pra registrar"` : ''}>
+      <div class="sla-label">${t.icon} ${t.label}</div>
+      <div class="sla-value">${valorTexto}</div>
+      <div class="sla-meta">${metaTexto} · ${t.sufixo}</div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('[data-tarefa]').forEach(card => {
+    card.addEventListener('click', () => abrirModalAuditoria(card.dataset.tarefa));
+  });
+}
+
+function abrirModalAuditoria(tipo){
+  document.getElementById('go-insp-modal').dataset.tipo = tipo;
+  document.getElementById('go-insp-modal-titulo').textContent = AUDITORIA_TITULOS[tipo];
+  document.getElementById('go-insp-modal-sub').textContent = `Inspetor: ${tituloCase(goInspSelecionado)} · semana de ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingoDaSemana(goInspSemanaSegunda))}`;
+  document.getElementById('go-insp-modal-tecnico').value = '';
+  document.getElementById('go-insp-modal-protocolo').value = '';
+  document.getElementById('go-insp-modal-nota').value = '';
+  document.getElementById('go-insp-modal-obs').value = '';
+  document.getElementById('go-insp-modal-checklist').innerHTML = (AUDITORIA_CHECKLIST[tipo] || []).map((item, i) => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim)">
+      <input type="checkbox" id="go-insp-check-${i}"> ${item}
+    </label>`).join('');
+  document.getElementById('go-insp-modal').style.display = 'flex';
+}
+document.getElementById('go-insp-modal-fechar').addEventListener('click', () => { document.getElementById('go-insp-modal').style.display = 'none'; });
+document.getElementById('go-insp-modal').addEventListener('click', (e) => { if (e.target.id === 'go-insp-modal') document.getElementById('go-insp-modal').style.display = 'none'; });
+document.getElementById('go-insp-modal-salvar').addEventListener('click', async () => {
+  const tipo = document.getElementById('go-insp-modal').dataset.tipo;
+  const tecnico = document.getElementById('go-insp-modal-tecnico').value.trim();
+  if (!tecnico){ alert('Informe o técnico auditado.'); return; }
+  const itens = AUDITORIA_CHECKLIST[tipo] || [];
+  const checklist = {};
+  itens.forEach((item, i) => { checklist[item] = document.getElementById(`go-insp-check-${i}`).checked; });
+  const btn = document.getElementById('go-insp-modal-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    const registro = {
+      id: OPS.uid(), tipo, inspetor: goInspSelecionado, tecnico,
+      protocolo: document.getElementById('go-insp-modal-protocolo').value.trim() || null,
+      data: new Date().toISOString(), checklist,
+      nota: document.getElementById('go-insp-modal-nota').value ? Number(document.getElementById('go-insp-modal-nota').value) : null,
+      observacao: document.getElementById('go-insp-modal-obs').value.trim(),
+      criado_por: nomeDoLogin(),
+    };
+    await OPS_SUPABASE.upsert('auditorias_registros', [registro], 'id');
+    goInspAuditorias.push(registro);
+    document.getElementById('go-insp-modal').style.display = 'none';
+    desenharTarefasInspetor();
+  }catch(err){
+    alert('Não consegui salvar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Salvar';
+  }
+});
 function desenharAbaInspetor(){
   const data = goRegistrosFiltrados();
   const pares = goParesFiltrados();
