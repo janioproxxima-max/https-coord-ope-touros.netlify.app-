@@ -1315,13 +1315,15 @@ function processarLinhasProdutividade(rows){
               : null,
           });
 
-          // reparo produtivo com cliente identificado — candidato a recorrência
+          // reparo produtivo com cliente identificado — candidato a recorrência.
+          // Agrupa só por CLIENTE (não por técnico+cliente): recorrência é o
+          // mesmo cliente voltando a precisar de reparo, não importa se foi
+          // o mesmo técnico que atendeu de novo ou não.
           if (ehCandidatoRecorrencia && idxNumeroCliente >= 0){
             const clienteId = (row[idxNumeroCliente] || '').toString().trim();
             if (clienteId){
-              const chave = tecnico + '|' + clienteId;
-              (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({
-                data: dt, mesKey, tipo, clienteId,
+              (ocorrenciasReparo[clienteId] = ocorrenciasReparo[clienteId] || []).push({
+                data: dt, mesKey, tipo, clienteId, tecnico,
                 protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
                 area: areaDaLinha(row),
                 localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
@@ -1334,20 +1336,25 @@ function processarLinhasProdutividade(rows){
 
       if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); return null; }
 
-      // detecta recorrência: mesmo técnico + mesmo cliente + outro reparo em até 30 dias
+      // detecta recorrência: MESMO CLIENTE tem outro reparo produtivo em até
+      // 30 dias - não precisa ser o mesmo técnico. Quem "leva" a recorrência
+      // é sempre o técnico da visita ANTERIOR (o serviço dele não resolveu
+      // de vez, obrigando alguém - o mesmo técnico ou outro - a voltar lá),
+      // mesmo que o retorno tenha sido feito por outro técnico.
       const paresRecorrencia = []; // { tecnico, mesKey, tipo, anterior, atual }
-      Object.entries(ocorrenciasReparo).forEach(([chave, lista]) => {
-        const tecnico = chave.split('|')[0];
+      Object.entries(ocorrenciasReparo).forEach(([clienteId, lista]) => {
         lista.sort((a, b) => a.data - b.data);
         for (let i = 1; i < lista.length; i++){
-          const diffDias = (lista[i].data - lista[i - 1].data) / 86400000;
-          if (diffDias <= 30 && agregado[tecnico] && agregado[tecnico][lista[i].mesKey]){
-            const mesDoTecnico = agregado[tecnico][lista[i].mesKey];
+          const anterior = lista[i - 1];
+          const atual = lista[i];
+          const diffDias = (atual.data - anterior.data) / 86400000;
+          if (diffDias <= 30 && agregado[anterior.tecnico] && agregado[anterior.tecnico][anterior.mesKey]){
+            const mesDoTecnico = agregado[anterior.tecnico][anterior.mesKey];
             mesDoTecnico.recorrencias += 1;
-            if (mesDoTecnico.porTipo[lista[i].tipo]) mesDoTecnico.porTipo[lista[i].tipo].recorrencias += 1;
+            if (mesDoTecnico.porTipo[anterior.tipo]) mesDoTecnico.porTipo[anterior.tipo].recorrencias += 1;
             paresRecorrencia.push({
-              tecnico, mesKey: lista[i].mesKey, tipo: lista[i].tipo, clienteId: lista[i].clienteId,
-              anterior: lista[i - 1], atual: lista[i],
+              tecnico: anterior.tecnico, mesKey: anterior.mesKey, tipo: anterior.tipo, clienteId,
+              anterior, atual,
             });
           }
         }
