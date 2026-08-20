@@ -2082,25 +2082,27 @@ async function renderPontosHoje(){
       pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0,
     }));
 
-  // quadrados: % de atingimento da meta do dia por supervisor (soma dos
-  // pontos da equipe ÷ soma da meta da equipe) - sempre com todo mundo,
-  // clicável pra aplicar o filtro de Supervisor do topo.
+  // quadrados: % de atingimento da meta do dia por supervisor = quantos da
+  // equipe já bateram os 8 pontos individualmente ÷ total da equipe (não é
+  // soma de pontos - um colaborador que passou muito da meta não pode
+  // "cobrir" outro que ainda não bateu). Sempre com todo mundo, clicável
+  // pra aplicar o filtro de Supervisor do topo.
   const porSupervisor = {};
   linhasTodas.forEach(l => {
-    porSupervisor[l.supervisor] = porSupervisor[l.supervisor] || { pontos: 0, pessoas: 0 };
-    porSupervisor[l.supervisor].pontos += l.pontos;
+    porSupervisor[l.supervisor] = porSupervisor[l.supervisor] || { bateram: 0, pessoas: 0 };
+    if (l.pontos >= META_PONTOS_DIA) porSupervisor[l.supervisor].bateram += 1;
     porSupervisor[l.supervisor].pessoas += 1;
   });
   const cardsHtml = Object.entries(porSupervisor)
-    .map(([sup, v]) => ({ sup, pontos: v.pontos, pessoas: v.pessoas, meta: v.pessoas * META_PONTOS_DIA }))
-    .sort((a,b) => (b.pontos/b.meta) - (a.pontos/a.meta))
-    .map(({ sup, pontos, pessoas, meta }) => {
-      const pct = meta ? (pontos / meta) * 100 : 0;
-      const cor = pct >= 100 ? 'ok' : (pct >= 70 ? 'warn' : 'crit');
+    .map(([sup, v]) => ({ sup, bateram: v.bateram, pessoas: v.pessoas }))
+    .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
+    .map(({ sup, bateram, pessoas }) => {
+      const pct = pessoas ? (bateram / pessoas) * 100 : 0;
+      const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
       return `<div class="sla-card ${cor}" data-supervisor="${sup}" style="cursor:pointer" title="Clique pra filtrar a tabela por esse supervisor">
         <div class="sla-label">${tituloCase(sup)}</div>
         <div class="sla-value">${fmtPct(pct)}</div>
-        <div class="sla-meta">Atingimento da meta do dia · ${fmtNum(pessoas)} colaborador(es)</div>
+        <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
         <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
       </div>`;
     }).join('');
