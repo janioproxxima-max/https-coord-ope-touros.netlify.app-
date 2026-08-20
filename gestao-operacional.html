@@ -366,8 +366,14 @@
   <div id="go-aba-produtividade-tecnica" style="display:none">
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3><span class="cnt-badge" id="go-pt-hoje-badge">—</span></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (quem tá de folga não aparece). Verde = pontos já feitos, vermelho = quanto falta pra bater a meta do dia.</p>
-      <div class="table-wrap" style="max-height:520px;padding:10px 16px 16px"><div id="go-chart-pt-hoje-inner" style="position:relative"><canvas id="go-chart-pt-hoje"></canvas></div></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado). O filtro de Supervisor lá em cima também filtra a tabela — clique num quadrado pra aplicar.</p>
+      <div class="sla-grid" id="go-pt-hoje-supervisor-cards" style="margin:0 16px 14px"></div>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Pontos hoje</th><th>Faltam pra meta</th></tr></thead>
+          <tbody id="go-pt-hoje-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -1938,7 +1944,7 @@ const META_PONTOS_DIA = 8;
 
 function desenharProdutividadeTecnica(){
   const data = goRegistrosFiltrados();
-  renderChartPontosHoje();
+  renderPontosHoje();
 
   // dias trabalhados = dias distintos em que o colaborador fechou algum
   // atendimento no período, produtivo OU improdutivo, como responsável
@@ -2024,6 +2030,12 @@ async function carregarAtestadosCacheSeNecessario(){
   return goAtestados;
 }
 
+// primeiro + segundo nome só, pra não ficar gigante na tabela
+function nomeCurto2(nome){
+  const partes = String(nome||'').trim().split(/\s+/);
+  return tituloCase(partes.slice(0,2).join(' '));
+}
+
 // pontuação de HOJE × meta diária - independe do filtro de período/cidade do
 // topo da página: um técnico do Touros pode fechar um atendimento numa
 // cidade fora da lista de unidade (ex: cobrir um chamado em Natal ou
@@ -2031,8 +2043,10 @@ async function carregarAtestadosCacheSeNecessario(){
 // hoje direto no Supabase, sem o filtro de cidade que goRegistros aplica.
 // Roster vem de quem é Instalador/Reparador (mesmo filtro do donut
 // Produtivos×Improdutivos, fora Coordenação/Supervisão/Inspetor), status
-// ativo, sem folga hoje e sem atestado cobrindo hoje.
-async function renderChartPontosHoje(){
+// ativo, sem folga hoje e sem atestado cobrindo hoje. Os quadrados por
+// supervisor mostram sempre TODO MUNDO (visão geral); só a tabela respeita
+// o filtro de Supervisor do topo da página.
+async function renderPontosHoje(){
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
   const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
@@ -2054,38 +2068,63 @@ async function renderChartPontosHoje(){
     const key = OPS.normalize(r.tecnico);
     pontosHojePorTecnicoNorm[key] = (pontosHojePorTecnicoNorm[key] || 0) + (parseFloat(r.pontos) || 0);
   });
+  const supervisorPorNomeNorm = {};
+  Object.entries(goTecnicoSupervisor).forEach(([tec, sup]) => { supervisorPorNomeNorm[OPS.normalize(tec)] = sup; });
 
-  const linhas = (goPessoasCache || [])
+  const linhasTodas = (goPessoasCache || [])
     .filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo')
     .filter(p => !OPS.isFolgaNoDia(p, hoje))
     .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)))
-    .map(p => ({ tecnico: p.nome, pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0 }))
-    .sort((a,b) => a.pontos - b.pontos);
+    .map(p => ({
+      tecnico: p.nome,
+      cidade: p.cidade || '—',
+      supervisor: supervisorPorNomeNorm[OPS.normalize(p.nome)] || '—',
+      pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0,
+    }));
+
+  // quadrados: % de atingimento da meta do dia por supervisor (soma dos
+  // pontos da equipe ÷ soma da meta da equipe) - sempre com todo mundo,
+  // clicável pra aplicar o filtro de Supervisor do topo.
+  const porSupervisor = {};
+  linhasTodas.forEach(l => {
+    porSupervisor[l.supervisor] = porSupervisor[l.supervisor] || { pontos: 0, pessoas: 0 };
+    porSupervisor[l.supervisor].pontos += l.pontos;
+    porSupervisor[l.supervisor].pessoas += 1;
+  });
+  const cardsHtml = Object.entries(porSupervisor)
+    .map(([sup, v]) => ({ sup, pontos: v.pontos, pessoas: v.pessoas, meta: v.pessoas * META_PONTOS_DIA }))
+    .sort((a,b) => (b.pontos/b.meta) - (a.pontos/a.meta))
+    .map(({ sup, pontos, pessoas, meta }) => {
+      const pct = meta ? (pontos / meta) * 100 : 0;
+      const cor = pct >= 100 ? 'ok' : (pct >= 70 ? 'warn' : 'crit');
+      return `<div class="sla-card ${cor}" data-supervisor="${sup}" style="cursor:pointer" title="Clique pra filtrar a tabela por esse supervisor">
+        <div class="sla-label">${tituloCase(sup)}</div>
+        <div class="sla-value">${fmtPct(pct)}</div>
+        <div class="sla-meta">Atingimento da meta do dia · ${fmtNum(pessoas)} colaborador(es)</div>
+        <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
+      </div>`;
+    }).join('');
+  document.getElementById('go-pt-hoje-supervisor-cards').innerHTML = cardsHtml
+    || `<p style="color:var(--ink-faint);padding:0 2px">Sem colaboradores ativos agora.</p>`;
+  document.querySelectorAll('#go-pt-hoje-supervisor-cards [data-supervisor]').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('go-f-supervisor').value = el.dataset.supervisor;
+      goRenderAbaAtiva();
+    });
+  });
+
+  // tabela: respeita o filtro de Supervisor do topo da página
+  const supervisorFiltro = document.getElementById('go-f-supervisor').value;
+  const linhas = (supervisorFiltro
+    ? linhasTodas.filter(l => OPS.normalize(l.supervisor) === OPS.normalize(supervisorFiltro))
+    : linhasTodas
+  ).sort((a,b) => a.pontos - b.pontos);
 
   document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
-
-  const canvas = document.getElementById('go-chart-pt-hoje');
-  document.getElementById('go-chart-pt-hoje-inner').style.height = Math.max(280, linhas.length * 24 + 40) + 'px';
-  if (goCharts.ptHoje) goCharts.ptHoje.destroy();
-  goCharts.ptHoje = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: linhas.map(l => tituloCase(l.tecnico)),
-      datasets: [
-        { label: 'Pontos hoje', data: linhas.map(l => Number(l.pontos.toFixed(2))), backgroundColor: '#00e5a0', stack: 's' },
-        { label: `Faltam pra meta (${META_PONTOS_DIA})`, data: linhas.map(l => Number(Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2))), backgroundColor: '#ff4d6d', stack: 's' },
-      ],
-    },
-    plugins: [ChartDataLabels],
-    options: { ...commonChartOpts, indexAxis: 'y',
-      scales: {
-        x: { beginAtZero:true, stacked:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' } },
-        y: { stacked:true, ticks:{ color:'#e2eaf5', font:{size:10.5} }, grid:{ display:false } },
-      },
-      plugins: { legend: { labels:{ color:'#e2eaf5' } },
-        datalabels: { display: ctx => ctx.raw > 0, color:'#0a1220', anchor:'center', align:'center', font:{ weight:'700', size:9.5 }, formatter: v => v.toFixed(1) } },
-    },
-  });
+  document.getElementById('go-pt-hoje-tbody').innerHTML = linhas.map(l => `<tr>
+    <td>${nomeCurto2(l.tecnico)}</td><td>${tituloCase(l.cidade)}</td><td>${tituloCase(l.supervisor)}</td>
+    <td>${l.pontos.toFixed(2)}</td><td>${Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2)}</td>
+  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum colaborador ativo agora.</td></tr>`;
 }
 
 // ================= ABA SLA (fila de protocolos em aberto) =================
