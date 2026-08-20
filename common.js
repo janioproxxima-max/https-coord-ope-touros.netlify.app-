@@ -1459,7 +1459,7 @@ const OPS_USERS_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1YADg1BB
 const OPS_USERS_FALLBACK = { coordenador: { senha: 'ops2024', acesso: 'TOTAL' } };
 
 // Módulos válidos pra usar na coluna LIMITE DE ACESSO (mesma chave do href, sem .html)
-const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'sla', 'mundo-jira', 'gestao-operacional', 'gestao-pessoas', 'frotas', 'desligamentos'];
+const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'sla', 'mundo-jira', 'gestao-operacional', 'gestao-pessoas', 'frotas', 'desligamentos', 'alerta'];
 
 function parseAcesso(raw){
   const v = (raw || '').trim();
@@ -1496,6 +1496,7 @@ const OPS_NAV_LINKS = [
   { href: 'sla.html',             label: 'SLA',                icon: '⏱️' },
   { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
   { href: 'gestao-operacional.html', label: 'Gestão Operacional', icon: '🧭' },
+  { href: 'alerta.html',           label: 'Alerta',             icon: '🚨' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
   { href: 'desligamentos.html',    label: 'Desligamentos',      icon: '📤' },

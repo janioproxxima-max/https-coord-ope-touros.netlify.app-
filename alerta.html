@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alerta · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Qualidade</p>
+    <h1 class="page-title">Alerta</h1>
+    <p class="page-sub">Recorrência (D-1), Improdutividade semanal, Justificativa de SLA e Recorrência LOG — clique numa pendência e responda o checklist pra tratar.</p>
+  </div>
+
+  <div class="qf-tiles" id="al-abas" style="margin-bottom:14px">
+    <button type="button" class="qf-tile active" data-aba="recorrencia">🔁 Recorrência (D-1)</button>
+    <button type="button" class="qf-tile" data-aba="improdutividade">📉 Improdutividade</button>
+    <button type="button" class="qf-tile" data-aba="sla">⏱️ Justificativa SLA</button>
+    <button type="button" class="qf-tile" data-aba="recorrencia_log">📋 Recorrência LOG</button>
+  </div>
+
+  <!-- ================= ABA: RECORRÊNCIA D-1 ================= -->
+  <div id="al-aba-recorrencia">
+    <div class="card">
+      <div class="card-head"><h3>🔁 Recorrências detectadas ontem</h3><span class="cnt-badge" id="al-rec-badge">—</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Todo par de recorrência (mesmo técnico atendeu o mesmo cliente de novo) com a 2ª visita ontem entra aqui - clique pra tratar.</p>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="services">
+          <thead><tr><th>Status</th><th>Técnico</th><th>Protocolo anterior</th><th>Data anterior</th><th>Protocolo atual</th><th>Data atual</th><th>Cidade</th></tr></thead>
+          <tbody id="al-rec-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: IMPRODUTIVIDADE SEMANAL ================= -->
+  <div id="al-aba-improdutividade" style="display:none">
+    <div class="card">
+      <div class="card-head"><h3>📉 Improdutividade acima de 10% (semana passada)</h3><span class="cnt-badge" id="al-improd-badge">—</span></div>
+      <p class="page-sub" id="al-improd-periodo" style="padding:0 16px;margin:10px 0"></p>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Status</th><th>Técnico</th><th>Cidade</th><th>Improdutividade (%)</th><th>Qtd. improdutivos</th></tr></thead>
+          <tbody id="al-improd-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;display:none" id="al-improd-chart-card">
+      <div class="card-head"><h3 id="al-improd-chart-titulo">Detalhe por dia</h3></div>
+      <div class="chart-box"><canvas id="al-improd-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: JUSTIFICATIVA SLA ================= -->
+  <div id="al-aba-sla" style="display:none">
+    <p class="page-sub" id="al-sla-periodo" style="margin:0 2px 14px"></p>
+    <div id="al-sla-conteudo"></div>
+  </div>
+
+  <!-- ================= ABA: RECORRÊNCIA LOG (3+ visitas) ================= -->
+  <div id="al-aba-recorrencia_log" style="display:none">
+    <div class="card">
+      <div class="card-head"><h3>📋 Clientes com 3 ou mais visitas de reparo</h3><span class="cnt-badge" id="al-log-badge">—</span></div>
+      <p class="page-sub" id="al-log-aviso" style="padding:0 16px;margin:10px 0;display:none"></p>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="services">
+          <thead><tr><th>Status</th><th>ID Cliente</th><th>Cidade</th><th>Visitas</th><th>Técnicos envolvidos</th></tr></thead>
+          <tbody id="al-log-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: checklist genérico, usado pelas 4 abas -->
+<div class="modal-backdrop" id="al-modal" style="display:none">
+  <div class="modal">
+    <h3 id="al-modal-titulo">Checklist</h3>
+    <p class="modal-sub" id="al-modal-sub"></p>
+    <div id="al-modal-campos" style="display:flex;flex-direction:column;gap:14px;margin:16px 0"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="al-modal-fechar">Fechar</button>
+      <button type="button" class="btn primary" id="al-modal-salvar">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('alerta.html', 'Alerta');
+
+// ============================================================
+// Página Alerta - workflow de tratamento de qualidade:
+// Recorrência (D-1), Improdutividade semanal, Justificativa de SLA e
+// Recorrência LOG (clientes com 3+ visitas de reparo). Cada pendência,
+// quando tratada, salva um checklist de respostas na tabela
+// alertas_tratamentos (chave = tipo + protocolo/técnico/cliente conforme
+// o caso) - upsert pelo id determinístico, então tratar de novo atualiza
+// a resposta em vez de duplicar.
+// ============================================================
+
+function diaKey(v){ return v ? String(v).slice(0,10) : ''; }
+function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
+function fmtPct1(n){ return isFinite(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
+function tituloCase(s){ return String(s||'').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+function isProdutivo(r){ return r.produtivo === true || r.produtivo === 'true'; }
+function segundaFeiraDaSemana(data){
+  const d = new Date(data); d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  return d;
+}
+function domingoDaSemana(segunda){ const d = new Date(segunda); d.setDate(d.getDate() + 6); return d; }
+function fmtDataBR(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
+
+// Mesmo agrupamento de SLA usado em Gestão Operacional
+const SLA_GROUPS = {
+  reparo:    { label: 'Reparo (VT)', meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO','AÇÕES PREVENTIVAS'] },
+  ativacao:  { label: 'Ativação', meta: 95, tipos: ['ATIVAÇÃO'] },
+};
+const HORAS_SLA_POR_TIPO = {};
+Object.values(SLA_GROUPS).forEach(cfg => { cfg.tipos.forEach(t => { HORAS_SLA_POR_TIPO[t] = t === 'ATIVAÇÃO' ? 72 : 24; }); });
+function grupoSlaDoTipo(tipo){
+  const t = (tipo || '').toUpperCase();
+  for (const [chave, cfg] of Object.entries(SLA_GROUPS)) if (cfg.tipos.includes(t)) return chave;
+  return null;
+}
+function horasAbertura(r){ return (new Date(r.data_encerramento) - new Date(r.data_criacao)) / 3600000; }
+function dentroDoPrazo(r){
+  const limite = HORAS_SLA_POR_TIPO[(r.tipo||'').toUpperCase()];
+  if (limite == null) return null;
+  const h = horasAbertura(r);
+  return isFinite(h) ? h <= limite : null;
+}
+
+// -------- cache compartilhado: pessoas (filtro Instalador/Reparador) e
+// técnico->supervisor (produtividade_historico) --------
+let alPessoas = null, alTecnicoSupervisor = {};
+async function carregarBaseComum(){
+  const [pessoas, historico] = await Promise.all([
+    OPS.syncPull('PessoasData').catch(() => []),
+    OPS_SUPABASE.select('produtividade_historico').catch(() => []),
+  ]);
+  alPessoas = pessoas || [];
+  (historico || []).forEach(h => { alTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
+}
+function ehInstaladorReparador(tecnico){
+  const pessoa = (alPessoas||[]).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+  if (!pessoa || !pessoa.cargo) return false;
+  const cargoNorm = OPS.normalize(pessoa.cargo);
+  return cargoNorm.includes('instalador') && cargoNorm.includes('reparador');
+}
+
+// -------- tratamentos (respostas salvas) --------
+async function carregarTratamentos(tipo){
+  const registros = await OPS_SUPABASE.select('alertas_tratamentos', `tipo=eq.${encodeURIComponent(tipo)}`);
+  const mapa = {};
+  (registros || []).forEach(r => { mapa[r.chave] = r; });
+  return mapa;
+}
+function nomeDoLogin(){
+  const usuario = (sessionStorage.getItem('ops_user') || '').trim();
+  if (/^[a-z]+\.[a-z]+$/i.test(usuario)){
+    return usuario.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+  return usuario || 'usuário';
+}
+
+// -------- modal genérico de checklist --------
+const ALERTA_CONFIG = {
+  recorrencia: {
+    titulo: '🔁 Tratar recorrência',
+    campos: [
+      { id: 'evidencias', label: 'Na primeira visita o colaborador seguiu o protocolo de adicionar informações e evidências?', tipo: 'sim_nao' },
+      { id: 'feedback', label: 'Foi aplicado o feedback ao colaborador sobre o ocorrido e a oportunidade de melhoria encontrada?', tipo: 'sim_nao' },
+      { id: 'acao', label: 'Qual ação será aplicada ao colaborador?', tipo: 'select', opcoes: ['Treinamento de Reciclagem','Acompanhamento do Inspetor','Feedback Monitorado'] },
+    ],
+  },
+  improdutividade: {
+    titulo: '📉 Justificar improdutividade',
+    campos: [
+      { id: 'clientes_ausentes', label: 'Está sendo validado os clientes ausentes?', tipo: 'sim_nao' },
+      { id: 'acao', label: 'Qual a ação será aplicada?', tipo: 'select', opcoes: ['Treinamento de Reciclagem','Orientação','Acompanhamento pelo Inspetor'] },
+    ],
+  },
+  sla: {
+    titulo: '⏱️ Justificar protocolo fora do prazo',
+    campos: [
+      { id: 'o_que_aconteceu', label: 'O que aconteceu?', tipo: 'texto' },
+    ],
+  },
+  recorrencia_log: {
+    titulo: '📋 Tratar Recorrência LOG',
+    campos: [
+      { id: 'ciente', label: 'Colaboradores estão cientes do ocorrido?', tipo: 'sim_nao' },
+      { id: 'oportunidade', label: 'Qual a oportunidade de melhoria encontrada?', tipo: 'texto' },
+      { id: 'acao', label: 'Qual ação será adicionada aos colaboradores?', tipo: 'select', opcoes: ['Treinamento de Reciclagem','Acompanhamento do Inspetor','Orientação'] },
+    ],
+  },
+};
+
+let alModalContexto = null; // { tipo, chave, referencia, onSalvar }
+
+function campoHtml(campo, valorAtual){
+  const v = valorAtual || {};
+  if (campo.tipo === 'sim_nao'){
+    return `<div class="field"><label>${campo.label}</label>
+      <select class="input" id="al-campo-${campo.id}">
+        <option value="">Selecione...</option>
+        <option value="Sim" ${v[campo.id]==='Sim'?'selected':''}>Sim</option>
+        <option value="Não" ${v[campo.id]==='Não'?'selected':''}>Não</option>
+      </select></div>`;
+  }
+  if (campo.tipo === 'select'){
+    return `<div class="field"><label>${campo.label}</label>
+      <select class="input" id="al-campo-${campo.id}">
+        <option value="">Selecione...</option>
+        ${campo.opcoes.map(o => `<option value="${o}" ${v[campo.id]===o?'selected':''}>${o}</option>`).join('')}
+      </select></div>`;
+  }
+  return `<div class="field"><label>${campo.label}</label>
+    <textarea class="input" id="al-campo-${campo.id}" rows="3" style="resize:vertical">${v[campo.id]||''}</textarea></div>`;
+}
+
+function abrirChecklist(tipo, chave, subtitulo, referencia, onSalvo){
+  const cfg = ALERTA_CONFIG[tipo];
+  alModalContexto = { tipo, chave, referencia, onSalvo };
+  document.getElementById('al-modal-titulo').textContent = cfg.titulo;
+  document.getElementById('al-modal-sub').textContent = subtitulo || '';
+  carregarTratamentos(tipo).then(mapa => {
+    const existente = mapa[chave];
+    document.getElementById('al-modal-campos').innerHTML = cfg.campos.map(c => campoHtml(c, existente ? existente.respostas : {})).join('');
+    if (existente){
+      document.getElementById('al-modal-sub').textContent = (subtitulo || '') + ` · já tratado por ${existente.tratado_por} em ${OPS.formatDateTimeBR ? OPS.formatDateTimeBR(existente.tratado_em) : diaKey(existente.tratado_em)}`;
+    }
+  });
+  document.getElementById('al-modal').style.display = 'flex';
+}
+document.getElementById('al-modal-fechar').addEventListener('click', () => { document.getElementById('al-modal').style.display = 'none'; });
+document.getElementById('al-modal').addEventListener('click', (e) => { if (e.target.id === 'al-modal') document.getElementById('al-modal').style.display = 'none'; });
+document.getElementById('al-modal-salvar').addEventListener('click', async () => {
+  if (!alModalContexto) return;
+  const { tipo, chave, referencia, onSalvo } = alModalContexto;
+  const cfg = ALERTA_CONFIG[tipo];
+  const respostas = {};
+  let faltando = false;
+  cfg.campos.forEach(c => {
+    const el = document.getElementById('al-campo-' + c.id);
+    const val = el ? el.value.trim() : '';
+    if (!val) faltando = true;
+    respostas[c.id] = val;
+  });
+  if (faltando){ alert('Responda todos os campos antes de salvar.'); return; }
+  const btn = document.getElementById('al-modal-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    await OPS_SUPABASE.upsert('alertas_tratamentos', [{
+      id: `${tipo}|${chave}`, tipo, chave, respostas,
+      tratado_por: nomeDoLogin(), tratado_em: new Date().toISOString(), referencia: referencia || '',
+    }], 'id');
+    document.getElementById('al-modal').style.display = 'none';
+    if (onSalvo) onSalvo();
+  }catch(err){
+    alert('Não consegui salvar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Salvar';
+  }
+});
+
+function statusBadge(tratado){
+  return tratado ? `<span class="badge ok"><span class="dot"></span>Tratado</span>` : `<span class="badge crit"><span class="dot"></span>Pendente</span>`;
+}
+
+// ================= ABA RECORRÊNCIA (D-1) =================
+async function carregarRecorrenciaD1(){
+  const tbody = document.getElementById('al-rec-tbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+  const ontemStr = ontem.toISOString().slice(0,10);
+  const [pares, tratamentos] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_pares_recorrencia', `data_atual=gte.${ontemStr}T00:00:00.000Z&data_atual=lte.${ontemStr}T23:59:59.999Z`),
+    carregarTratamentos('recorrencia'),
+  ]);
+  const lista = (pares || []).filter(p => OPS.isTourosUnitCity(p.area) && ehInstaladorReparador(p.tecnico));
+  document.getElementById('al-rec-badge').textContent = `${fmtNum(lista.length)} recorrência(s) de ${fmtDataBR(ontem)}`;
+  tbody.innerHTML = lista.map(p => {
+    const tratado = tratamentos[p.protocolo_atual];
+    return `<tr style="cursor:pointer" data-protocolo="${p.protocolo_atual}">
+      <td>${statusBadge(tratado)}</td><td>${tituloCase(p.tecnico)}</td>
+      <td>${p.protocolo_anterior||'—'}</td><td>${diaKey(p.data_anterior)}</td>
+      <td>${p.protocolo_atual||'—'}</td><td>${diaKey(p.data_atual)}</td>
+      <td>${p.area||'—'}${p.localidade?' · '+p.localidade:''}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma recorrência com 2ª visita ontem (${fmtDataBR(ontem)}).</td></tr>`;
+  tbody.querySelectorAll('tr[data-protocolo]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const p = lista.find(x => x.protocolo_atual === tr.dataset.protocolo);
+      abrirChecklist('recorrencia', p.protocolo_atual, `${tituloCase(p.tecnico)} · ${p.protocolo_anterior} → ${p.protocolo_atual}`, ontemStr, carregarRecorrenciaD1);
+    });
+  });
+}
+
+// ================= ABA IMPRODUTIVIDADE SEMANAL =================
+let alImprodSemanaSegunda = null, alImprodRegistrosSemana = [];
+async function carregarImprodutividadeSemanal(){
+  const tbody = document.getElementById('al-improd-tbody');
+  tbody.innerHTML = `<tr><td colspan="5" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  const hoje = new Date();
+  alImprodSemanaSegunda = segundaFeiraDaSemana(new Date(hoje.getTime() - 7*86400000));
+  const domingo = domingoDaSemana(alImprodSemanaSegunda);
+  const inicioStr = alImprodSemanaSegunda.toISOString().slice(0,10);
+  const fimStr = domingo.toISOString().slice(0,10);
+  document.getElementById('al-improd-periodo').textContent = `Semana passada: ${fmtDataBR(alImprodSemanaSegunda)} a ${fmtDataBR(domingo)}`;
+  const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
+  const [registros, tratamentos] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_registros', filtro),
+    carregarTratamentos('improdutividade'),
+  ]);
+  alImprodRegistrosSemana = (registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico));
+  const porTecnico = {};
+  alImprodRegistrosSemana.forEach(r => {
+    porTecnico[r.tecnico] = porTecnico[r.tecnico] || { total:0, improd:0 };
+    porTecnico[r.tecnico].total++;
+    if (!isProdutivo(r)) porTecnico[r.tecnico].improd++;
+  });
+  const semanaKey = inicioStr;
+  const linhas = Object.entries(porTecnico).map(([tecnico,v]) => ({
+    tecnico, cidade: alTecnicoAreaMaisFrequente(tecnico), pct: v.total ? (v.improd/v.total)*100 : 0, qtd: v.improd,
+  })).filter(l => l.pct > 10).sort((a,b) => b.pct - a.pct);
+  document.getElementById('al-improd-badge').textContent = `${fmtNum(linhas.length)} colaborador(es) acima de 10%`;
+  tbody.innerHTML = linhas.map(l => {
+    const chave = `${l.tecnico}|${semanaKey}`;
+    const tratado = tratamentos[chave];
+    return `<tr style="cursor:pointer" data-tecnico="${l.tecnico}">
+      <td>${statusBadge(tratado)}</td><td>${tituloCase(l.tecnico)}</td><td>${l.cidade}</td>
+      <td><span class="badge crit"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Ninguém passou de 10% de improdutividade na semana passada.</td></tr>`;
+  tbody.querySelectorAll('tr[data-tecnico]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const l = linhas.find(x => x.tecnico === tr.dataset.tecnico);
+      mostrarGraficoImprodutividade(l.tecnico);
+      const chave = `${l.tecnico}|${semanaKey}`;
+      abrirChecklist('improdutividade', chave, `${tituloCase(l.tecnico)} · ${fmtPct1(l.pct)} de improdutividade na semana`, semanaKey, carregarImprodutividadeSemanal);
+    });
+  });
+}
+function alTecnicoAreaMaisFrequente(tecnico){
+  const contagem = {};
+  alImprodRegistrosSemana.filter(r => r.tecnico === tecnico).forEach(r => {
+    const c = r.area || 'Sem informação';
+    contagem[c] = (contagem[c]||0)+1;
+  });
+  const entradas = Object.entries(contagem).sort((a,b) => b[1]-a[1]);
+  return entradas.length ? entradas[0][0] : '—';
+}
+let alImprodChart = null;
+function mostrarGraficoImprodutividade(tecnico){
+  const meus = alImprodRegistrosSemana.filter(r => r.tecnico === tecnico);
+  const porDia = {};
+  meus.forEach(r => {
+    const d = diaKey(r.data_encerramento);
+    porDia[d] = porDia[d] || { total:0, improd:0 };
+    porDia[d].total++;
+    if (!isProdutivo(r)) porDia[d].improd++;
+  });
+  const dias = Object.keys(porDia).sort();
+  const pontosTotais = meus.reduce((s,r) => s + (parseFloat(r.pontos)||0), 0);
+  const diasTrabalhados = dias.length;
+  const ppc = diasTrabalhados ? (pontosTotais/diasTrabalhados) : 0;
+  document.getElementById('al-improd-chart-titulo').textContent =
+    `📊 ${tituloCase(tecnico)} — % de improdutividade por dia (Ponto por Cabeça na semana: ${ppc.toFixed(2)})`;
+  document.getElementById('al-improd-chart-card').style.display = 'block';
+  if (alImprodChart) alImprodChart.destroy();
+  alImprodChart = new Chart(document.getElementById('al-improd-chart'), {
+    type: 'bar',
+    data: { labels: dias.map(d => { const [,m,dd]=d.split('-'); return `${dd}/${m}`; }),
+      datasets: [{ label:'% improdutividade', data: dias.map(d => (porDia[d].improd/porDia[d].total)*100), backgroundColor:'#ff4d6d' }] },
+    options: { responsive:true, maintainAspectRatio:false,
+      scales: { y:{ beginAtZero:true, max:100, ticks:{color:'#8a97ab',callback:v=>v+'%'}, grid:{color:'#1e2d47'} }, x:{ ticks:{color:'#8a97ab'}, grid:{display:false} } },
+      plugins: { legend:{ display:false } } },
+  });
+  document.getElementById('al-improd-chart-card').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ================= ABA JUSTIFICATIVA SLA =================
+async function carregarJustificativaSla(){
+  const container = document.getElementById('al-sla-conteudo');
+  container.innerHTML = `<div class="card"><div style="padding:20px;color:var(--ink-faint)">Carregando...</div></div>`;
+  const hoje = new Date();
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  document.getElementById('al-sla-periodo').textContent = `Período: ${fmtDataBR(inicioMes)} a ${fmtDataBR(hoje)} (mês atual)`;
+  const inicioStr = inicioMes.toISOString().slice(0,10);
+  const fimStr = hoje.toISOString().slice(0,10);
+  const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
+  const [registros, tratamentos] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_registros', filtro),
+    carregarTratamentos('sla'),
+  ]);
+  const base = (registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const porCidadeGrupo = {}; // cidade|grupo -> {dentro, total, foraDoPrazo:[]}
+  base.forEach(r => {
+    const cidade = r.area || 'Sem informação';
+    const grupo = grupoSlaDoTipo(r.tipo);
+    const chave = cidade + '|' + grupo;
+    porCidadeGrupo[chave] = porCidadeGrupo[chave] || { cidade, grupo, dentro:0, total:0, fora:[] };
+    porCidadeGrupo[chave].total++;
+    if (dentroDoPrazo(r) === true) porCidadeGrupo[chave].dentro++;
+    else porCidadeGrupo[chave].fora.push(r);
+  });
+  const foraDaMeta = Object.values(porCidadeGrupo)
+    .map(v => ({ ...v, pct: v.total ? (v.dentro/v.total)*100 : 0 }))
+    .filter(v => v.pct < SLA_GROUPS[v.grupo].meta)
+    .sort((a,b) => a.pct - b.pct);
+
+  if (!foraDaMeta.length){
+    container.innerHTML = `<div class="card"><div style="padding:20px;color:var(--ink-faint)">Nenhuma cidade fora da meta de SLA no período. 🎉</div></div>`;
+    return;
+  }
+  container.innerHTML = foraDaMeta.map(v => {
+    const linhasProtocolo = v.fora.map(r => {
+      const tratado = tratamentos[r.protocolo];
+      return `<tr style="cursor:pointer" data-protocolo="${r.protocolo}"><td>${statusBadge(tratado)}</td><td>${r.protocolo}</td><td>${tituloCase(r.tecnico)}</td><td>${r.tipo}</td><td>${diaKey(r.data_criacao)}</td><td>${diaKey(r.data_encerramento)}</td></tr>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🏙️ ${v.cidade} · ${SLA_GROUPS[v.grupo].label}</h3><span class="cnt-badge">${fmtPct1(v.pct)} (meta ${SLA_GROUPS[v.grupo].meta}%)</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">${fmtNum(v.fora.length)} protocolo(s) fora do prazo — clique num protocolo pra justificar.</p>
+      <div class="table-wrap" style="max-height:280px">
+        <table class="services"><thead><tr><th>Status</th><th>Protocolo</th><th>Técnico</th><th>Tipo</th><th>Criação</th><th>Encerramento</th></tr></thead>
+        <tbody>${linhasProtocolo}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('tr[data-protocolo]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const protocolo = tr.dataset.protocolo;
+      const r = base.find(x => x.protocolo === protocolo);
+      abrirChecklist('sla', protocolo, `Protocolo ${protocolo} · ${tituloCase(r.tecnico)} · ${r.tipo} · ${r.area}`, inicioStr, carregarJustificativaSla);
+    });
+  });
+}
+
+// ================= ABA RECORRÊNCIA LOG (3+ visitas) =================
+async function carregarRecorrenciaLog(){
+  const tbody = document.getElementById('al-log-tbody');
+  const aviso = document.getElementById('al-log-aviso');
+  tbody.innerHTML = `<tr><td colspan="5" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  const hoje = new Date();
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioStr = inicioMes.toISOString().slice(0,10);
+  const fimStr = hoje.toISOString().slice(0,10);
+  // busca todos os tipos de reparo produtivo do mês - filtra client-side pelo grupo (reparo)
+  const filtroAmplo = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
+  const [registros, tratamentos] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_registros', filtroAmplo),
+    carregarTratamentos('recorrencia_log'),
+  ]);
+  const base = (registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id);
+  const semClienteId = (registros || []).filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && isProdutivo(r) && !r.cliente_id).length;
+
+  const porCliente = {};
+  base.forEach(r => {
+    porCliente[r.cliente_id] = porCliente[r.cliente_id] || { clienteId: r.cliente_id, cidade: r.area, visitas: [], tecnicos: new Set() };
+    porCliente[r.cliente_id].visitas.push(r);
+    porCliente[r.cliente_id].tecnicos.add(r.tecnico);
+  });
+  const com3Mais = Object.values(porCliente).filter(c => c.visitas.length >= 3).sort((a,b) => b.visitas.length - a.visitas.length);
+
+  document.getElementById('al-log-badge').textContent = `${fmtNum(com3Mais.length)} cliente(s)`;
+  if (semClienteId > 0){
+    aviso.style.display = 'block';
+    aviso.textContent = `ℹ️ ${fmtNum(semClienteId)} reparo(s) produtivo(s) do mês ficaram fora dessa conta por não terem ID de cliente registrado (dado novo - só passa a vir em importações feitas a partir de agora; meses/dias já importados antes não têm esse campo até serem reimportados).`;
+  } else {
+    aviso.style.display = 'none';
+  }
+  tbody.innerHTML = com3Mais.map(c => {
+    const tratado = tratamentos[c.clienteId];
+    return `<tr style="cursor:pointer" data-cliente="${c.clienteId}">
+      <td>${statusBadge(tratado)}</td><td>${c.clienteId}</td><td>${c.cidade||'—'}</td>
+      <td>${fmtNum(c.visitas.length)}</td><td>${[...c.tecnicos].map(tituloCase).join(', ')}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum cliente com 3+ visitas de reparo no mês atual (com ID de cliente disponível).</td></tr>`;
+
+  tbody.querySelectorAll('tr[data-cliente]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const c = com3Mais.find(x => x.clienteId === tr.dataset.cliente);
+      const detalhe = c.visitas.map(v => `${v.protocolo} (${diaKey(v.data_encerramento)}, ${tituloCase(v.tecnico)})`).join(' · ');
+      abrirChecklist('recorrencia_log', c.clienteId, `Cliente ${c.clienteId} · ${c.visitas.length} visitas: ${detalhe}`, inicioStr, carregarRecorrenciaLog);
+    });
+  });
+}
+
+// ================= navegação entre abas =================
+let alAbaAtiva = 'recorrencia';
+const AL_CARREGADORES = {
+  recorrencia: carregarRecorrenciaD1,
+  improdutividade: carregarImprodutividadeSemanal,
+  sla: carregarJustificativaSla,
+  recorrencia_log: carregarRecorrenciaLog,
+};
+document.querySelectorAll('#al-abas .qf-tile').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#al-abas .qf-tile').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    alAbaAtiva = btn.dataset.aba;
+    ['recorrencia','improdutividade','sla','recorrencia_log'].forEach(k => {
+      document.getElementById('al-aba-' + k).style.display = k === alAbaAtiva ? 'block' : 'none';
+    });
+    AL_CARREGADORES[alAbaAtiva]();
+  });
+});
+
+async function initPage(){
+  await carregarBaseComum();
+  carregarRecorrenciaD1();
+}
+window.OPS_ON_REFRESH = initPage;
+initPage();
+</script>
+</body>
+</html>
