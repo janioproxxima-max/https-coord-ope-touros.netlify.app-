@@ -1413,7 +1413,7 @@ function mesclarProdutividade(resultado){
     if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
-      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [] };
+      registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [], ppcMedio: null, tendencia: null };
       produtividade.push(registro);
     }
     registrosTocados.push(registro);
@@ -1547,10 +1547,18 @@ async function aplicarResultadoProdutividade(resultado){
   }, 0);
 
   // sincroniza só quem mudou (não a base toda) com o servidor, em segundo
-  // plano, sem travar a tela
+  // plano, sem travar a tela. Usa allSettled (não all) de propósito: se UMA
+  // dessas 3 operações falhar (ex: produtividade_historico com chave
+  // inconsistente), as outras duas — principalmente o envio de
+  // produtividade_registros/pares, que é o que realmente importa e o mais
+  // demorado — continuam até o fim em vez de serem abandonadas no meio.
+  // Isso já causou perda de dados de verdade: a automação fecha a página
+  // assim que vê qualquer alerta "⚠️", e com Promise.all esse alerta podia
+  // disparar ANTES do envio de registros terminar, cortando ele pela
+  // metade. Com allSettled, o alerta só aparece depois que tudo já rodou.
   produtividadeSyncPendente = true;
   const toast = OPS.showToast('☁️ Sincronizando...');
-  Promise.all([
+  Promise.allSettled([
     inserirEmLotes('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 500, 'tecnico'),
     inserirEmLotes('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 500, 'tecnico,mes_key,tipo'),
     // limpa o detalhe antigo desses meses antes de inserir o novo, pra não
@@ -1563,12 +1571,13 @@ async function aplicarResultadoProdutividade(resultado){
       await inserirEmLotes('produtividade_registros', resultado.detalhesRegistros.map(detalheRegistroParaSupabase), 500);
       await inserirEmLotes('produtividade_pares_recorrencia', resultado.paresRecorrencia.map(parRecorrenciaParaSupabase), 500);
     })(),
-  ]).then(() => {
+  ]).then((resultados) => {
     toast.remove();
-  }).catch((err) => {
-    toast.remove();
-    console.error('Falha ao sincronizar produtividade', err);
-    alert(`⚠️ A atualização está salva no seu navegador, mas não consegui enviar pro servidor agora.\n\nMotivo técnico: ${err.message}\n\nPrint isso e me avisa. Por enquanto, os outros usuários não vão ver essa atualização.`);
+    const falhas = resultados.filter(r => r.status === 'rejected');
+    if (falhas.length){
+      console.error('Falha parcial ao sincronizar produtividade', falhas);
+      alert(`⚠️ Parte da sincronização falhou (o que não deu erro já foi enviado normalmente).\n\nMotivo técnico: ${falhas.map(f => f.reason && f.reason.message).join(' | ')}\n\nPrint isso e me avisa.`);
+    }
   }).finally(() => {
     produtividadeSyncPendente = false;
   });
