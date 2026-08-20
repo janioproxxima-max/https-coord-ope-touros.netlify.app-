@@ -19,9 +19,9 @@
 
   <div class="qf-tiles" id="al-abas" style="margin-bottom:14px">
     <button type="button" class="qf-tile active" data-aba="recorrencia">🔁 Recorrência (D-1)</button>
+    <button type="button" class="qf-tile" data-aba="recorrencia_log">📋 Recorrência LOG</button>
     <button type="button" class="qf-tile" data-aba="improdutividade">📉 Improdutividade</button>
     <button type="button" class="qf-tile" data-aba="sla">⏱️ Justificativa SLA</button>
-    <button type="button" class="qf-tile" data-aba="recorrencia_log">📋 Recorrência LOG</button>
   </div>
 
   <!-- ================= ABA: RECORRÊNCIA D-1 ================= -->
@@ -35,6 +35,25 @@
           <tbody id="al-rec-tbody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: RECORRÊNCIA LOG (3+ visitas) ================= -->
+  <div id="al-aba-recorrencia_log" style="display:none">
+    <div class="card">
+      <div class="card-head"><h3>📋 Clientes com 3 ou mais visitas de reparo</h3><span class="cnt-badge" id="al-log-badge">—</span></div>
+      <p class="page-sub" id="al-log-aviso" style="padding:0 16px;margin:10px 0;display:none"></p>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="services">
+          <thead><tr><th>Status</th><th>ID Cliente</th><th>Cidade</th><th>Visitas</th><th>Técnicos envolvidos</th></tr></thead>
+          <tbody id="al-log-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-head"><h3>🔧 Tipos de problema (clientes com 3+ visitas)</h3></div>
+      <div class="chart-box tall"><canvas id="al-log-chart-tipos"></canvas></div>
     </div>
   </div>
 
@@ -60,25 +79,6 @@
   <div id="al-aba-sla" style="display:none">
     <p class="page-sub" id="al-sla-periodo" style="margin:0 2px 14px"></p>
     <div id="al-sla-conteudo"></div>
-  </div>
-
-  <!-- ================= ABA: RECORRÊNCIA LOG (3+ visitas) ================= -->
-  <div id="al-aba-recorrencia_log" style="display:none">
-    <div class="card">
-      <div class="card-head"><h3>📋 Clientes com 3 ou mais visitas de reparo</h3><span class="cnt-badge" id="al-log-badge">—</span></div>
-      <p class="page-sub" id="al-log-aviso" style="padding:0 16px;margin:10px 0;display:none"></p>
-      <div class="table-wrap" style="max-height:520px">
-        <table class="services">
-          <thead><tr><th>Status</th><th>ID Cliente</th><th>Cidade</th><th>Visitas</th><th>Técnicos envolvidos</th></tr></thead>
-          <tbody id="al-log-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card" style="margin-top:18px">
-      <div class="card-head"><h3>🔧 Tipos de problema (clientes com 3+ visitas)</h3></div>
-      <div class="chart-box tall"><canvas id="al-log-chart-tipos"></canvas></div>
-    </div>
   </div>
 </div>
 
@@ -546,7 +546,7 @@ document.querySelectorAll('#al-abas .qf-tile').forEach(btn => {
     document.querySelectorAll('#al-abas .qf-tile').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     alAbaAtiva = btn.dataset.aba;
-    ['recorrencia','improdutividade','sla','recorrencia_log'].forEach(k => {
+    ['recorrencia','recorrencia_log','improdutividade','sla'].forEach(k => {
       document.getElementById('al-aba-' + k).style.display = k === alAbaAtiva ? 'block' : 'none';
     });
     AL_CARREGADORES[alAbaAtiva]();
