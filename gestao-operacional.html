@@ -901,7 +901,11 @@ function renderSlaHistorico(data){
         x: { ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
       },
       plugins: { legend: { labels:{ color:'#e2eaf5' } },
-        datalabels: { display:'auto', align:'top', anchor:'end', color: ctx => ctx.dataset.borderColor, font:{ weight:'700', size:9.5 }, formatter: v => v == null ? '' : v.toFixed(1)+'%' } },
+        // sem rótulo fixo em cada ponto aqui — com 4 séries por dia os
+        // números colidem entre si e com a legenda; passa o mouse pra ver
+        // o valor exato no tooltip
+        datalabels: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : ctx.parsed.y.toFixed(1)+'%'}` } } },
     },
   });
 }
