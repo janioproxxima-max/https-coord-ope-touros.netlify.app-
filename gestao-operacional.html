@@ -140,6 +140,26 @@
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-bottom:18px;margin-top:18px">
+      <div class="card-head" style="display:flex;align-items:center;gap:10px">
+        <h3>🏙️ % Recorrência por Cidade</h3>
+        <button type="button" class="btn ghost" id="go-btn-analitico-recorrencia" style="margin-left:auto;font-size:12px;padding:5px 10px">📋 Ver analítico</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Clique numa barra pra ver os pares de recorrência daquela cidade no analítico.</p>
+      <div class="chart-box tall"><canvas id="go-chart-rec-cidade"></canvas></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>📅 Tendência mensal de Recorrência (%)</h3></div>
+        <div class="chart-box"><canvas id="go-chart-rec-tendencia"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>🔧 Pareto por Tipo de Serviço</h3></div>
+        <div class="chart-box"><canvas id="go-chart-rec-pareto"></canvas></div>
+      </div>
+    </div>
   </div>
 
   <!-- ================= ABA: IMPRODUTIVIDADE ================= -->
@@ -157,6 +177,26 @@
       </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services"><thead><tr><th>Responsável</th><th>Improdutividade (%)</th><th>Qtd.</th></tr></thead><tbody id="go-improd-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px;margin-top:18px">
+      <div class="card-head" style="display:flex;align-items:center;gap:10px">
+        <h3>🏙️ % Improdutividade por Cidade</h3>
+        <button type="button" class="btn ghost" id="go-btn-analitico-improdutividade" style="margin-left:auto;font-size:12px;padding:5px 10px">📋 Ver analítico</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Clique numa barra pra ver os protocolos improdutivos daquela cidade no analítico.</p>
+      <div class="chart-box tall"><canvas id="go-chart-improd-cidade"></canvas></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>📅 Tendência mensal de Improdutividade (%)</h3></div>
+        <div class="chart-box"><canvas id="go-chart-improd-tendencia"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>⚠️ Pareto por Motivo (descrição do encerramento)</h3></div>
+        <div class="chart-box"><canvas id="go-chart-improd-pareto"></canvas></div>
       </div>
     </div>
   </div>
@@ -214,17 +254,15 @@
 
 </div>
 
-<!-- Modal: analítico de Serviços (linha a linha, pra validar os números agregados) -->
+<!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
+     reaproveitado por Serviços, Recorrência e Improdutividade (ver ANALITICO_CONFIG) -->
 <div class="modal-backdrop" id="go-modal-analitico" style="display:none">
   <div class="modal" style="max-width:min(1100px,92vw)">
-    <h3>📋 Analítico de Serviços</h3>
+    <h3 id="go-analitico-titulo">📋 Analítico</h3>
     <p class="modal-sub" id="go-analitico-sub"></p>
     <div class="table-wrap" style="max-height:60vh">
       <table class="services" id="go-analitico-tabela">
-        <thead><tr>
-          <th>Protocolo</th><th>Técnico</th><th>Tipo</th><th>Área</th><th>Localidade</th>
-          <th>Produtivo</th><th>Pontos</th><th>Data criação</th><th>Data encerramento</th><th>TMA (h)</th><th>Dentro do SLA</th>
-        </tr></thead>
+        <thead id="go-analitico-thead"></thead>
         <tbody id="go-analitico-tbody"></tbody>
       </table>
     </div>
@@ -709,40 +747,101 @@ function renderResumo(data){
   document.getElementById('go-resumo-pontos').textContent = totalPontos.toFixed(1).replace('.', ',');
 }
 
-// -------- analítico de Serviços: mesma base linha a linha dos cartões/
-// gráficos acima, pra dar pra conferir manualmente que os números batem --------
-function linhasAnaliticoServicos(){
-  return dedupePorProtocolo(goRegistrosFiltrados()).map(r => {
+// -------- analítico: mesma base linha a linha dos cartões/gráficos acima,
+// pra dar pra conferir manualmente que os números batem. Genérico - cada aba
+// (Serviços/Recorrência/Improdutividade) registra seu modo em
+// ANALITICO_CONFIG; "filtro" é um predicado opcional aplicado quando o
+// usuário clica numa barra/linha específica de um gráfico (drill-down) --------
+function linhasAnaliticoServicos(filtro){
+  let data = dedupePorProtocolo(goRegistrosFiltrados());
+  if (filtro) data = data.filter(filtro);
+  return data.map(r => {
     const dp = dentroDoPrazo(r);
-    return {
-      protocolo: r.protocolo || '', tecnico: r.tecnico || '', tipo: r.tipo || '',
-      area: r.area || '', localidade: r.localidade || '',
-      produtivo: isProdutivo(r) ? 'Sim' : 'Não',
-      pontos: r.pontos != null ? r.pontos : '',
-      dataCriacao: r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
-      dataEncerramento: r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
-      tma: isFinite(parseFloat(r.tma)) ? Number(r.tma).toFixed(2) : '',
-      dentroSla: dp == null ? '—' : (dp ? 'Sim' : 'Não'),
-    };
+    return [
+      r.protocolo || '', r.tecnico || '', r.tipo || '', r.area || '', r.localidade || '',
+      isProdutivo(r) ? 'Sim' : 'Não',
+      r.pontos != null ? r.pontos : '',
+      r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
+      r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+      isFinite(parseFloat(r.tma)) ? Number(r.tma).toFixed(2) : '',
+      dp == null ? '—' : (dp ? 'Sim' : 'Não'),
+    ];
   });
 }
-function linhaAnaliticoParaTr(l){
-  return `<tr><td>${l.protocolo}</td><td>${l.tecnico}</td><td>${l.tipo}</td><td>${l.area}</td><td>${l.localidade}</td>` +
-    `<td>${l.produtivo}</td><td>${l.pontos}</td><td>${l.dataCriacao}</td><td>${l.dataEncerramento}</td><td>${l.tma}</td><td>${l.dentroSla}</td></tr>`;
+function linhasAnaliticoRecorrencia(filtro){
+  let data = goParesFiltrados();
+  if (filtro) data = data.filter(filtro);
+  return data.map(p => [
+    tituloCase(p.tecnico || ''), p.tipo || '',
+    p.protocolo_anterior || '', p.descricao_anterior || '', diaKey(p.data_anterior),
+    p.protocolo_atual || '', p.descricao_atual || '', diaKey(p.data_atual),
+    diffDias(p.data_anterior, p.data_atual),
+    p.area || '', p.localidade || '',
+  ]);
 }
-function abrirAnaliticoServicos(){
-  const linhas = linhasAnaliticoServicos();
+function linhasAnaliticoImprodutividade(filtro){
+  let data = goRegistrosFiltrados().filter(r => !isProdutivo(r));
+  if (filtro) data = data.filter(filtro);
+  return data.map(r => [
+    r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.descricao || '',
+    r.area || '', r.localidade || '',
+    r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+  ]);
+}
+
+const ANALITICO_CONFIG = {
+  servicos: {
+    titulo: '📋 Analítico de Serviços',
+    headers: ['Protocolo','Técnico','Tipo','Área','Localidade','Produtivo','Pontos','Data criação','Data encerramento','TMA (h)','Dentro do SLA'],
+    linhas: linhasAnaliticoServicos, arquivo: 'servicos', sheet: 'Serviços',
+  },
+  recorrencia: {
+    titulo: '📋 Analítico de Recorrência',
+    headers: ['Técnico','Tipo','Protocolo anterior','Descrição anterior','Data anterior','Protocolo atual','Descrição atual','Data atual','Dias entre','Cidade','Localidade'],
+    linhas: linhasAnaliticoRecorrencia, arquivo: 'recorrencia', sheet: 'Recorrência',
+  },
+  improdutividade: {
+    titulo: '📋 Analítico de Improdutividade',
+    headers: ['Protocolo','Técnico','Tipo','Descrição do encerramento','Área','Localidade','Data encerramento'],
+    linhas: linhasAnaliticoImprodutividade, arquivo: 'improdutividade', sheet: 'Improdutividade',
+  },
+};
+let goAnaliticoModo = 'servicos';
+let goAnaliticoFiltro = null;
+
+function abrirAnalitico(modo, filtro, rotuloFiltro){
+  goAnaliticoModo = modo;
+  goAnaliticoFiltro = filtro || null;
+  const cfg = ANALITICO_CONFIG[modo];
+  const linhas = cfg.linhas(filtro);
   const LIMITE_TELA = 1000;
+  document.getElementById('go-analitico-titulo').textContent = cfg.titulo;
+  document.getElementById('go-analitico-thead').innerHTML = '<tr>' + cfg.headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
   document.getElementById('go-analitico-sub').textContent =
-    `${fmtNum(linhas.length)} registro(s) no período/filtro atual — a mesma base que alimenta os cartões e gráficos acima.`;
+    `${fmtNum(linhas.length)} registro(s)${rotuloFiltro ? ' · filtrado por ' + rotuloFiltro : ' no período/filtro atual'} — a mesma base que alimenta os cartões e gráficos acima.`;
   const tbody = document.getElementById('go-analitico-tbody');
-  tbody.innerHTML = linhas.slice(0, LIMITE_TELA).map(linhaAnaliticoParaTr).join('') +
-    (linhas.length > LIMITE_TELA
-      ? `<tr><td colspan="11" style="text-align:center;color:var(--ink-faint)">Mostrando os primeiros ${fmtNum(LIMITE_TELA)} de ${fmtNum(linhas.length)} — exporte pra Excel pra ver todos.</td></tr>`
-      : '');
+  tbody.innerHTML = linhas.slice(0, LIMITE_TELA).map(arr => `<tr>${arr.map(v => `<td>${v}</td>`).join('')}</tr>`).join('') ||
+    `<tr><td colspan="${cfg.headers.length}" style="text-align:center;color:var(--ink-faint)">Sem dados.</td></tr>`;
+  if (linhas.length > LIMITE_TELA){
+    tbody.innerHTML += `<tr><td colspan="${cfg.headers.length}" style="text-align:center;color:var(--ink-faint)">Mostrando os primeiros ${fmtNum(LIMITE_TELA)} de ${fmtNum(linhas.length)} — exporte pra Excel pra ver todos.</td></tr>`;
+  }
   document.getElementById('go-modal-analitico').style.display = 'flex';
 }
-document.getElementById('go-btn-analitico').addEventListener('click', abrirAnaliticoServicos);
+document.getElementById('go-btn-analitico').addEventListener('click', () => abrirAnalitico('servicos'));
+document.getElementById('go-btn-analitico-recorrencia').addEventListener('click', () => abrirAnalitico('recorrencia'));
+document.getElementById('go-btn-analitico-improdutividade').addEventListener('click', () => abrirAnalitico('improdutividade'));
+document.getElementById('go-rec-resp-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-nome]');
+  if (!tr) return;
+  const nome = tr.dataset.nome;
+  abrirAnalitico('recorrencia', p => respChave(goRespRec, p.tecnico) === nome, tituloCase(nome));
+});
+document.getElementById('go-improd-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-nome]');
+  if (!tr) return;
+  const nome = tr.dataset.nome;
+  abrirAnalitico('improdutividade', r => respChave(goRespImprod, r.tecnico) === nome, tituloCase(nome));
+});
 document.getElementById('go-btn-fechar-analitico').addEventListener('click', () => {
   document.getElementById('go-modal-analitico').style.display = 'none';
 });
@@ -750,11 +849,83 @@ document.getElementById('go-modal-analitico').addEventListener('click', (e) => {
   if (e.target.id === 'go-modal-analitico') document.getElementById('go-modal-analitico').style.display = 'none';
 });
 document.getElementById('go-btn-exportar-analitico').addEventListener('click', () => {
-  const linhas = linhasAnaliticoServicos();
-  const headers = ['Protocolo','Técnico','Tipo','Área','Localidade','Produtivo','Pontos','Data criação','Data encerramento','TMA (h)','Dentro do SLA'];
-  const rows = linhas.map(l => [l.protocolo, l.tecnico, l.tipo, l.area, l.localidade, l.produtivo, l.pontos, l.dataCriacao, l.dataEncerramento, l.tma, l.dentroSla]);
-  OPS.downloadXLSX(`gestao-operacional-servicos-analitico-${new Date().toISOString().slice(0,10)}.xlsx`, headers, rows, 'Serviços');
+  const cfg = ANALITICO_CONFIG[goAnaliticoModo];
+  const rows = cfg.linhas(goAnaliticoFiltro);
+  OPS.downloadXLSX(`gestao-operacional-${cfg.arquivo}-analitico-${new Date().toISOString().slice(0,10)}.xlsx`, cfg.headers, rows, cfg.sheet);
 });
+
+// -------- ranking horizontal (barras) + pareto (barra+linha %) - usados nos
+// novos cartões de Recorrência e Improdutividade, clicáveis pra abrir o
+// analítico já filtrado naquele valor --------
+function renderRankingBarras(canvasId, entries, corBase, onClickEntry){
+  const top = entries.slice().sort((a,b) => b.valor - a.valor).slice(0, 15);
+  const el = document.getElementById(canvasId);
+  if (goCharts[canvasId]) goCharts[canvasId].destroy();
+  goCharts[canvasId] = new Chart(el, {
+    type: 'bar',
+    data: { labels: top.map(e => e.label), datasets: [{ data: top.map(e => e.valor), backgroundColor: corBase }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts, indexAxis: 'y',
+      onClick: (evt, elems) => { if (elems.length && onClickEntry) onClickEntry(top[elems[0].index]); },
+      scales: {
+        x: { beginAtZero:true, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ color:'#1e2d47' } },
+        y: { ticks:{ color:'#e2eaf5', font:{size:10.5} }, grid:{ display:false } },
+      },
+      plugins: { legend:{ display:false },
+        datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{ weight:'700', size:10.5 }, formatter: v => v.toFixed(2)+'%' } },
+    },
+  });
+}
+function renderParetoChart(canvasId, entries, onClickEntry){
+  const top = entries.slice().sort((a,b) => b.qtd - a.qtd).slice(0, 12);
+  const total = top.reduce((s,e) => s + e.qtd, 0);
+  let acumulado = 0;
+  const cumulativa = top.map(e => { acumulado += e.qtd; return total ? (acumulado/total*100) : 0; });
+  const el = document.getElementById(canvasId);
+  if (goCharts[canvasId]) goCharts[canvasId].destroy();
+  goCharts[canvasId] = new Chart(el, {
+    data: {
+      labels: top.map(e => e.label),
+      datasets: [
+        { type:'bar', label:'Quantidade', data: top.map(e => e.qtd), backgroundColor:'#ffd166', yAxisID:'y', order:2 },
+        { type:'line', label:'% acumulado', data: cumulativa, borderColor:'#00d4ff', backgroundColor:'#00d4ff', pointRadius:3, yAxisID:'y1', order:1, tension:0.15 },
+      ],
+    },
+    options: { ...commonChartOpts,
+      onClick: (evt, elems) => { if (elems.length && onClickEntry) onClickEntry(top[elems[0].index]); },
+      scales: {
+        y: { beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' }, position:'left' },
+        y1: { beginAtZero:true, max:100, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ display:false }, position:'right' },
+        x: { ticks:{ color:'#e2eaf5', maxRotation:40, minRotation:20, font:{size:10} }, grid:{ display:false } },
+      },
+      plugins: { legend:{ labels:{ color:'#e2eaf5' } } },
+    },
+  });
+}
+function renderTendenciaMensal(canvasId, entries, corBase, onClickEntry){
+  const ordenado = entries.slice().sort((a,b) => a.mesKey.localeCompare(b.mesKey));
+  const el = document.getElementById(canvasId);
+  if (goCharts[canvasId]) goCharts[canvasId].destroy();
+  goCharts[canvasId] = new Chart(el, {
+    type: 'bar',
+    data: { labels: ordenado.map(e => formatarMesCurto(e.mesKey)), datasets: [{ label:'%', data: ordenado.map(e => e.valor), backgroundColor: corBase }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts,
+      onClick: (evt, elems) => { if (elems.length && onClickEntry) onClickEntry(ordenado[elems[0].index]); },
+      scales: {
+        y: { beginAtZero:true, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ color:'#1e2d47' } },
+        x: { ticks:{ color:'#8a97ab' }, grid:{ display:false } },
+      },
+      plugins: { legend:{ display:false },
+        datalabels: { color:'#e2eaf5', anchor:'end', align:'top', font:{ weight:'700', size:10.5 }, formatter: v => v.toFixed(1)+'%' } },
+    },
+  });
+}
+function formatarMesCurto(mesKey){
+  const [ano, mes] = mesKey.split('-');
+  const nomes = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return `${nomes[Number(mes)-1]}/${ano.slice(2)}`;
+}
 
 // Exporta exatamente o que já está na tela em qualquer tabela da página -
 // garante que o Excel bate 100% com o que a pessoa está vendo (mesmos
@@ -797,6 +968,40 @@ function renderAbaRecorrencia(data, pares){
     </tr>`).join('') || `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
 
   renderRecorrenciaResp(data, pares);
+  renderRecorrenciaCidade(data, pares);
+  renderRecorrenciaTendencia(data, pares);
+  renderRecorrenciaPareto(pares);
+}
+function renderRecorrenciaCidade(data, pares){
+  const produtivosPorArea = {}, paresPorArea = {};
+  data.filter(isProdutivo).forEach(r => { produtivosPorArea[r.area] = (produtivosPorArea[r.area]||0)+1; });
+  pares.forEach(p => { paresPorArea[p.area] = (paresPorArea[p.area]||0)+1; });
+  const entries = Object.keys(produtivosPorArea).map(area => ({
+    label: area || 'Sem informação',
+    valor: produtivosPorArea[area] ? ((paresPorArea[area]||0)/produtivosPorArea[area])*100 : 0,
+  }));
+  renderRankingBarras('go-chart-rec-cidade', entries, '#ffd166', (entry) => {
+    abrirAnalitico('recorrencia', p => (p.area || 'Sem informação') === entry.label, `Cidade: ${entry.label}`);
+  });
+}
+function renderRecorrenciaTendencia(data, pares){
+  const produtivosPorMes = {}, paresPorMes = {};
+  data.filter(isProdutivo).forEach(r => { const m = diaKey(r.data_encerramento).slice(0,7); if (m) produtivosPorMes[m] = (produtivosPorMes[m]||0)+1; });
+  pares.forEach(p => { const m = diaKey(p.data_atual).slice(0,7); if (m) paresPorMes[m] = (paresPorMes[m]||0)+1; });
+  const entries = Object.keys(produtivosPorMes).map(m => ({
+    mesKey: m, valor: produtivosPorMes[m] ? ((paresPorMes[m]||0)/produtivosPorMes[m])*100 : 0,
+  }));
+  renderTendenciaMensal('go-chart-rec-tendencia', entries, '#00d4ff', (entry) => {
+    abrirAnalitico('recorrencia', p => diaKey(p.data_atual).slice(0,7) === entry.mesKey, `Mês: ${formatarMesCurto(entry.mesKey)}`);
+  });
+}
+function renderRecorrenciaPareto(pares){
+  const porTipo = {};
+  pares.forEach(p => { const t = p.tipo || 'Sem tipo'; porTipo[t] = (porTipo[t]||0)+1; });
+  const entries = Object.entries(porTipo).map(([label,qtd]) => ({ label, qtd }));
+  renderParetoChart('go-chart-rec-pareto', entries, (entry) => {
+    abrirAnalitico('recorrencia', p => (p.tipo || 'Sem tipo') === entry.label, `Tipo: ${entry.label}`);
+  });
 }
 function renderRecorrenciaResp(data, pares){
   const produtivosPorResp = {};
@@ -814,7 +1019,7 @@ function renderRecorrenciaResp(data, pares){
     return { nome, qtd, pct: produtivosPorResp[nome] ? (qtd / produtivosPorResp[nome]) * 100 : 0 };
   }).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-rec-resp-tbody').innerHTML = linhas.map(l =>
-    `<tr><td>${tituloCase(l.nome)}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
+    `<tr style="cursor:pointer" data-nome="${l.nome}" title="Clique pra ver o analítico"><td>${tituloCase(l.nome)}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
 }
 
@@ -838,8 +1043,47 @@ function renderImprodutividade(data){
   const linhas = Object.entries(grupos).map(([nome,v]) => ({ nome, pct: v.total ? (v.improd/v.total)*100 : 0, qtd: v.improd })).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-improd-tbody').innerHTML = linhas.map(l => {
     const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
-    return `<tr><td>${tituloCase(l.nome)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
+    return `<tr style="cursor:pointer" data-nome="${l.nome}" title="Clique pra ver o analítico"><td>${tituloCase(l.nome)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
   }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+
+  renderImprodCidade(data);
+  renderImprodTendencia(data);
+  renderImprodPareto(data);
+}
+function renderImprodCidade(data){
+  const totalPorArea = {}, improdPorArea = {};
+  data.forEach(r => {
+    totalPorArea[r.area] = (totalPorArea[r.area]||0)+1;
+    if (!isProdutivo(r)) improdPorArea[r.area] = (improdPorArea[r.area]||0)+1;
+  });
+  const entries = Object.keys(totalPorArea).map(area => ({
+    label: area || 'Sem informação',
+    valor: totalPorArea[area] ? ((improdPorArea[area]||0)/totalPorArea[area])*100 : 0,
+  }));
+  renderRankingBarras('go-chart-improd-cidade', entries, '#ff4d6d', (entry) => {
+    abrirAnalitico('improdutividade', r => (r.area || 'Sem informação') === entry.label, `Cidade: ${entry.label}`);
+  });
+}
+function renderImprodTendencia(data){
+  const totalPorMes = {}, improdPorMes = {};
+  data.forEach(r => {
+    const m = diaKey(r.data_encerramento).slice(0,7);
+    if (!m) return;
+    totalPorMes[m] = (totalPorMes[m]||0)+1;
+    if (!isProdutivo(r)) improdPorMes[m] = (improdPorMes[m]||0)+1;
+  });
+  const entries = Object.keys(totalPorMes).map(m => ({ mesKey: m, valor: totalPorMes[m] ? ((improdPorMes[m]||0)/totalPorMes[m])*100 : 0 }));
+  renderTendenciaMensal('go-chart-improd-tendencia', entries, '#ff4d6d', (entry) => {
+    abrirAnalitico('improdutividade', r => diaKey(r.data_encerramento).slice(0,7) === entry.mesKey, `Mês: ${formatarMesCurto(entry.mesKey)}`);
+  });
+}
+function renderImprodPareto(data){
+  const porMotivo = {};
+  data.filter(r => !isProdutivo(r)).forEach(r => { const m = r.descricao || 'Sem descrição'; porMotivo[m] = (porMotivo[m]||0)+1; });
+  const entries = Object.entries(porMotivo).map(([label,qtd]) => ({ label, qtd }));
+  renderParetoChart('go-chart-improd-pareto', entries, (entry) => {
+    abrirAnalitico('improdutividade', r => (r.descricao || 'Sem descrição') === entry.label, `Motivo: ${entry.label}`);
+  });
 }
 
 // ================= ABA TICKETS =================
