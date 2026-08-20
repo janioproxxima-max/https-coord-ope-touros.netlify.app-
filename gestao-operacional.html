@@ -2013,27 +2013,54 @@ function desenharProdutividadeTecnica(){
   });
 }
 
-// pontuação de HOJE × meta diária - independe do filtro de período do topo
-// (é sempre "hoje"). Só entra quem tá ativo (status === 'ativo' no cadastro,
-// mesmo critério de gestao-pessoas.html/indicadores.html) e não tá de folga
-// hoje (OPS.isFolgaNoDia). Sem cadastro (ainda carregando ou não achou o
-// nome) entra por padrão, igual ao filtro de Instalador/Reparador acima.
-function renderChartPontosHoje(){
+async function carregarAtestadosCacheSeNecessario(){
+  if (goAtestados !== null) return goAtestados;
+  try{
+    goAtestados = (await OPS.syncPull('AtestadosData')) || [];
+  }catch(err){
+    console.error('Falha ao buscar Atestados', err);
+    goAtestados = [];
+  }
+  return goAtestados;
+}
+
+// pontuação de HOJE × meta diária - independe do filtro de período/cidade do
+// topo da página: um técnico do Touros pode fechar um atendimento numa
+// cidade fora da lista de unidade (ex: cobrir um chamado em Natal ou
+// Jucurutu) e isso ainda conta pra meta dele, então busca os registros de
+// hoje direto no Supabase, sem o filtro de cidade que goRegistros aplica.
+// Roster vem de quem é Instalador/Reparador (mesmo filtro do donut
+// Produtivos×Improdutivos, fora Coordenação/Supervisão/Inspetor), status
+// ativo, sem folga hoje e sem atestado cobrindo hoje.
+async function renderChartPontosHoje(){
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
-  const pontosHojePorTecnico = {};
-  goRegistros.forEach(r => {
-    if (!r.tecnico || diaKey(r.data_encerramento) !== hojeStr) return;
-    pontosHojePorTecnico[r.tecnico] = (pontosHojePorTecnico[r.tecnico] || 0) + (parseFloat(r.pontos) || 0);
+  const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+  const amanhaStr = amanha.toISOString().slice(0,10);
+
+  let registrosHoje = [];
+  try{
+    registrosHoje = await OPS_SUPABASE.select('produtividade_registros',
+      `data_encerramento=gte.${hojeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`);
+  }catch(err){
+    console.error('Falha ao buscar produtividade de hoje', err);
+  }
+  await carregarAtestadosCacheSeNecessario();
+  if (goAbaAtiva !== 'produtividade-tecnica') return;
+
+  const pontosHojePorTecnicoNorm = {};
+  registrosHoje.forEach(r => {
+    if (!r.tecnico) return;
+    const key = OPS.normalize(r.tecnico);
+    pontosHojePorTecnicoNorm[key] = (pontosHojePorTecnicoNorm[key] || 0) + (parseFloat(r.pontos) || 0);
   });
 
-  const nomes = new Set([...Object.keys(pontosHojePorTecnico), ...(goPessoasCache || []).map(p => p.nome).filter(Boolean)]);
-  const linhas = [...nomes].map(tecnico => {
-    const pessoa = (goPessoasCache || []).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
-    const inativo = pessoa && pessoa.status && pessoa.status !== 'ativo';
-    const deFolgaHoje = pessoa ? OPS.isFolgaNoDia(pessoa, hoje) : false;
-    return { tecnico, pontos: pontosHojePorTecnico[tecnico] || 0, inativo, deFolgaHoje };
-  }).filter(l => !l.inativo && !l.deFolgaHoje).sort((a,b) => a.pontos - b.pontos);
+  const linhas = (goPessoasCache || [])
+    .filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo')
+    .filter(p => !OPS.isFolgaNoDia(p, hoje))
+    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)))
+    .map(p => ({ tecnico: p.nome, pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0 }))
+    .sort((a,b) => a.pontos - b.pontos);
 
   document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
 
