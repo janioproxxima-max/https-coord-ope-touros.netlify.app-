@@ -105,6 +105,12 @@
       <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas><p id="go-reparo-vazio" class="page-sub" style="display:none;text-align:center;padding-top:40px">Nenhuma abertura de reparo (VT) no período selecionado.</p></div>
     </div>
 
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🔧 Motivo de Fechamento dos VT</h3></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Descrição do encerramento dos reparos (VT) do período · clique numa barra pra ver o analítico.</p>
+      <div class="chart-box tall"><canvas id="go-chart-motivo-vt"></canvas></div>
+    </div>
+
     <div class="card">
       <div class="card-head"><h3>📦 Resumo do período</h3></div>
       <div class="stat-row" style="padding:18px;margin-bottom:0">
@@ -143,7 +149,7 @@
           <button type="button" class="qf-tile" data-resp="inspetor">Inspetor</button>
         </div>
         <div class="table-wrap" style="max-height:320px">
-          <table class="services"><thead><tr><th>Resp.</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-rec-resp-tbody"></tbody></table>
+          <table class="services"><thead><tr><th>Resp.</th><th>Cidade</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-rec-resp-tbody"></tbody></table>
         </div>
       </div>
     </div>
@@ -604,6 +610,7 @@ async function renderAbaServicos(data){
   renderChartCidades(deduped);
   renderTop5(deduped);
   renderAberturaReparo(deduped);
+  renderMotivoVT(deduped);
   renderResumo(deduped);
   // Produtivos × Improdutivos só conta equipes Instalador e Reparador (não
   // backoffice/outros cargos) - precisa do cadastro de Gestão de Pessoas
@@ -611,6 +618,15 @@ async function renderAbaServicos(data){
   await carregarPessoasCacheSeNecessario();
   if (goAbaAtiva !== 'servicos') return; // usuário já trocou de aba enquanto buscava
   renderDonut(deduped);
+}
+function renderMotivoVT(data){
+  const vt = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo');
+  const porMotivo = {};
+  vt.forEach(r => { const m = r.descricao || 'Sem descrição'; porMotivo[m] = (porMotivo[m]||0)+1; });
+  const entries = Object.entries(porMotivo).map(([label,qtd]) => ({ label, qtd }));
+  renderParetoChart('go-chart-motivo-vt', entries, (entry) => {
+    abrirAnalitico('servicos', r => grupoSlaDoTipo(r.tipo) === 'reparo' && (r.descricao || 'Sem descrição') === entry.label, `Motivo: ${entry.label}`);
+  });
 }
 
 function renderCardsSLA(data){
@@ -1168,17 +1184,26 @@ function renderRecorrenciaResp(data, pares){
     produtivosPorResp[chave] = (produtivosPorResp[chave] || 0) + 1;
   });
   const paresPorResp = {};
+  const cidadesPorResp = {}; // chave -> {cidade: contagem} pra achar a cidade mais frequente
   pares.forEach(p => {
     const chave = respChave(goRespRec, p.tecnico);
     paresPorResp[chave] = (paresPorResp[chave] || 0) + 1;
+    const cidade = p.area || 'Sem informação';
+    cidadesPorResp[chave] = cidadesPorResp[chave] || {};
+    cidadesPorResp[chave][cidade] = (cidadesPorResp[chave][cidade] || 0) + 1;
   });
+  const cidadeMaisFrequente = chave => {
+    const contagem = cidadesPorResp[chave];
+    if (!contagem) return '—';
+    return Object.entries(contagem).sort((a,b) => b[1]-a[1])[0][0];
+  };
   const linhas = Object.keys(produtivosPorResp).map(nome => {
     const qtd = paresPorResp[nome] || 0;
-    return { nome, qtd, pct: produtivosPorResp[nome] ? (qtd / produtivosPorResp[nome]) * 100 : 0 };
+    return { nome, cidade: cidadeMaisFrequente(nome), qtd, pct: produtivosPorResp[nome] ? (qtd / produtivosPorResp[nome]) * 100 : 0 };
   }).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-rec-resp-tbody').innerHTML = linhas.map(l =>
-    `<tr style="cursor:pointer" data-nome="${l.nome}" title="Clique pra ver o analítico"><td>${tituloCase(l.nome)}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
-  ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+    `<tr style="cursor:pointer" data-nome="${l.nome}" title="Clique pra ver o analítico"><td>${tituloCase(l.nome)}</td><td>${l.cidade}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
+  ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
 }
 
 // ================= ABA IMPRODUTIVIDADE =================

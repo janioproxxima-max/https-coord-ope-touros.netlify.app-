@@ -1294,6 +1294,7 @@ function processarLinhasProdutividade(rows){
           detalhesRegistros.push({
             tecnico, mesKey, tipo,
             protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
+            clienteId: idxNumeroCliente >= 0 ? (row[idxNumeroCliente] || '').toString().trim() : '',
             area: areaDaLinha(row),
             localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
             descricao: (row[idxDescricao] || '').toString().trim(),
@@ -1316,7 +1317,7 @@ function processarLinhasProdutividade(rows){
             if (clienteId){
               const chave = tecnico + '|' + clienteId;
               (ocorrenciasReparo[chave] = ocorrenciasReparo[chave] || []).push({
-                data: dt, mesKey, tipo,
+                data: dt, mesKey, tipo, clienteId,
                 protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
                 area: areaDaLinha(row),
                 localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
@@ -1341,7 +1342,7 @@ function processarLinhasProdutividade(rows){
             mesDoTecnico.recorrencias += 1;
             if (mesDoTecnico.porTipo[lista[i].tipo]) mesDoTecnico.porTipo[lista[i].tipo].recorrencias += 1;
             paresRecorrencia.push({
-              tecnico, mesKey: lista[i].mesKey, tipo: lista[i].tipo,
+              tecnico, mesKey: lista[i].mesKey, tipo: lista[i].tipo, clienteId: lista[i].clienteId,
               anterior: lista[i - 1], atual: lista[i],
             });
           }
@@ -1504,7 +1505,7 @@ function detalheTipoDeSupabase(r){
 function detalheRegistroParaSupabase(r){
   return {
     id: OPS.uid(), tecnico: r.tecnico, mes_key: r.mesKey, tipo: r.tipo,
-    protocolo: r.protocolo, area: r.area, localidade: r.localidade,
+    protocolo: r.protocolo, cliente_id: r.clienteId || null, area: r.area, localidade: r.localidade,
     descricao: r.descricao, produtivo: r.produtivo, tma: r.tma,
     pontos: r.pontos || 0, data_encerramento: r.dataEncerramento,
     data_criacao: r.dataCriacao,
@@ -1512,7 +1513,7 @@ function detalheRegistroParaSupabase(r){
 }
 function parRecorrenciaParaSupabase(p){
   return {
-    id: OPS.uid(), tecnico: p.tecnico, mes_key: p.mesKey, tipo: p.tipo,
+    id: OPS.uid(), tecnico: p.tecnico, mes_key: p.mesKey, tipo: p.tipo, cliente_id: p.clienteId || null,
     protocolo_anterior: p.anterior.protocolo, data_anterior: p.anterior.data, descricao_anterior: p.anterior.descricao,
     protocolo_atual: p.atual.protocolo, data_atual: p.atual.data, descricao_atual: p.atual.descricao,
     area: p.atual.area, localidade: p.atual.localidade,
