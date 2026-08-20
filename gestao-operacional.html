@@ -2078,7 +2078,11 @@ async function renderPontosHoje(){
     .map(p => ({
       tecnico: p.nome,
       cidade: p.cidade || '—',
-      supervisor: supervisorPorNomeNorm[OPS.normalize(p.nome)] || '—',
+      // prioriza o "gestor" do próprio cadastro de pessoas - cobre todo
+      // mundo, mesmo quem ainda não apareceu em produtividade_historico
+      // (ex: colaborador novo, ainda sem atendimento fechado no período
+      // que alimenta essa tabela). goTecnicoSupervisor fica só de reserva.
+      supervisor: p.gestor || supervisorPorNomeNorm[OPS.normalize(p.nome)] || '—',
       pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0,
     }));
 
@@ -2100,7 +2104,7 @@ async function renderPontosHoje(){
       const pct = pessoas ? (bateram / pessoas) * 100 : 0;
       const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
       return `<div class="sla-card ${cor}" data-supervisor="${sup}" style="cursor:pointer" title="Clique pra filtrar a tabela por esse supervisor">
-        <div class="sla-label">${tituloCase(sup)}</div>
+        <div class="sla-label">${nomeCurto2(sup)}</div>
         <div class="sla-value">${fmtPct(pct)}</div>
         <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
         <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
@@ -2124,7 +2128,7 @@ async function renderPontosHoje(){
 
   document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
   document.getElementById('go-pt-hoje-tbody').innerHTML = linhas.map(l => `<tr>
-    <td>${nomeCurto2(l.tecnico)}</td><td>${tituloCase(l.cidade)}</td><td>${tituloCase(l.supervisor)}</td>
+    <td>${tituloCase(l.tecnico)}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
     <td>${l.pontos.toFixed(2)}</td><td>${Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2)}</td>
   </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum colaborador ativo agora.</td></tr>`;
 }
