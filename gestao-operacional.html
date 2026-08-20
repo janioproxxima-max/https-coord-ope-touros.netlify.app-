@@ -1027,7 +1027,7 @@ function renderRankingBarras(canvasId, entries, corBase, onClickEntry){
   });
 }
 function renderParetoChart(canvasId, entries, onClickEntry){
-  const top = entries.slice().sort((a,b) => b.qtd - a.qtd).slice(0, 12);
+  const top = entries.slice().sort((a,b) => b.qtd - a.qtd).slice(0, 8);
   const total = top.reduce((s,e) => s + e.qtd, 0);
   let acumulado = 0;
   const cumulativa = top.map(e => { acumulado += e.qtd; return total ? (acumulado/total*100) : 0; });
@@ -1041,14 +1041,17 @@ function renderParetoChart(canvasId, entries, onClickEntry){
         { type:'line', label:'% acumulado', data: cumulativa, borderColor:'#00d4ff', backgroundColor:'#00d4ff', pointRadius:3, yAxisID:'y1', order:1, tension:0.15 },
       ],
     },
+    plugins: [ChartDataLabels],
     options: { ...commonChartOpts,
       onClick: (evt, elems) => { if (elems.length && onClickEntry) onClickEntry(top[elems[0].index]); },
       scales: {
         y: { beginAtZero:true, ticks:{ color:'#8a97ab' }, grid:{ color:'#1e2d47' }, position:'left' },
         y1: { beginAtZero:true, max:100, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ display:false }, position:'right' },
-        x: { ticks:{ color:'#e2eaf5', maxRotation:40, minRotation:20, font:{size:10} }, grid:{ display:false } },
+        x: { ticks:{ color:'#e2eaf5', maxRotation:55, minRotation:35, font:{size:9.5}, autoSkip:false,
+          callback: function(value){ const l = this.getLabelForValue(value); return l.length > 18 ? l.slice(0,16)+'…' : l; } }, grid:{ display:false } },
       },
-      plugins: { legend:{ labels:{ color:'#e2eaf5' } } },
+      plugins: { legend:{ labels:{ color:'#e2eaf5' } },
+        datalabels: { display: ctx => ctx.dataset.type === 'bar', color:'#e2eaf5', anchor:'end', align:'top', font:{ weight:'700', size:10 }, formatter: v => fmtNum(v) } },
     },
   });
 }
@@ -1096,7 +1099,12 @@ document.querySelectorAll('.go-btn-export-tabela').forEach(btn => {
 });
 
 // ================= ABA RECORRÊNCIA =================
-function renderAbaRecorrencia(data, pares){
+// Só conta equipes Instalador e Reparador - mesma regra da Improdutividade.
+async function renderAbaRecorrencia(data, pares){
+  await carregarPessoasCacheSeNecessario();
+  if (goAbaAtiva !== 'recorrencia') return; // trocou de aba enquanto buscava
+  data = data.filter(r => ehInstaladorReparador(r.tecnico));
+  pares = pares.filter(p => ehInstaladorReparador(p.tecnico));
   const produtivos = data.filter(isProdutivo).length;
   const pct = produtivos ? (pares.length / produtivos) * 100 : 0;
   const cor = pct <= 3 ? 'ok' : (pct <= 6 ? 'crit' : 'crit');
@@ -1174,7 +1182,12 @@ function renderRecorrenciaResp(data, pares){
 }
 
 // ================= ABA IMPRODUTIVIDADE =================
-function renderImprodutividade(data){
+// Só conta equipes Instalador e Reparador - supervisor/coordenador que
+// fecha algum chamado pontualmente (gestão) não deve entrar nessa métrica.
+async function renderImprodutividade(data){
+  await carregarPessoasCacheSeNecessario();
+  if (goAbaAtiva !== 'improdutividade') return; // trocou de aba enquanto buscava
+  data = data.filter(r => ehInstaladorReparador(r.tecnico));
   const produtivos = data.filter(isProdutivo).length;
   const improdutivos = data.length - produtivos;
   const pct = data.length ? (improdutivos / data.length) * 100 : 0;
