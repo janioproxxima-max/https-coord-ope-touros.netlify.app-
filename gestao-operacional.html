@@ -1466,11 +1466,14 @@ function calcularChavesPremiacao(){
   return { projecao: { pct: pctProjecao, qtd: ativacoes.length }, ativacao72, reparo24, recolhimento, nSupervisores };
 }
 
-// Chaves 1-3 são um valor POR EQUIPE ATIVA (técnico com pelo menos 1
-// serviço produtivo na semana), multiplicado pela quantidade de equipes de
-// quem está vendo: a coordenação multiplica pelo total de equipes da
-// unidade, cada supervisor multiplica só pelas equipes dele. Recolhimento
-// não entra nessa conta - já tem a própria regra (valor/OS × produtivos).
+// Chaves 1-3: o valor da faixa (Bronze/Prata/Ouro) é uma referência pra um
+// time de EQUIPES_REFERENCIA (8) equipes - quem tem mais ou menos equipes
+// ativas (técnico com pelo menos 1 serviço produtivo na semana) que essa
+// referência tem o valor ajustado proporcionalmente (valor × equipes/8).
+// A coordenação usa o total de equipes da unidade; cada supervisor usa só
+// as equipes dele. Recolhimento não entra nessa conta - já tem a própria
+// regra (valor/OS × produtivos).
+const EQUIPES_REFERENCIA = 8;
 function equipesAtivas(registros, supervisor){
   const set = new Set();
   registros.forEach(r => {
@@ -1480,12 +1483,30 @@ function equipesAtivas(registros, supervisor){
   });
   return set.size;
 }
-function somaTotalPremiacao(cfg, chaves, valorRecolhimento, qtdEquipes){
+function valorChaveAjustado(banda, qtdEquipes){
+  return banda ? banda.valor * (qtdEquipes / EQUIPES_REFERENCIA) : 0;
+}
+function chavesAjustadas(cfg, chaves, qtdEquipes){
   const c1 = chaves.projecao.pct == null ? null : bandaPremiacao(chaves.projecao.pct, cfg.projecao);
   const c2 = chaves.ativacao72.pct == null ? null : bandaPremiacao(chaves.ativacao72.pct, cfg.ativacao72);
   const c3 = chaves.reparo24.pct == null ? null : bandaPremiacao(chaves.reparo24.pct, cfg.reparo24);
-  const porEquipe = (c1?c1.valor:0) + (c2?c2.valor:0) + (c3?c3.valor:0);
-  return porEquipe * qtdEquipes + valorRecolhimento;
+  return [
+    { label: 'Chave 1 · Projeção Ativação', banda: c1, valor: valorChaveAjustado(c1, qtdEquipes) },
+    { label: 'Chave 2 · Ativação 72h', banda: c2, valor: valorChaveAjustado(c2, qtdEquipes) },
+    { label: 'Chave 3 · Reparo 24h', banda: c3, valor: valorChaveAjustado(c3, qtdEquipes) },
+  ];
+}
+function somaTotalPremiacao(cfg, chaves, valorRecolhimento, qtdEquipes){
+  return chavesAjustadas(cfg, chaves, qtdEquipes).reduce((acc,c) => acc + c.valor, 0) + valorRecolhimento;
+}
+function resumoChavesHtml(itens, valorRecolhimento, bandaRecolhimento){
+  const linhas = itens.map(c => `<tr><td>${c.label}</td><td>${c.banda ? c.banda.nome : '—'}</td><td style="text-align:right;font-weight:700">${fmtReais(c.valor)}</td></tr>`).join('');
+  return `<div class="table-wrap" style="max-height:220px;margin-top:10px">
+    <table class="services"><tbody>
+      ${linhas}
+      <tr><td>Chave 4 · Recolhimento</td><td>${bandaRecolhimento ? bandaRecolhimento.nome : '—'}</td><td style="text-align:right;font-weight:700">${fmtReais(valorRecolhimento)}</td></tr>
+    </tbody></table>
+  </div>`;
 }
 function corBanda(banda){ return banda == null ? 'crit' : (banda.nome === 'Ouro' ? 'ok' : (banda.nome === 'Prata' ? 'warn' : 'neutral')); }
 
@@ -1544,7 +1565,7 @@ function desenharPremiacao(){
       ${cardChavePremiacao('Chave 2 · Ativação 72h', chaves.ativacao72.pct, PREMIACAO_LIDERANCA.ativacao72, 'ativacao72')}
       ${cardChavePremiacao('Chave 3 · Reparo 24h', chaves.reparo24.pct, PREMIACAO_LIDERANCA.reparo24, 'reparo24')}
     </div>
-    <p class="page-sub" style="margin:10px 2px">Chaves 1-3 usam o % da unidade inteira, mas o valor é <b>por equipe ativa</b> (técnico com pelo menos 1 serviço produtivo na semana) × a quantidade de equipes de cada supervisor/coordenação — não é um valor fixo igual pra todo mundo. Unidade tem ${fmtNum(equipesUnidade)} equipe(s) ativa(s) essa semana. Projeção: ${fmtNum(chaves.projecao.qtd)} ativações produtivas ÷ meta de ${PREMIACAO_META_SEMANAL_ATIVACAO} (13/dia seg-sex + 7 no sábado; domingo soma no total mas não tem meta própria).</p>
+    <p class="page-sub" style="margin:10px 2px">Chaves 1-3 usam o % da unidade inteira, mas o valor da faixa é uma referência pra um time de ${EQUIPES_REFERENCIA} equipes — quem tem mais ou menos equipes ativas (técnico com pelo menos 1 serviço produtivo na semana) que essa referência tem o valor ajustado (valor da faixa × equipes ÷ ${EQUIPES_REFERENCIA}). Unidade tem ${fmtNum(equipesUnidade)} equipe(s) ativa(s) essa semana. Projeção: ${fmtNum(chaves.projecao.qtd)} ativações produtivas ÷ meta de ${PREMIACAO_META_SEMANAL_ATIVACAO} (13/dia seg-sex + 7 no sábado; domingo soma no total mas não tem meta própria).</p>
   `;
 
   let html = cardsComuns;
@@ -1554,15 +1575,17 @@ function desenharPremiacao(){
     const valorOS = chaves.recolhimento.banda ? PREMIACAO_LIDERANCA.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
     const valorRecolhimentoTotal = valorOS * chaves.recolhimento.produtivos;
     const valorRecolhimentoFinal = valorRecolhimentoTotal / chaves.nSupervisores;
-    const total = somaTotalPremiacao(PREMIACAO_LIDERANCA, chaves, valorRecolhimentoFinal, equipesSup);
+    const itens = chavesAjustadas(PREMIACAO_LIDERANCA, chaves, equipesSup);
+    const total = itens.reduce((acc,c) => acc + c.valor, 0) + valorRecolhimentoFinal;
     html += `
       <div class="card" style="margin-top:18px">
         <div class="card-head"><h3>👤 ${tituloCase(meuSupervisor)} · ${fmtNum(equipesSup)} equipe(s) ativa(s)</h3></div>
         <div class="sla-grid">${cardRecolhimento(PREMIACAO_LIDERANCA, chaves.recolhimento, valorRecolhimentoFinal, `Sua parte (÷${fmtNum(chaves.nSupervisores)})`)}</div>
+        ${resumoChavesHtml(itens, valorRecolhimentoFinal, chaves.recolhimento.banda)}
         <div class="stat-row" style="padding:16px">
           <div class="stat-card brand"><div class="label">Total da semana</div><div class="value">${fmtReais(total)}</div></div>
         </div>
-        <p class="page-sub" style="padding:0 16px 14px">Chaves 1-3: valor/equipe da faixa × ${fmtNum(equipesSup)} equipe(s) suas. Recolhimento dividido por ${fmtNum(chaves.nSupervisores)} supervisor(es) ativos na unidade (referência: 8 equipes × 2 = 16 recolhimentos/semana).</p>
+        <p class="page-sub" style="padding:0 16px 14px">Chaves 1-3: valor da faixa × ${fmtNum(equipesSup)}/${EQUIPES_REFERENCIA} equipes. Recolhimento dividido por ${fmtNum(chaves.nSupervisores)} supervisor(es) ativos na unidade (referência: 8 equipes × 2 = 16 recolhimentos/semana).</p>
       </div>`;
   } else {
     const valorOSLid = chaves.recolhimento.banda ? PREMIACAO_LIDERANCA.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
@@ -1584,7 +1607,8 @@ function desenharPremiacao(){
 
     const valorOSCoord = chaves.recolhimento.banda ? PREMIACAO_COORDENACAO.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
     const valorRecCoord = valorOSCoord * chaves.recolhimento.produtivos;
-    const totalCoord = somaTotalPremiacao(PREMIACAO_COORDENACAO, chaves, valorRecCoord, equipesUnidade);
+    const itensCoord = chavesAjustadas(PREMIACAO_COORDENACAO, chaves, equipesUnidade);
+    const totalCoord = itensCoord.reduce((acc,c) => acc + c.valor, 0) + valorRecCoord;
     html += `
       <div class="card" style="margin-top:18px">
         <div class="card-head"><h3>🏆 Premiação Coordenação · ${fmtNum(equipesUnidade)} equipe(s) ativa(s) na unidade</h3></div>
@@ -1594,6 +1618,7 @@ function desenharPremiacao(){
           ${cardChavePremiacao('Chave 3 · Reparo 24h', chaves.reparo24.pct, PREMIACAO_COORDENACAO.reparo24, null)}
           ${cardRecolhimento(PREMIACAO_COORDENACAO, chaves.recolhimento, valorRecCoord, 'Total (não dividido)')}
         </div>
+        ${resumoChavesHtml(itensCoord, valorRecCoord, chaves.recolhimento.banda)}
         <div class="stat-row" style="padding:16px">
           <div class="stat-card brand"><div class="label">Total da semana (coordenação)</div><div class="value">${fmtReais(totalCoord)}</div></div>
         </div>
