@@ -1271,7 +1271,7 @@ function processarLinhasProdutividade(rows){
         const tecnicosDoRegistro = [...new Set([responsavel, tecnicoAuxiliar].filter(Boolean))];
 
         tecnicosDoRegistro.forEach(tecnico => {
-          const ehCandidatoRecorrencia = creditarTecnico(tecnico, svc, prod, dt, mesKey, diaKey, tipo);
+          creditarTecnico(tecnico, svc, prod, dt, mesKey, diaKey, tipo);
           const bucket = agregado[tecnico][mesKey];
           const bucketTipo = bucket.porTipo[tipo];
           if (idxSupervisor >= 0 && row[idxSupervisor]) bucket.supervisor = row[idxSupervisor].toString().trim();
@@ -1313,24 +1313,31 @@ function processarLinhasProdutividade(rows){
               ? new Date(Date.UTC(dtEncerramento.getFullYear(), dtEncerramento.getMonth(), dtEncerramento.getDate(), dtEncerramento.getHours(), dtEncerramento.getMinutes())).toISOString()
               : null,
           });
-
-          // reparo produtivo com cliente identificado — candidato a recorrência.
-          // Agrupa só por CLIENTE (não por técnico+cliente): recorrência é o
-          // mesmo cliente voltando a precisar de reparo, não importa se foi
-          // o mesmo técnico que atendeu de novo ou não.
-          if (ehCandidatoRecorrencia && idxNumeroCliente >= 0){
-            const clienteId = (row[idxNumeroCliente] || '').toString().trim();
-            if (clienteId){
-              (ocorrenciasReparo[clienteId] = ocorrenciasReparo[clienteId] || []).push({
-                data: dt, mesKey, tipo, clienteId, tecnico,
-                protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
-                area: areaDaLinha(row),
-                localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
-                descricao: (row[idxDescricao] || '').toString().trim(),
-              });
-            }
-          }
         });
+
+        // reparo produtivo com cliente identificado — candidato a recorrência.
+        // Conta 1x por atendimento (linha da planilha), não 1x por técnico
+        // creditado — senão um registro com responsável + auxiliar diferentes
+        // empurra a MESMA visita duas vezes em ocorrenciasReparo, e ela acaba
+        // pareada contra si mesma (falsa recorrência com diffDias=0). Agrupa
+        // só por CLIENTE (não por técnico+cliente): recorrência é o mesmo
+        // cliente voltando a precisar de reparo, não importa se foi o mesmo
+        // técnico que atendeu de novo ou não. Crédito vai pro responsável
+        // (ou pro auxiliar, se não houver responsável).
+        const ehCandidatoRecorrencia = prod.produtivo && TIPOS_REPARO_VT.includes(svc.tipoCurto);
+        if (ehCandidatoRecorrencia && idxNumeroCliente >= 0){
+          const clienteId = (row[idxNumeroCliente] || '').toString().trim();
+          if (clienteId){
+            const tecnicoRecorrencia = responsavel || tecnicoAuxiliar;
+            (ocorrenciasReparo[clienteId] = ocorrenciasReparo[clienteId] || []).push({
+              data: dt, mesKey, tipo, clienteId, tecnico: tecnicoRecorrencia,
+              protocolo: idxProtocolo >= 0 ? (row[idxProtocolo] || '').toString().trim() : '',
+              area: areaDaLinha(row),
+              localidade: idxLocalidade >= 0 ? (row[idxLocalidade] || '').toString().trim() : '',
+              descricao: (row[idxDescricao] || '').toString().trim(),
+            });
+          }
+        }
       }
 
       if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); return null; }
