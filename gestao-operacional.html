@@ -101,7 +101,7 @@
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>📈 Abertura de Reparo</h3><span class="cnt-badge" id="go-reparo-badge">—</span></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Coluna = reparos (VT) encerrados por dia · Linha = estimativa (200 serviços / 2 dias = 100/dia)</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Coluna = reparos (VT) <b>criados</b> por dia (data de criação, não de encerramento) · Linha = estimativa (200 serviços / 2 dias = 100/dia)</p>
       <div class="chart-box tall"><canvas id="go-chart-evolucao"></canvas><p id="go-reparo-vazio" class="page-sub" style="display:none;text-align:center;padding-top:40px">Nenhuma abertura de reparo (VT) no período selecionado.</p></div>
     </div>
 
@@ -400,7 +400,7 @@ const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'R
 const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardando_setor','validado_inspetor','aguardando_aprovacao_coordenacao','em_atendimento'];
 
 let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
-let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Reparo"
+let goPessoasCache = null; // lazy-load compartilhado: filtro Instalador/Reparador do donut + aba Produtividade Técnica
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
@@ -595,17 +595,22 @@ function dedupePorProtocolo(data){
     return true;
   });
 }
-function renderAbaServicos(data){
+async function renderAbaServicos(data){
   const deduped = dedupePorProtocolo(data);
   renderCardsSLA(deduped);
   renderSlaHistorico(deduped);
   renderTabelaCidadeTipo(deduped);
-  renderDonut(deduped);
   renderTMA(deduped);
   renderChartCidades(deduped);
   renderTop5(deduped);
-  renderAberturaReparo();
+  renderAberturaReparo(deduped);
   renderResumo(deduped);
+  // Produtivos × Improdutivos só conta equipes Instalador e Reparador (não
+  // backoffice/outros cargos) - precisa do cadastro de Gestão de Pessoas
+  // pra saber o cargo de cada técnico.
+  await carregarPessoasCacheSeNecessario();
+  if (goAbaAtiva !== 'servicos') return; // usuário já trocou de aba enquanto buscava
+  renderDonut(deduped);
 }
 
 function renderCardsSLA(data){
@@ -693,6 +698,7 @@ function renderSlaHistorico(data){
   goCharts.slaHistorico = new Chart(document.getElementById('go-chart-sla-historico'), {
     type: 'line',
     data: { labels: dias.map(d => { const [,m,dd] = d.split('-'); return `${dd}/${m}`; }), datasets },
+    plugins: [ChartDataLabels],
     options: { ...commonChartOpts,
       onClick: (evt, elems) => {
         if (!elems.length) return;
@@ -705,7 +711,8 @@ function renderSlaHistorico(data){
         y: { beginAtZero:true, max:100, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ color:'#1e2d47' } },
         x: { ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
       },
-      plugins: { legend: { labels:{ color:'#e2eaf5' } } },
+      plugins: { legend: { labels:{ color:'#e2eaf5' } },
+        datalabels: { display:'auto', align:'top', anchor:'end', color: ctx => ctx.dataset.borderColor, font:{ weight:'700', size:9.5 }, formatter: v => v == null ? '' : v.toFixed(1)+'%' } },
     },
   });
 }
@@ -735,9 +742,31 @@ function renderTabelaCidadeTipo(data){
   document.getElementById('go-total-badge').textContent = `${fmtNum(data.length)} encerrados`;
 }
 
+// Só conta equipes Instalador e Reparador (backoffice e outros cargos
+// ficam de fora) - mesma regra já usada em mundo-jira.html
+// (ehInstaladorReparador) pra não poluir os indicadores de produtividade.
+function ehInstaladorReparador(tecnico){
+  if (!goPessoasCache) return true; // ainda carregando - mostra sem filtrar até saber de verdade
+  const pessoa = goPessoasCache.find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+  if (!pessoa || !pessoa.cargo) return false;
+  const cargoNorm = OPS.normalize(pessoa.cargo);
+  return cargoNorm.includes('instalador') && cargoNorm.includes('reparador');
+}
+async function carregarPessoasCacheSeNecessario(){
+  if (goPessoasCache !== null) return goPessoasCache;
+  try{
+    goPessoasCache = (await OPS.syncPull('PessoasData')) || [];
+  }catch(err){
+    console.error('Falha ao buscar Gestão de Pessoas', err);
+    goPessoasCache = [];
+  }
+  return goPessoasCache;
+}
+
 function renderDonut(data){
-  const produtivos = data.filter(isProdutivo).length;
-  const improdutivos = data.length - produtivos;
+  const elegiveis = data.filter(r => ehInstaladorReparador(r.tecnico));
+  const produtivos = elegiveis.filter(isProdutivo).length;
+  const improdutivos = elegiveis.length - produtivos;
   goCharts.donut = new Chart(document.getElementById('go-chart-donut'), {
     type: 'doughnut',
     data: { labels: ['Produtivos','Improdutivos'], datasets: [{ data: [produtivos, improdutivos], backgroundColor: ['#00e5a0','#ff4d6d'] }] },
@@ -746,7 +775,7 @@ function renderDonut(data){
       onClick: (evt, elems) => {
         if (!elems.length) return;
         const quer = elems[0].index === 0 ? true : false;
-        abrirAnalitico('servicos', r => isProdutivo(r) === quer, quer ? 'Produtivos' : 'Improdutivos');
+        abrirAnalitico('servicos', r => isProdutivo(r) === quer && ehInstaladorReparador(r.tecnico), quer ? 'Produtivos (Instalador/Reparador)' : 'Improdutivos (Instalador/Reparador)');
       },
       plugins: {
         legend: { position: 'bottom', labels: { color: '#e2eaf5', boxWidth: 12 } },
@@ -787,46 +816,25 @@ function renderTop5(data){
     `<tr style="cursor:pointer" data-tipo="${tipo}" title="Clique pra ver o analítico"><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
-async function renderAberturaReparo(){
+// Antes usava o Mapa de Serviços (snapshot dos chamados ATUALMENTE em
+// aberto) filtrado por criadoEm - como o Mapa só reflete o que está aberto
+// agora, chamados VT já encerrados há mais tempo somem de lá e o gráfico
+// ficava quase vazio pros dias mais antigos do período. produtividade_
+// registros já tem data_criacao persistida pra sempre (não é um snapshot),
+// então dá o histórico completo de criação - além de tirar uma busca a
+// mais no Supabase, já que os dados já estão carregados na aba.
+function renderAberturaReparo(data){
   const badge = document.getElementById('go-reparo-badge');
-  badge.textContent = 'Carregando Mapa de Serviços...';
-
-  if (goMapaServicos === null){
-    try{
-      goMapaServicos = (await OPS.syncPull('MapaServicosData')) || [];
-    }catch(err){
-      console.error('Falha ao buscar Mapa de Serviços', err);
-      badge.textContent = '';
-      document.getElementById('go-chart-evolucao').style.display = 'none';
-      const vazioEl = document.getElementById('go-reparo-vazio');
-      vazioEl.textContent = `⚠️ Não consegui buscar o Mapa de Serviços. ${err.message}`;
-      vazioEl.style.color = 'var(--crit)';
-      vazioEl.style.display = 'block';
-      return;
-    }
-  }
-  // se a aba trocou enquanto a busca rodava, não desenha em cima de outra tela
-  if (goAbaAtiva !== 'servicos') return;
-
-  // mesmo agrupamento VT (reparo) já usado no site pra SLA do Mapa de Serviços
-  const VT_TIPOS = ['SEM ACESSO','CABO BAIXO','PROBLEMA RECORRENTE','DIFICULDADE DE ACESSO','RETENÇÃO CLIENTE CRITICO','AÇÕES PREVENTIVAS'];
-  const { inicio, fim } = periodoAtual();
-  const reparosAbertos = goMapaServicos.filter(r => {
-    if (!r.criadoEm) return false;
-    if (!VT_TIPOS.includes((r.tipoCurto || '').toUpperCase())) return false;
-    if (!OPS.isTourosUnitCity(r.cidade)) return false;
-    const d = diaKey(r.criadoEm);
-    if (inicio && d < inicio) return false;
-    if (fim && d > fim) return false;
-    return true;
-  });
+  const reparosAbertos = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && r.data_criacao);
+  const semDataCriacao = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && !r.data_criacao).length;
 
   const porDia = {};
-  reparosAbertos.forEach(r => { const d = diaKey(r.criadoEm); porDia[d] = (porDia[d] || 0) + 1; });
+  reparosAbertos.forEach(r => { const d = diaKey(r.data_criacao); porDia[d] = (porDia[d] || 0) + 1; });
   const dias = Object.keys(porDia).sort();
   const valores = dias.map(d => porDia[d]);
   const linhaMeta = dias.map(() => META_REPARO_POR_DIA);
-  badge.textContent = `${fmtNum(reparosAbertos.length)} reparo(s) aberto(s) no período`;
+  badge.textContent = `${fmtNum(reparosAbertos.length)} reparo(s) criado(s) no período` +
+    (semDataCriacao > 0 ? ` (+${fmtNum(semDataCriacao)} sem data de criação registrada)` : '');
 
   const chartEl = document.getElementById('go-chart-evolucao');
   const vazioEl = document.getElementById('go-reparo-vazio');
@@ -842,7 +850,7 @@ async function renderAberturaReparo(){
     data: {
       labels: dias.map(d => { const [,m,dd] = d.split('-'); return `${dd}/${m}`; }),
       datasets: [
-        { type:'bar', label:'Reparos abertos', data: valores, backgroundColor:'#00d4ff', order:2 },
+        { type:'bar', label:'Reparos criados', data: valores, backgroundColor:'#00d4ff', order:2 },
         { type:'line', label:'Estimativa (100/dia)', data: linhaMeta, borderColor:'#ffd166', backgroundColor:'#ffd166', pointRadius:0, borderDash:[6,4], order:1, tension:0 },
       ],
     },
@@ -1686,18 +1694,15 @@ ANALITICO_CONFIG.premiacao = {
 // ================= ABA PRODUTIVIDADE TÉCNICA =================
 // Usa o mesmo filtro de período/supervisor/cidade do topo da página (igual
 // às abas Recorrência/Improdutividade) - não é semanal como a Premiação.
-let goPtPessoas = null;
-
 async function renderAbaProdutividadeTecnica(){
-  if (goPtPessoas === null){
+  if (goPessoasCache === null){
     document.getElementById('go-pt-ranking-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
-    try{
-      goPtPessoas = (await OPS.syncPull('PessoasData')) || [];
-    }catch(err){
-      console.error('Falha ao buscar Gestão de Pessoas', err);
-      document.getElementById('go-pt-ranking-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
-      return;
-    }
+  }
+  try{
+    await carregarPessoasCacheSeNecessario();
+  }catch(err){
+    document.getElementById('go-pt-ranking-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    return;
   }
   if (goAbaAtiva !== 'produtividade-tecnica') return;
   desenharProdutividadeTecnica();
@@ -1729,7 +1734,7 @@ function desenharProdutividadeTecnica(){
   });
 
   const linhas = Object.keys(pontosPorTecnico).map(tecnico => {
-    const pessoa = goPtPessoas.find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+    const pessoa = goPessoasCache.find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
     const dias = pessoa ? diasTrabalhadosNoPeriodo(pessoa, inicio, fim) : 0;
     const pontos = pontosPorTecnico[tecnico];
     return { tecnico, supervisor: goTecnicoSupervisor[tecnico] || '—', pontos, dias, pontosDia: dias ? pontos / dias : null };
