@@ -26,6 +26,8 @@
     <button type="button" class="qf-tile" data-aba="tickets">🎫 Tickets</button>
     <button type="button" class="qf-tile" data-aba="absenteismo">🧑‍⚕️ Absenteísmo</button>
     <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
+    <button type="button" class="qf-tile" data-aba="premiacao">🏆 Premiação</button>
+    <button type="button" class="qf-tile" data-aba="produtividade-tecnica">📊 Produtividade Técnica</button>
   </div>
 
   <div class="panel toolbar">
@@ -257,6 +259,57 @@
     </div>
   </div>
 
+  <!-- ================= ABA: PREMIAÇÃO ================= -->
+  <div id="go-aba-premiacao" style="display:none">
+    <div class="panel toolbar" style="margin-bottom:14px">
+      <div class="field">
+        <label for="go-prem-semana">Semana (qualquer dia dela)</label>
+        <input class="input" type="date" id="go-prem-semana">
+      </div>
+      <button type="button" class="btn ghost" id="go-prem-btn-anterior">◀ Semana anterior</button>
+      <button type="button" class="btn ghost" id="go-prem-btn-atual">Semana atual</button>
+      <button type="button" class="btn ghost" id="go-prem-btn-proxima">Próxima semana ▶</button>
+      <div style="flex:1"></div>
+      <span class="page-sub" id="go-prem-status"></span>
+    </div>
+    <div id="go-prem-conteudo"></div>
+  </div>
+
+  <!-- ================= ABA: PRODUTIVIDADE TÉCNICA ================= -->
+  <div id="go-aba-produtividade-tecnica" style="display:none">
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>👥 Média por Supervisão</h3>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-pt-supervisao-tbody" data-arquivo="produtividade-supervisao" data-sheet="Por Supervisão" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services">
+          <thead><tr><th>Supervisor</th><th>Técnicos</th><th>Pontos totais</th><th>Média pontos/dia</th></tr></thead>
+          <tbody id="go-pt-supervisao-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📊 Média de pontos/dia por supervisor</h3></div>
+      <div class="chart-box tall"><canvas id="go-chart-pt-supervisor"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>🏅 Ranking de colaboradores (quartil)</h3><span class="cnt-badge" id="go-pt-ranking-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-pt-ranking-tbody" data-arquivo="produtividade-ranking" data-sheet="Ranking" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Pontos e dias trabalhados no período selecionado no filtro do topo da página.</p>
+      <div class="table-wrap" style="max-height:480px">
+        <table class="services">
+          <thead><tr><th>#</th><th>Colaborador</th><th>Supervisor</th><th>Pontos</th><th>Dias trabalhados</th><th>Pontos/dia</th><th>Quartil</th></tr></thead>
+          <tbody id="go-pt-ranking-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
@@ -465,7 +518,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['servicos','recorrencia','improdutividade','tickets','absenteismo','frotas'].forEach(k => {
+      ['servicos','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -522,6 +575,8 @@ function goRenderAbaAtiva(){
   else if (goAbaAtiva === 'tickets') renderAbaTickets();
   else if (goAbaAtiva === 'absenteismo') renderAbaAbsenteismo();
   else if (goAbaAtiva === 'frotas') renderAbaFrotas();
+  else if (goAbaAtiva === 'premiacao') renderAbaPremiacao();
+  else if (goAbaAtiva === 'produtividade-tecnica') renderAbaProdutividadeTecnica();
 }
 
 // ================= ABA SERVIÇOS =================
@@ -1313,6 +1368,371 @@ async function renderAbaFrotas(){
   container.innerHTML = linhas.map(l =>
     `<tr><td>${l.placa}</td><td>${l.veiculo}</td><td>${l.lav}</td><td>${l.man}</td><td>${l.abertaAgora ? '<span class="badge crit"><span class="dot"></span>Sim</span>' : '<span class="badge ok"><span class="dot"></span>Não</span>'}</td></tr>`
   ).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum veículo cadastrado.</td></tr>`;
+}
+
+// ================= ABA PREMIAÇÃO =================
+// Apuração semanal (segunda a domingo), independente do filtro de período
+// do topo da página - busca sempre a semana escolhida direto no Supabase.
+// Chaves 1-3 usam o resultado da UNIDADE INTEIRA (mesmo valor pra todo
+// mundo); só a Chave 4 (Recolhimento) divide o valor pelos supervisores.
+const PREMIACAO_LIDERANCA = {
+  projecao:   [{min:85, nome:'Bronze',valor:25.20},{min:100,    nome:'Prata',valor:30.24},{min:105.0001,nome:'Ouro',valor:37.84}],
+  ativacao72: [{min:89, nome:'Bronze',valor:32.40},{min:94,     nome:'Prata',valor:38.88},{min:96.0001, nome:'Ouro',valor:48.64}],
+  reparo24:   [{min:85, nome:'Bronze',valor:32.40},{min:90,     nome:'Prata',valor:38.88},{min:95.0001, nome:'Ouro',valor:48.64}],
+  recolhimentoValorOS: { Bronze:0.66, Prata:0.86, Ouro:1.45 },
+};
+const PREMIACAO_COORDENACAO = {
+  projecao:   [{min:85, nome:'Bronze',valor:33.60},{min:100,    nome:'Prata',valor:40.32},{min:105.0001,nome:'Ouro',valor:50.40}],
+  ativacao72: [{min:89, nome:'Bronze',valor:43.20},{min:94,     nome:'Prata',valor:51.84},{min:96.0001, nome:'Ouro',valor:64.80}],
+  reparo24:   [{min:85, nome:'Bronze',valor:43.20},{min:90,     nome:'Prata',valor:51.84},{min:95.0001, nome:'Ouro',valor:64.80}],
+  recolhimentoValorOS: { Bronze:1.00, Prata:1.30, Ouro:2.20 },
+};
+const PREMIACAO_RECOLHIMENTO_FAIXAS = [{min:40,nome:'Bronze'},{min:55,nome:'Prata'},{min:70,nome:'Ouro'}];
+// seg-sex 13/dia + sáb 7/dia = 72/semana. Domingo é "extra": soma no
+// numerador (ativações feitas), mas não tem meta própria (não entra aqui).
+const PREMIACAO_META_SEMANAL_ATIVACAO = 5 * 13 + 7;
+
+function bandaPremiacao(pct, faixas){
+  let atual = null;
+  faixas.forEach(f => { if (pct >= f.min) atual = f; });
+  return atual;
+}
+function segundaFeiraDaSemana(data){
+  const d = new Date(data); d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  return d;
+}
+function domingoDaSemana(segunda){
+  const d = new Date(segunda); d.setDate(d.getDate() + 6);
+  return d;
+}
+function fmtDataBR(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
+function fmtReais(v){ return `R$ ${v.toFixed(2).replace('.', ',')}`; }
+
+let goPremiacaoSemanaSegunda = null;
+let goPremiacaoRegistros = [];
+let goPremiacaoCarregando = false;
+
+async function carregarSemanaPremiacao(){
+  const inicioStr = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
+  const fimStr = domingoDaSemana(goPremiacaoSemanaSegunda).toISOString().slice(0,10);
+  const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
+  const registros = (await OPS_SUPABASE.select('produtividade_registros', filtro)) || [];
+  goPremiacaoRegistros = dedupePorProtocolo(registros.filter(r => OPS.isTourosUnitCity(r.area)));
+}
+
+function nomeDoLogin(){
+  const usuario = (sessionStorage.getItem('ops_user') || '').trim();
+  if (/^[a-z]+\.[a-z]+$/i.test(usuario)){
+    return usuario.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+  return usuario;
+}
+// Casa o nome reconstruído do login contra os supervisores conhecidos
+// (produtividade_historico) - se bater, é aquele supervisor (só vê o seu);
+// sem match, trata como coordenador/inspetor (vê tudo).
+function supervisorLogado(){
+  const nome = nomeDoLogin();
+  if (!nome) return null;
+  const supervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(s => s && s !== '—');
+  return supervisores.find(s => OPS.normalize(s) === OPS.normalize(nome)) || null;
+}
+
+function calcularChavesPremiacao(){
+  const semana = goPremiacaoRegistros;
+
+  const ativacoes = semana.filter(r => r.tipo === 'ATIVAÇÃO' && isProdutivo(r));
+  const pctProjecao = (ativacoes.length / PREMIACAO_META_SEMANAL_ATIVACAO) * 100;
+
+  function pctSlaGrupo(chave){
+    const elegiveis = semana.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === chave && r.data_criacao && r.data_encerramento);
+    const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
+    return { pct: elegiveis.length ? (dentro.length / elegiveis.length) * 100 : null, total: elegiveis.length };
+  }
+  const ativacao72 = pctSlaGrupo('ativacao');
+  const reparo24 = pctSlaGrupo('reparo');
+
+  const recolhimentos = semana.filter(r => r.tipo === 'RECOLHIMENTO');
+  const recolhimentosProdutivos = recolhimentos.filter(isProdutivo);
+  const pctRecolhimento = recolhimentos.length ? (recolhimentosProdutivos.length / recolhimentos.length) * 100 : null;
+  const recolhimento = {
+    pct: pctRecolhimento, total: recolhimentos.length, produtivos: recolhimentosProdutivos.length,
+    banda: pctRecolhimento == null ? null : bandaPremiacao(pctRecolhimento, PREMIACAO_RECOLHIMENTO_FAIXAS),
+  };
+
+  const nSupervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(s => s && s !== '—').length || 1;
+
+  return { projecao: { pct: pctProjecao, qtd: ativacoes.length }, ativacao72, reparo24, recolhimento, nSupervisores };
+}
+
+function somaTotalPremiacao(cfg, chaves, valorRecolhimento){
+  const c1 = chaves.projecao.pct == null ? null : bandaPremiacao(chaves.projecao.pct, cfg.projecao);
+  const c2 = chaves.ativacao72.pct == null ? null : bandaPremiacao(chaves.ativacao72.pct, cfg.ativacao72);
+  const c3 = chaves.reparo24.pct == null ? null : bandaPremiacao(chaves.reparo24.pct, cfg.reparo24);
+  return (c1?c1.valor:0) + (c2?c2.valor:0) + (c3?c3.valor:0) + valorRecolhimento;
+}
+function corBanda(banda){ return banda == null ? 'crit' : (banda.nome === 'Ouro' ? 'ok' : (banda.nome === 'Prata' ? 'warn' : 'neutral')); }
+
+function cardChavePremiacao(titulo, pct, faixas, chaveFiltro){
+  const banda = pct == null ? null : bandaPremiacao(pct, faixas);
+  const faixasHtml = faixas.map(f => {
+    const ativo = banda && banda.nome === f.nome;
+    return `<div class="sla-meta" style="${ativo ? 'font-weight:800;color:var(--brand)' : ''}">${f.nome}: ≥${f.min < 100 ? f.min : Math.floor(f.min)}% · ${fmtReais(f.valor)}</div>`;
+  }).join('');
+  return `<div class="sla-card ${corBanda(banda)}" ${chaveFiltro ? `style="cursor:pointer" data-premfiltro="${chaveFiltro}" title="Clique pra ver o analítico"` : ''}>
+    <div class="sla-label">${titulo}</div>
+    <div class="sla-value">${pct == null ? '—' : fmtPct1(pct)}</div>
+    ${faixasHtml}
+    <div class="sla-meta" style="margin-top:6px">${banda ? `Faixa atual: <b>${banda.nome}</b> · ${fmtReais(banda.valor)}` : 'Abaixo de Bronze — sem premiação nessa chave'}</div>
+  </div>`;
+}
+function cardRecolhimento(cfg, r, valorFinal, labelDivisao){
+  const faixasHtml = PREMIACAO_RECOLHIMENTO_FAIXAS.map(f => {
+    const ativo = r.banda && r.banda.nome === f.nome;
+    return `<div class="sla-meta" style="${ativo ? 'font-weight:800;color:var(--brand)' : ''}">${f.nome}: ≥${f.min}% · ${fmtReais(cfg.recolhimentoValorOS[f.nome])}/OS</div>`;
+  }).join('');
+  return `<div class="sla-card ${corBanda(r.banda)}">
+    <div class="sla-label">Chave 4 · Recolhimento</div>
+    <div class="sla-value">${r.pct == null ? '—' : fmtPct1(r.pct)}</div>
+    ${faixasHtml}
+    <div class="sla-meta" style="margin-top:6px">${fmtNum(r.produtivos)}/${fmtNum(r.total)} produtivos · ${labelDivisao}: ${fmtReais(valorFinal)}</div>
+  </div>`;
+}
+
+function renderAbaPremiacao(){
+  if (!goPremiacaoSemanaSegunda){
+    goPremiacaoSemanaSegunda = segundaFeiraDaSemana(new Date());
+    document.getElementById('go-prem-semana').value = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
+  }
+  const domingo = domingoDaSemana(goPremiacaoSemanaSegunda);
+  document.getElementById('go-prem-status').textContent = `Semana de ${fmtDataBR(goPremiacaoSemanaSegunda)} a ${fmtDataBR(domingo)}`;
+  if (goPremiacaoCarregando) return;
+  goPremiacaoCarregando = true;
+  document.getElementById('go-prem-conteudo').innerHTML = `<div class="card"><div style="padding:20px;text-align:center;color:var(--ink-faint)">Carregando semana...</div></div>`;
+  carregarSemanaPremiacao().then(() => {
+    goPremiacaoCarregando = false;
+    if (goAbaAtiva !== 'premiacao') return;
+    desenharPremiacao();
+  });
+}
+
+function desenharPremiacao(){
+  const chaves = calcularChavesPremiacao();
+  const meuSupervisor = supervisorLogado();
+  const supervisoresTodos = [...new Set(Object.values(goTecnicoSupervisor))].filter(s => s && s !== '—').sort();
+
+  const cardsComuns = `
+    <div class="sla-grid">
+      ${cardChavePremiacao('Chave 1 · Projeção Ativação', chaves.projecao.pct, PREMIACAO_LIDERANCA.projecao, 'projecao')}
+      ${cardChavePremiacao('Chave 2 · Ativação 72h', chaves.ativacao72.pct, PREMIACAO_LIDERANCA.ativacao72, 'ativacao72')}
+      ${cardChavePremiacao('Chave 3 · Reparo 24h', chaves.reparo24.pct, PREMIACAO_LIDERANCA.reparo24, 'reparo24')}
+    </div>
+    <p class="page-sub" style="margin:10px 2px">Chaves 1-3 usam o resultado da unidade inteira — mesmo valor pra todo mundo. Projeção: ${fmtNum(chaves.projecao.qtd)} ativações produtivas na semana ÷ meta de ${PREMIACAO_META_SEMANAL_ATIVACAO} (13/dia seg-sex + 7 no sábado; domingo soma no total mas não tem meta própria).</p>
+  `;
+
+  let html = cardsComuns;
+
+  if (meuSupervisor){
+    const valorOS = chaves.recolhimento.banda ? PREMIACAO_LIDERANCA.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
+    const valorRecolhimentoTotal = valorOS * chaves.recolhimento.produtivos;
+    const valorRecolhimentoFinal = valorRecolhimentoTotal / chaves.nSupervisores;
+    const total = somaTotalPremiacao(PREMIACAO_LIDERANCA, chaves, valorRecolhimentoFinal);
+    html += `
+      <div class="card" style="margin-top:18px">
+        <div class="card-head"><h3>👤 ${tituloCase(meuSupervisor)}</h3></div>
+        <div class="sla-grid">${cardRecolhimento(PREMIACAO_LIDERANCA, chaves.recolhimento, valorRecolhimentoFinal, `Sua parte (÷${fmtNum(chaves.nSupervisores)})`)}</div>
+        <div class="stat-row" style="padding:16px">
+          <div class="stat-card brand"><div class="label">Total da semana</div><div class="value">${fmtReais(total)}</div></div>
+        </div>
+        <p class="page-sub" style="padding:0 16px 14px">Recolhimento dividido por ${fmtNum(chaves.nSupervisores)} supervisor(es) ativos na unidade. Referência: 8 equipes × 2 = 16 recolhimentos/semana.</p>
+      </div>`;
+  } else {
+    const valorOSLid = chaves.recolhimento.banda ? PREMIACAO_LIDERANCA.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
+    const valorRecLidTotal = valorOSLid * chaves.recolhimento.produtivos;
+    const valorRecLidFinal = valorRecLidTotal / chaves.nSupervisores;
+    const totalPorSupervisor = somaTotalPremiacao(PREMIACAO_LIDERANCA, chaves, valorRecLidFinal);
+    const linhasSupervisores = supervisoresTodos.map(s =>
+      `<tr><td>${tituloCase(s)}</td><td>${fmtReais(valorRecLidFinal)}</td><td style="font-weight:700">${fmtReais(totalPorSupervisor)}</td></tr>`
+    ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhum supervisor encontrado no histórico de produtividade.</td></tr>`;
+    html += `
+      <div class="card" style="margin-top:18px">
+        <div class="card-head"><h3>👥 Premiação Liderança — todos os supervisores</h3></div>
+        <div class="sla-grid">${cardRecolhimento(PREMIACAO_LIDERANCA, chaves.recolhimento, valorRecLidFinal, `Cada supervisor (÷${fmtNum(chaves.nSupervisores)})`)}</div>
+        <div class="table-wrap" style="max-height:320px;margin-top:10px">
+          <table class="services"><thead><tr><th>Supervisor</th><th>Recolhimento (parte)</th><th>Total da semana</th></tr></thead><tbody>${linhasSupervisores}</tbody></table>
+        </div>
+      </div>`;
+
+    const valorOSCoord = chaves.recolhimento.banda ? PREMIACAO_COORDENACAO.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
+    const valorRecCoord = valorOSCoord * chaves.recolhimento.produtivos;
+    const totalCoord = somaTotalPremiacao(PREMIACAO_COORDENACAO, chaves, valorRecCoord);
+    html += `
+      <div class="card" style="margin-top:18px">
+        <div class="card-head"><h3>🏆 Premiação Coordenação</h3></div>
+        <div class="sla-grid">
+          ${cardChavePremiacao('Chave 1 · Projeção Ativação', chaves.projecao.pct, PREMIACAO_COORDENACAO.projecao, null)}
+          ${cardChavePremiacao('Chave 2 · Ativação 72h', chaves.ativacao72.pct, PREMIACAO_COORDENACAO.ativacao72, null)}
+          ${cardChavePremiacao('Chave 3 · Reparo 24h', chaves.reparo24.pct, PREMIACAO_COORDENACAO.reparo24, null)}
+          ${cardRecolhimento(PREMIACAO_COORDENACAO, chaves.recolhimento, valorRecCoord, 'Total (não dividido)')}
+        </div>
+        <div class="stat-row" style="padding:16px">
+          <div class="stat-card brand"><div class="label">Total da semana (coordenação)</div><div class="value">${fmtReais(totalCoord)}</div></div>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('go-prem-conteudo').innerHTML = html;
+  document.querySelectorAll('#go-prem-conteudo [data-premfiltro]').forEach(card => {
+    card.addEventListener('click', () => {
+      const chave = card.dataset.premfiltro;
+      let filtro, label;
+      if (chave === 'projecao'){ filtro = r => r.tipo === 'ATIVAÇÃO' && isProdutivo(r); label = 'Projeção Ativação (semana)'; }
+      else if (chave === 'ativacao72'){ filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'ativacao' && r.data_criacao && r.data_encerramento; label = 'Ativação 72h (semana)'; }
+      else if (chave === 'reparo24'){ filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.data_criacao && r.data_encerramento; label = 'Reparo 24h (semana)'; }
+      abrirAnalitico('premiacao', filtro, label);
+    });
+  });
+}
+
+document.getElementById('go-prem-semana').addEventListener('change', (e) => {
+  if (!e.target.value) return;
+  goPremiacaoSemanaSegunda = segundaFeiraDaSemana(new Date(e.target.value + 'T00:00:00'));
+  renderAbaPremiacao();
+});
+document.getElementById('go-prem-btn-anterior').addEventListener('click', () => {
+  const d = new Date(goPremiacaoSemanaSegunda || new Date()); d.setDate(d.getDate() - 7);
+  goPremiacaoSemanaSegunda = segundaFeiraDaSemana(d);
+  document.getElementById('go-prem-semana').value = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
+  renderAbaPremiacao();
+});
+document.getElementById('go-prem-btn-proxima').addEventListener('click', () => {
+  const d = new Date(goPremiacaoSemanaSegunda || new Date()); d.setDate(d.getDate() + 7);
+  goPremiacaoSemanaSegunda = segundaFeiraDaSemana(d);
+  document.getElementById('go-prem-semana').value = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
+  renderAbaPremiacao();
+});
+document.getElementById('go-prem-btn-atual').addEventListener('click', () => {
+  goPremiacaoSemanaSegunda = segundaFeiraDaSemana(new Date());
+  document.getElementById('go-prem-semana').value = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
+  renderAbaPremiacao();
+});
+
+// -------- analítico da Premiação: base é a semana carregada (independente
+// do filtro de período do topo da página) --------
+function linhasAnaliticoPremiacao(filtro){
+  let data = goPremiacaoRegistros;
+  if (filtro) data = data.filter(filtro);
+  return data.map(r => {
+    const dp = dentroDoPrazo(r);
+    return [
+      r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.area || '', r.localidade || '',
+      isProdutivo(r) ? 'Sim' : 'Não',
+      r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
+      r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+      dp == null ? '—' : (dp ? 'Sim' : 'Não'),
+    ];
+  });
+}
+ANALITICO_CONFIG.premiacao = {
+  titulo: '📋 Analítico de Premiação (semana)',
+  headers: ['Protocolo','Técnico','Tipo','Área','Localidade','Produtivo','Data criação','Data encerramento','Dentro do SLA'],
+  linhas: linhasAnaliticoPremiacao, arquivo: 'premiacao-semana', sheet: 'Premiação',
+};
+
+// ================= ABA PRODUTIVIDADE TÉCNICA =================
+// Usa o mesmo filtro de período/supervisor/cidade do topo da página (igual
+// às abas Recorrência/Improdutividade) - não é semanal como a Premiação.
+let goPtPessoas = null;
+
+async function renderAbaProdutividadeTecnica(){
+  if (goPtPessoas === null){
+    document.getElementById('go-pt-ranking-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
+    try{
+      goPtPessoas = (await OPS.syncPull('PessoasData')) || [];
+    }catch(err){
+      console.error('Falha ao buscar Gestão de Pessoas', err);
+      document.getElementById('go-pt-ranking-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      return;
+    }
+  }
+  if (goAbaAtiva !== 'produtividade-tecnica') return;
+  desenharProdutividadeTecnica();
+}
+
+// dias "trabalháveis" no período pra essa pessoa (domingo e folga fixa/FDS
+// dela ficam de fora) - mesma lógica de OPS.isFolgaNoDia já usada em
+// Gestão de Pessoas/indicadores pra calcular meta de pontos por dia.
+function diasTrabalhadosNoPeriodo(pessoa, inicio, fim){
+  if (!inicio || !fim) return 0;
+  let dias = 0;
+  const d = new Date(inicio + 'T00:00:00');
+  const fimDate = new Date(fim + 'T00:00:00');
+  for (; d <= fimDate; d.setDate(d.getDate() + 1)){
+    if (d.getDay() === 0) continue;
+    if (!OPS.isFolgaNoDia(pessoa, d)) dias++;
+  }
+  return dias;
+}
+
+function desenharProdutividadeTecnica(){
+  const data = goRegistrosFiltrados();
+  const { inicio, fim } = periodoAtual();
+
+  const pontosPorTecnico = {};
+  data.forEach(r => {
+    if (!r.tecnico) return;
+    pontosPorTecnico[r.tecnico] = (pontosPorTecnico[r.tecnico] || 0) + (parseFloat(r.pontos) || 0);
+  });
+
+  const linhas = Object.keys(pontosPorTecnico).map(tecnico => {
+    const pessoa = goPtPessoas.find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
+    const dias = pessoa ? diasTrabalhadosNoPeriodo(pessoa, inicio, fim) : 0;
+    const pontos = pontosPorTecnico[tecnico];
+    return { tecnico, supervisor: goTecnicoSupervisor[tecnico] || '—', pontos, dias, pontosDia: dias ? pontos / dias : null };
+  }).sort((a,b) => b.pontos - a.pontos);
+
+  const n = linhas.length;
+  linhas.forEach((l,i) => {
+    const posicao = n > 1 ? i / (n - 1) : 0;
+    l.quartil = posicao <= 0.25 ? 1 : posicao <= 0.5 ? 2 : posicao <= 0.75 ? 3 : 4;
+  });
+  const QUARTIL_LABEL = { 1:'Excelente', 2:'Bom', 3:'Regular', 4:'Atenção' };
+  const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
+
+  document.getElementById('go-pt-ranking-badge').textContent = `${fmtNum(n)} colaborador(es)`;
+  document.getElementById('go-pt-ranking-tbody').innerHTML = linhas.map((l,i) => `<tr>
+    <td>${i+1}</td><td>${tituloCase(l.tecnico)}</td><td>${tituloCase(l.supervisor)}</td>
+    <td>${l.pontos.toFixed(2)}</td><td>${fmtNum(l.dias)}</td>
+    <td>${l.pontosDia == null ? '—' : l.pontosDia.toFixed(2)}</td>
+    <td><span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º · ${QUARTIL_LABEL[l.quartil]}</span></td>
+  </tr>`).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+
+  const porSupervisor = {};
+  linhas.forEach(l => {
+    const s = l.supervisor;
+    porSupervisor[s] = porSupervisor[s] || { tecnicos:0, pontos:0, somaPontosDia:0, comPontosDia:0 };
+    porSupervisor[s].tecnicos++;
+    porSupervisor[s].pontos += l.pontos;
+    if (l.pontosDia != null){ porSupervisor[s].somaPontosDia += l.pontosDia; porSupervisor[s].comPontosDia++; }
+  });
+  const linhasSupervisor = Object.entries(porSupervisor).map(([s,v]) => ({
+    supervisor: s, tecnicos: v.tecnicos, pontos: v.pontos, media: v.comPontosDia ? v.somaPontosDia / v.comPontosDia : null,
+  })).sort((a,b) => (b.media||0) - (a.media||0));
+
+  document.getElementById('go-pt-supervisao-tbody').innerHTML = linhasSupervisor.map(l => `<tr>
+    <td>${tituloCase(l.supervisor)}</td><td>${fmtNum(l.tecnicos)}</td><td>${l.pontos.toFixed(2)}</td><td>${l.media == null ? '—' : l.media.toFixed(2)}</td>
+  </tr>`).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
+
+  if (goCharts.ptSupervisor) goCharts.ptSupervisor.destroy();
+  goCharts.ptSupervisor = new Chart(document.getElementById('go-chart-pt-supervisor'), {
+    type: 'bar',
+    data: { labels: linhasSupervisor.map(l => tituloCase(l.supervisor)), datasets: [{ label:'Pontos/dia (média)', data: linhasSupervisor.map(l => l.media || 0), backgroundColor: CHART_COLORS }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts, indexAxis:'y',
+      scales: { x:{ beginAtZero:true, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, y:{ ticks:{color:'#e2eaf5'}, grid:{display:false} } },
+      plugins: { legend:{ display:false }, datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{weight:'700',size:11}, formatter: v => v.toFixed(2) } } },
+  });
 }
 
 window.OPS_ON_REFRESH = initPage;
