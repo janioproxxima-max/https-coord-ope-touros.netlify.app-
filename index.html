@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Coordenação de Operações · Touros</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -14,48 +12,50 @@
   <div class="page-head">
     <p class="eyebrow">Coordenação de operações</p>
     <h1 class="page-title">Unidade Touros</h1>
-    <p class="page-sub">Painel central com pessoas, frota, desligamentos, indicadores e o mapa de serviços da unidade.</p>
+    <p class="page-sub">Painel central — os cards abaixo mostram só os módulos que o seu acesso libera.</p>
   </div>
 
-  <div class="module-grid">
-    <a class="module-card" href="mapa-servicos.html">
-      <span class="tag live">Ativo</span>
-      <span class="icon">📍</span>
-      <h3>Mapa de Serviços</h3>
-      <p>Protocolos por tempo de atendimento, filtros por cidade/tipo e localização no mapa.</p>
-    </a>
-
-    <a class="module-card" href="gestao-pessoas.html">
-      <span class="tag live">Ativo</span>
-      <span class="icon">👥</span>
-      <h3>Gestão de Pessoas</h3>
-      <p>Organograma, cadastro de colaboradores e centro de custo.</p>
-    </a>
-
-    <a class="module-card" href="frotas.html">
-      <span class="tag live">Ativo</span>
-      <span class="icon">🚚</span>
-      <h3>Frotas</h3>
-      <p>Veículos da unidade, responsáveis e manutenção.</p>
-    </a>
-
-    <a class="module-card" href="desligamentos.html">
-      <span class="tag live">Ativo</span>
-      <span class="icon">📤</span>
-      <h3>Desligamentos</h3>
-      <p>Histórico de desligamentos e motivos.</p>
-    </a>
-
-    <a class="module-card" href="indicadores.html">
-      <span class="tag soon">Em construção</span>
-      <span class="icon">📊</span>
-      <h3>Indicadores de Desempenho</h3>
-      <p>KPIs da unidade — SLA, produtividade e metas.</p>
-    </a>
-  </div>
+  <div class="module-grid" id="ix-module-grid"></div>
 </div>
 
 <script src="common.js"></script>
-<script>requireAuthThenInit('index.html', 'Início');</script>
+<script>
+requireAuthThenInit('index.html', 'Início');
+
+// Cards derivados da mesma lista/lógica de acesso da barra lateral
+// (OPS_NAV_LINKS + hasAccess) - some daqui automaticamente se o módulo for
+// removido, e aparece sozinho se um módulo novo entrar no menu, sem
+// precisar lembrar de atualizar essa tela à parte.
+const IX_DESCRICOES = {
+  'mapa-servicos': 'Protocolos por tempo de atendimento, filtros por cidade/tipo e localização no mapa.',
+  'mundo-jira':     'Produtividade da equipe, solicitações e o Painel do Colaborador.',
+  'gestao-operacional': 'Serviços, SLA, recorrência, improdutividade, premiação, tickets, absenteísmo e frotas da unidade.',
+  'alerta':         'Recorrência (D-1), improdutividade semanal, justificativa de SLA e Recorrência LOG — trate e responda os checklists.',
+  'gestao-pessoas': 'Organograma, cadastro de colaboradores e centro de custo.',
+  'frotas':         'Veículos da unidade, responsáveis e manutenção.',
+};
+const IX_EXTRAS = [
+  { key: 'indicadores', href: 'indicadores.html', label: 'Indicadores de Desempenho', icon: '📊', descricao: 'KPIs da unidade — SLA, produtividade e metas.', emConstrucao: true },
+];
+
+function renderModuleGrid(){
+  const access = getCurrentAccess();
+  const cards = OPS_NAV_LINKS
+    .filter(l => l.href !== 'index.html')
+    .map(l => ({ key: l.href.replace('.html',''), href: l.href, label: l.label, icon: l.icon, descricao: IX_DESCRICOES[l.href.replace('.html','')] || '' }))
+    .concat(IX_EXTRAS)
+    .filter(c => hasAccess(c.key, access));
+
+  document.getElementById('ix-module-grid').innerHTML = cards.map(c => `
+    <a class="module-card" href="${c.href}">
+      <span class="tag ${c.emConstrucao ? 'soon' : 'live'}">${c.emConstrucao ? 'Em construção' : 'Ativo'}</span>
+      <span class="icon">${c.icon}</span>
+      <h3>${c.label}</h3>
+      <p>${c.descricao}</p>
+    </a>
+  `).join('') || `<p class="page-sub">Seu acesso não libera nenhum módulo ainda. Fale com o coordenador.</p>`;
+}
+renderModuleGrid();
+</script>
 </body>
 </html>

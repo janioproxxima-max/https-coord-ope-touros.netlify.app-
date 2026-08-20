@@ -21,6 +21,7 @@
 
   <div class="qf-tiles" id="go-abas" style="margin-bottom:14px">
     <button type="button" class="qf-tile active" data-aba="servicos">🔧 Serviços</button>
+    <button type="button" class="qf-tile" data-aba="sla-fila">⏱️ SLA</button>
     <button type="button" class="qf-tile" data-aba="recorrencia">🔁 Recorrência</button>
     <button type="button" class="qf-tile" data-aba="improdutividade">📉 Improdutividade</button>
     <button type="button" class="qf-tile" data-aba="tickets">🎫 Tickets</button>
@@ -117,6 +118,85 @@
         <div class="stat-card ok"><div class="label">Produtivos</div><div class="value" id="go-resumo-produtivos">—</div></div>
         <div class="stat-card crit"><div class="label">Improdutivos</div><div class="value" id="go-resumo-improdutivos">—</div></div>
         <div class="stat-card brand"><div class="label">Total de pontos</div><div class="value" id="go-resumo-pontos">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: SLA (fila de protocolos em aberto) =================
+       Portado de sla.html - mesma lógica, só que como aba em vez de página
+       própria. Trabalha com o Mapa de Serviços (protocolos ABERTOS agora),
+       diferente da aba Serviços que usa produtividade_registros (ENCERRADOS). -->
+  <div id="go-aba-sla-fila" style="display:none">
+    <div class="sla-tabs" id="go-sla-tabs"></div>
+    <div class="stat-row" id="go-sla-stat-row"></div>
+    <div class="panel toolbar">
+      <div class="field" style="flex:2">
+        <label for="go-sla-f-search">Buscar</label>
+        <input class="input" id="go-sla-f-search" placeholder="Protocolo, responsável, cidade, bairro...">
+      </div>
+      <div class="field">
+        <label for="go-sla-f-unidade">Unidade</label>
+        <select id="go-sla-f-unidade">
+          <option value="">Todas</option>
+          <option value="TOUROS">📍 Unidade Touros</option>
+          <option value="NATAL">📍 Unidade Natal</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="go-sla-f-cidade-btn">Cidade</label>
+        <div class="multi-select" id="go-sla-f-cidade-wrap">
+          <button type="button" class="btn ghost" id="go-sla-f-cidade-btn">Todas as cidades ▾</button>
+          <div class="multi-select-panel" id="go-sla-f-cidade-panel" style="display:none"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="go-sla-f-statussla">Status SLA</label>
+        <select id="go-sla-f-statussla">
+          <option value="">Todos</option>
+          <option value="vencido">🔴 Atender vencido</option>
+          <option value="hoje">🟠 Atender hoje</option>
+          <option value="espera">🟢 Dentro do prazo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="go-sla-f-supervisor">Supervisor</label>
+        <select id="go-sla-f-supervisor">
+          <option value="">Todos</option>
+          <option value="JOEL TAVARES">Joel Tavares</option>
+          <option value="MARCELLO ROCHA">Marcello Rocha</option>
+        </select>
+      </div>
+      <div style="flex:1"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim);white-space:nowrap">
+        <input type="checkbox" id="go-sla-f-erro-projeto"> 🚩 Só com erro de projeto
+      </label>
+      <button class="btn" id="go-sla-btn-export">⇩ Exportar Excel</button>
+    </div>
+
+    <div class="panel" id="go-sla-table-panel">
+      <div class="table-wrap">
+        <table class="services">
+          <thead>
+            <tr>
+              <th data-sort="protocolo">Protocolo</th>
+              <th data-sort="tituloCompleto">Título serviço</th>
+              <th data-sort="cidade">Cidade</th>
+              <th data-sort="bairro">Bairro</th>
+              <th data-sort="responsavel">Responsável</th>
+              <th data-sort="projeto">Projeto</th>
+              <th data-sort="__tempo">Tempo atual</th>
+              <th>Prazo SLA</th>
+              <th>Status</th>
+              <th data-sort="__statussla">Status SLA</th>
+            </tr>
+          </thead>
+          <tbody id="go-sla-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="go-sla-empty-state" style="display:none">
+        <div class="glyph">⏱️</div>
+        <h3>Nenhum protocolo nessa categoria</h3>
+        <p>Ajuste os filtros ou importe uma planilha no Mapa de Serviços.</p>
       </div>
     </div>
   </div>
@@ -524,7 +604,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['servicos','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica'].forEach(k => {
+      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -576,6 +656,7 @@ function pctProdutivo(arr){ return arr.length ? (arr.filter(isProdutivo).length 
 function goRenderAbaAtiva(){
   goDestroyCharts();
   if (goAbaAtiva === 'servicos') renderAbaServicos(goRegistrosFiltrados());
+  else if (goAbaAtiva === 'sla-fila') renderAbaSlaFila();
   else if (goAbaAtiva === 'recorrencia') renderAbaRecorrencia(goRegistrosFiltrados(), goParesFiltrados());
   else if (goAbaAtiva === 'improdutividade') renderImprodutividade(goRegistrosFiltrados());
   else if (goAbaAtiva === 'tickets') renderAbaTickets();
@@ -620,12 +701,12 @@ async function renderAbaServicos(data){
   renderDonut(deduped);
 }
 function renderMotivoVT(data){
-  const vt = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo');
+  const vt = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && isProdutivo(r));
   const porMotivo = {};
   vt.forEach(r => { const m = r.descricao || 'Sem descrição'; porMotivo[m] = (porMotivo[m]||0)+1; });
   const entries = Object.entries(porMotivo).map(([label,qtd]) => ({ label, qtd }));
   renderParetoChart('go-chart-motivo-vt', entries, (entry) => {
-    abrirAnalitico('servicos', r => grupoSlaDoTipo(r.tipo) === 'reparo' && (r.descricao || 'Sem descrição') === entry.label, `Motivo: ${entry.label}`);
+    abrirAnalitico('servicos', r => grupoSlaDoTipo(r.tipo) === 'reparo' && isProdutivo(r) && (r.descricao || 'Sem descrição') === entry.label, `Motivo: ${entry.label}`);
   });
 }
 
@@ -1819,6 +1900,295 @@ function desenharProdutividadeTecnica(){
       scales: { x:{ beginAtZero:true, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, y:{ ticks:{color:'#e2eaf5'}, grid:{display:false} } },
       plugins: { legend:{ display:false }, datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{weight:'700',size:11}, formatter: v => v.toFixed(2) } } },
   });
+}
+
+// ================= ABA SLA (fila de protocolos em aberto) =================
+// Portado de sla.html - todas as funções/variáveis com prefixo goSla pra
+// não colidir com nada do resto do arquivo. Trabalha com o Mapa de
+// Serviços (MapaServicosData/Supabase), carregado sob demanda na primeira
+// vez que a aba é aberta.
+const GOSLA_RECOLHIMENTO_TROCA_ENDERECO = 'operacoes - recolhimento/troca de endereco';
+const GOSLA_FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
+function goSlaIsAlwaysHidden(r){
+  if (GOSLA_FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
+  if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
+  const nCompleto = OPS.normalize(r.tituloCompleto);
+  if (nCompleto.includes('bot backoffice') || nCompleto.includes('solicitacao inativa')) return true;
+  if (OPS.normalize(r.tipoCurto).includes('bot backoffice') || OPS.normalize(r.tipoCurto).includes('solicitacao inativa')) return true;
+  return false;
+}
+function goSlaIsDefaultHiddenRecolhimento(r){
+  return r.tipoCurto === 'RECOLHIMENTO' && OPS.normalize(r.tituloCompleto) !== GOSLA_RECOLHIMENTO_TROCA_ENDERECO;
+}
+const GOSLA_SIGLA_BY_TIPO = {
+  'SEM ACESSO': 'VT', 'CABO BAIXO': 'VT', 'PROBLEMA RECORRENTE': 'VT',
+  'DIFICULDADE DE ACESSO': 'VT', 'RETENÇÃO CLIENTE CRITICO': 'VT', 'AÇÕES PREVENTIVAS': 'VT',
+  'SERVIÇOS ADICIONAIS': 'SA', 'ATIVAÇÃO': 'AT', 'TROCA DE ENDEREÇO': 'MDE',
+};
+const GOSLA_TABS = [
+  { key: 'TODOS', label: 'Todos os tipos', horas: null, meta: null },
+  { key: 'VT',  label: 'SLA 24HS (Reparo)',           horas: 24, meta: 90 },
+  { key: 'SA',  label: 'SLA 48HS (Serviços Adicional)', horas: 48, meta: 95 },
+  { key: 'AT',  label: 'SLA 72HS (Ativação)',          horas: 72, meta: 95 },
+  { key: 'MDE', label: 'SLA 72HS (Mudança de Endereço)', horas: 72, meta: 95 },
+];
+let goSlaAbaAtiva = 'TODOS';
+let goSlaMapaRecords = null;
+let goSlaSortKey = '__statussla', goSlaSortDir = 1;
+let goSlaSelectedCities = new Set();
+
+function goSlaClassifyStatusAtendimento(raw){
+  const n = OPS.normalize(raw);
+  if (!n) return '';
+  if (n.includes('pausa') || n.includes('interromper')) return 'pausado';
+  if (n.includes('deslocamento')) return 'deslocamento';
+  if (n.includes('iniciado')) return 'iniciado';
+  if (n.includes('aguardando')) return 'aguardando';
+  return 'outro';
+}
+function goSlaVenceAteAmanha9h(r){
+  const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+  if (elapsed == null || !r.slaHoras) return false;
+  const restante = r.slaHoras - elapsed;
+  const hoje = new Date();
+  const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
+  const horasAteAmanha9h = (amanha9h.getTime() - hoje.getTime()) / 3600000;
+  return restante <= horasAteAmanha9h;
+}
+function goSlaGetStatusPrazo(r){
+  const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+  if (elapsed == null || !r.slaHoras) return 'sem_sla';
+  return elapsed > r.slaHoras ? 'fora' : 'dentro';
+}
+function goSlaGetStatusSLA(r){
+  if (goSlaGetStatusPrazo(r) === 'fora') return 'vencido';
+  if (goSlaVenceAteAmanha9h(r)) return 'hoje';
+  return 'espera';
+}
+const GOSLA_STATUS_ORDEM = { vencido: 0, hoje: 1, espera: 2 };
+const GOSLA_STATUS_INFO = {
+  vencido: { label: '🔴 Atender vencido', badge: 'crit' },
+  hoje:    { label: '🟠 Atender hoje',    badge: 'warn' },
+  espera:  { label: '🟢 Dentro do prazo', badge: 'ok' },
+};
+
+const goSlaEls = {
+  search: () => document.getElementById('go-sla-f-search'),
+  cidadeBtn: () => document.getElementById('go-sla-f-cidade-btn'),
+  unidade: () => document.getElementById('go-sla-f-unidade'),
+  cidadePanel: () => document.getElementById('go-sla-f-cidade-panel'),
+  statusSla: () => document.getElementById('go-sla-f-statussla'),
+  supervisor: () => document.getElementById('go-sla-f-supervisor'),
+  erroProjeto: () => document.getElementById('go-sla-f-erro-projeto'),
+  tbody: () => document.getElementById('go-sla-tbody'),
+  statRow: () => document.getElementById('go-sla-stat-row'),
+  emptyState: () => document.getElementById('go-sla-empty-state'),
+};
+
+function goSlaBaseRecordsDaAba(){
+  const base = goSlaMapaRecords.filter(r => !goSlaIsAlwaysHidden(r) && !goSlaIsDefaultHiddenRecolhimento(r) && GOSLA_SIGLA_BY_TIPO[r.tipoCurto]);
+  if (goSlaAbaAtiva === 'TODOS') return base;
+  return base.filter(r => GOSLA_SIGLA_BY_TIPO[r.tipoCurto] === goSlaAbaAtiva);
+}
+function goSlaRenderTabs(){
+  document.getElementById('go-sla-tabs').innerHTML = GOSLA_TABS.map(t => `
+    <button type="button" class="sla-tab ${goSlaAbaAtiva === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>
+  `).join('');
+  document.querySelectorAll('#go-sla-tabs .sla-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      goSlaAbaAtiva = btn.dataset.tab;
+      goSlaPopulateFilterOptions();
+      goSlaRenderAll();
+    });
+  });
+}
+function goSlaUpdateCityButtonLabel(total){
+  if (goSlaSelectedCities.size === 0 || goSlaSelectedCities.size === total) goSlaEls.cidadeBtn().textContent = 'Todas as cidades ▾';
+  else if (goSlaSelectedCities.size === 1) goSlaEls.cidadeBtn().textContent = [...goSlaSelectedCities][0] + ' ▾';
+  else {
+    const unidadeCorrespondente = Object.keys(OPS.UNIT_CITIES).find(u =>
+      [...goSlaSelectedCities].every(c => OPS.isUnitCity(c, u)) && goSlaSelectedCities.size >= 3
+    );
+    goSlaEls.cidadeBtn().textContent = unidadeCorrespondente
+      ? `📍 Unidade ${unidadeCorrespondente.charAt(0) + unidadeCorrespondente.slice(1).toLowerCase()} ▾`
+      : goSlaSelectedCities.size + ' cidades ▾';
+  }
+}
+function goSlaPopulateFilterOptions(){
+  const cidades = [...new Set(goSlaMapaRecords.filter(r => !goSlaIsAlwaysHidden(r) && !goSlaIsDefaultHiddenRecolhimento(r) && GOSLA_SIGLA_BY_TIPO[r.tipoCurto]).map(r => r.cidade).filter(Boolean))].sort();
+  const painel = goSlaEls.cidadePanel();
+  painel.innerHTML = `
+    <input class="input" id="go-sla-city-search" placeholder="Buscar cidade..." style="width:100%;margin-bottom:8px">
+    <div class="ms-actions">
+      <button type="button" id="go-sla-city-all">Marcar todas</button>
+      <button type="button" id="go-sla-city-none">Limpar</button>
+    </div>
+    <div id="go-sla-city-list">
+      ${cidades.map(c => `<label data-city="${c}"><input type="checkbox" value="${c}" ${goSlaSelectedCities.has(c) ? 'checked' : ''}> ${c}</label>`).join('')}
+    </div>
+  `;
+  goSlaUpdateCityButtonLabel(cidades.length);
+  document.getElementById('go-sla-city-search').addEventListener('input', (e) => {
+    const q = OPS.normalize(e.target.value);
+    painel.querySelectorAll('#go-sla-city-list label').forEach(label => {
+      label.style.display = OPS.normalize(label.dataset.city).includes(q) ? 'flex' : 'none';
+    });
+  });
+  document.getElementById('go-sla-city-search').addEventListener('click', e => e.stopPropagation());
+  painel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) goSlaSelectedCities.add(cb.value); else goSlaSelectedCities.delete(cb.value);
+      goSlaUpdateCityButtonLabel(cidades.length);
+      goSlaRenderStats(); goSlaRenderTable();
+    });
+  });
+  document.getElementById('go-sla-city-all').onclick = () => {
+    goSlaSelectedCities = new Set(cidades);
+    painel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+    goSlaUpdateCityButtonLabel(cidades.length);
+    goSlaRenderStats(); goSlaRenderTable();
+  };
+  document.getElementById('go-sla-city-none').onclick = () => {
+    goSlaSelectedCities = new Set();
+    painel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    goSlaUpdateCityButtonLabel(cidades.length);
+    goSlaRenderStats(); goSlaRenderTable();
+  };
+}
+function goSlaGetFiltered(){
+  const q = OPS.normalize(goSlaEls.search().value);
+  const statusSla = goSlaEls.statusSla().value;
+  const soErro = goSlaEls.erroProjeto().checked;
+  const supervisor = goSlaEls.supervisor().value;
+  return goSlaBaseRecordsDaAba().filter(r => {
+    if (goSlaSelectedCities.size > 0 && !goSlaSelectedCities.has(r.cidade)) return false;
+    if (statusSla && goSlaGetStatusSLA(r) !== statusSla) return false;
+    if (soErro && !OPS.checkProjectError(r)) return false;
+    if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
+    if (q){
+      const hay = OPS.normalize(r.protocolo + ' ' + (r.responsavel||'') + ' ' + (r.cidade||'') + ' ' + (r.bairro||''));
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function goSlaRenderStats(){
+  const list = goSlaGetFiltered();
+  const tab = GOSLA_TABS.find(t => t.key === goSlaAbaAtiva);
+  const dentro = list.filter(r => goSlaGetStatusPrazo(r) === 'dentro').length;
+  const fora = list.length - dentro;
+  const pct = list.length ? (dentro / list.length * 100) : 0;
+  const metaLabel = tab.meta != null ? `meta ${tab.meta}% em ${tab.horas}h` : 'meta varia por tipo de serviço';
+  const cor = tab.meta != null ? (pct >= tab.meta ? 'ok' : 'crit') : (pct >= 90 ? 'ok' : 'crit');
+  goSlaEls.statRow().innerHTML = `
+    <div class="stat-card brand"><div class="label">Protocolos</div><div class="value">${list.length}</div></div>
+    <div class="stat-card ok"><div class="label">Dentro do prazo</div><div class="value">${dentro}</div></div>
+    <div class="stat-card crit"><div class="label">Fora do prazo</div><div class="value">${fora}</div></div>
+    <div class="stat-card ${cor}"><div class="label">SLA atual (${metaLabel})</div><div class="value">${pct.toFixed(1)}%</div></div>
+  `;
+}
+function goSlaRenderTable(){
+  let list = goSlaGetFiltered();
+  if (goSlaSortKey === '__tempo'){
+    list = [...list].sort((a,b) => {
+      const ea = OPS.elapsedHoursSince(a.criadoEm) ?? -1;
+      const eb = OPS.elapsedHoursSince(b.criadoEm) ?? -1;
+      return (ea - eb) * goSlaSortDir;
+    });
+  } else if (goSlaSortKey === '__statussla'){
+    list = [...list].sort((a,b) => (GOSLA_STATUS_ORDEM[goSlaGetStatusSLA(a)] - GOSLA_STATUS_ORDEM[goSlaGetStatusSLA(b)]) * goSlaSortDir);
+  } else if (goSlaSortKey){
+    list = [...list].sort((a,b) => {
+      const av = OPS.normalize(a[goSlaSortKey]), bv = OPS.normalize(b[goSlaSortKey]);
+      if (av < bv) return -1 * goSlaSortDir;
+      if (av > bv) return 1 * goSlaSortDir;
+      return 0;
+    });
+  }
+  goSlaEls.emptyState().style.display = list.length === 0 ? 'block' : 'none';
+  document.querySelector('#go-sla-table-panel .table-wrap').style.display = list.length === 0 ? 'none' : 'block';
+  const statusCor = { iniciado:'ok', deslocamento:'crit', pausado:'warn', aguardando:'', outro:'' };
+  goSlaEls.tbody().innerHTML = list.map(r => {
+    const prazo = goSlaGetStatusPrazo(r);
+    const statusSla = goSlaGetStatusSLA(r);
+    const cat = goSlaClassifyStatusAtendimento(r.statusAtendimento);
+    const err = OPS.checkProjectError(r);
+    const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+    return `<tr>
+      <td class="proto">${r.protocolo}${err ? ' <span title="Erro de projeto — esperado ' + err.esperado + ', veio ' + err.encontrado + '">🚩</span>' : ''}</td>
+      <td>${r.tituloCompleto || r.tipoCurto || '—'}</td>
+      <td>${r.cidade || '—'}</td>
+      <td>${r.bairro || '—'}</td>
+      <td>${r.responsavel || '—'}</td>
+      <td class="proto" style="font-size:12px">${r.projeto || '—'}</td>
+      <td class="proto">${elapsed != null ? elapsed.toFixed(1) + 'h' : '—'}</td>
+      <td><span class="badge ${prazo === 'dentro' ? 'ok' : 'crit'}"><span class="dot"></span>${prazo === 'dentro' ? 'Dentro do prazo' : 'Fora do prazo'}</span></td>
+      <td style="font-size:12.5px;${statusCor[cat] ? '' : 'color:var(--ink-dim)'}"><span class="badge ${statusCor[cat]}"><span class="dot"></span>${r.statusAtendimento || '—'}</span></td>
+      <td><span class="badge ${GOSLA_STATUS_INFO[statusSla].badge}"><span class="dot"></span>${GOSLA_STATUS_INFO[statusSla].label}</span></td>
+    </tr>`;
+  }).join('');
+}
+function goSlaRenderAll(){ goSlaRenderTabs(); goSlaRenderStats(); goSlaRenderTable(); }
+
+let goSlaListenersLigados = false;
+function goSlaLigarListeners(){
+  if (goSlaListenersLigados) return;
+  goSlaListenersLigados = true;
+  goSlaEls.cidadeBtn().addEventListener('click', (e) => {
+    e.stopPropagation();
+    const painel = goSlaEls.cidadePanel();
+    painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('go-sla-f-cidade-wrap').contains(e.target)) goSlaEls.cidadePanel().style.display = 'none';
+  });
+  goSlaEls.unidade().addEventListener('change', () => {
+    const unidade = goSlaEls.unidade().value;
+    const todasCidades = [...new Set(goSlaMapaRecords.filter(r => !goSlaIsAlwaysHidden(r) && !goSlaIsDefaultHiddenRecolhimento(r) && GOSLA_SIGLA_BY_TIPO[r.tipoCurto]).map(r => r.cidade).filter(Boolean))];
+    goSlaSelectedCities = unidade ? new Set(todasCidades.filter(c => OPS.isUnitCity(c, unidade))) : new Set();
+    goSlaEls.cidadePanel().querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = goSlaSelectedCities.has(cb.value); });
+    goSlaUpdateCityButtonLabel(todasCidades.length);
+    goSlaRenderStats(); goSlaRenderTable();
+  });
+  [goSlaEls.search(), goSlaEls.statusSla(), goSlaEls.erroProjeto(), goSlaEls.supervisor()].forEach(el => {
+    el.addEventListener('input', goSlaRenderAll);
+    el.addEventListener('change', goSlaRenderAll);
+  });
+  document.querySelectorAll('#go-sla-table-panel th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (goSlaSortKey === key) goSlaSortDir *= -1; else { goSlaSortKey = key; goSlaSortDir = 1; }
+      goSlaRenderTable();
+    });
+  });
+  document.getElementById('go-sla-btn-export').onclick = () => {
+    const headers = ['PROTOCOLO','TÍTULO SERVIÇO','CIDADE','BAIRRO','RESPONSÁVEL','PROJETO','TEMPO ATUAL','PRAZO SLA','STATUS','STATUS SLA'];
+    const list = goSlaGetFiltered();
+    const rows = list.map(r => {
+      const elapsed = OPS.elapsedHoursSince(r.criadoEm);
+      return [r.protocolo, r.tituloCompleto, r.cidade, r.bairro, r.responsavel, r.projeto,
+        elapsed != null ? elapsed.toFixed(1) : '', goSlaGetStatusPrazo(r) === 'dentro' ? 'DENTRO DO PRAZO' : 'FORA DO PRAZO',
+        r.statusAtendimento || '', goSlaGetStatusSLA(r) === 'hoje' ? 'ATENDER HOJE' : 'PODE ESPERAR'];
+    });
+    OPS.downloadXLSX(`sla-${goSlaAbaAtiva.toLowerCase()}-touros.xlsx`, headers, rows);
+  };
+}
+
+async function renderAbaSlaFila(){
+  if (goSlaMapaRecords === null){
+    goSlaEls.statRow().innerHTML = `<div class="stat-card"><div class="label">Carregando</div><div class="value">...</div></div>`;
+    try{
+      goSlaMapaRecords = (await OPS.syncPull('MapaServicosData')) || [];
+    }catch(err){
+      console.error('Falha ao buscar Mapa de Serviços', err);
+      goSlaEls.statRow().innerHTML = `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</div></div>`;
+      return;
+    }
+  }
+  if (goAbaAtiva !== 'sla-fila') return; // trocou de aba enquanto buscava
+  goSlaLigarListeners();
+  goSlaPopulateFilterOptions();
+  goSlaRenderAll();
 }
 
 window.OPS_ON_REFRESH = initPage;
