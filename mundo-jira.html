@@ -1231,11 +1231,15 @@ function processarLinhasProdutividade(rows){
       for (let i = headerRowIdx + 1; i < rows.length; i++){
         const row = rows[i];
         const responsavel = (row[idxResponsavel] || '').toString().trim();
-        // remove o código numérico do início do nome - às vezes vem com
-        // traço ("18000144 - MURILO TENORIO TORRES"), às vezes só com espaço
-        // ("18000144 MURILO TENORIO TORRES") -> sempre "MURILO TENORIO TORRES"
+        // Às vezes vem mais de um auxiliar na mesma célula, separados por
+        // vírgula (ex: "CICERO DO NASCIMENTO CRUZ, 447188 - JAKSON ARIJANE
+        // FERREIRA DA SILVA") - só considera o primeiro, descarta o resto.
+        // Também remove o código numérico do início do nome - às vezes vem
+        // com traço ("18000144 - MURILO TENORIO TORRES"), às vezes só com
+        // espaço ("18000144 MURILO TENORIO TORRES") -> sempre "MURILO
+        // TENORIO TORRES".
         const tecnicoAuxiliar = idxTecnicoAuxiliar >= 0
-          ? (row[idxTecnicoAuxiliar] || '').toString().replace(/^\s*\d+\s*-?\s*/, '').trim()
+          ? (row[idxTecnicoAuxiliar] || '').toString().split(',')[0].replace(/^\s*\d+\s*-?\s*/, '').trim()
           : '';
         if (!responsavel && !tecnicoAuxiliar) continue;
 

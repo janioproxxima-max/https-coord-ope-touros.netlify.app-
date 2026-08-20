@@ -113,7 +113,10 @@
     <div class="stat-row" id="go-rec-cards"></div>
     <div class="two-col" style="grid-template-columns:1fr 320px">
       <div class="card">
-        <div class="card-head"><h3>🔁 Recorrência Log</h3><span class="cnt-badge" id="go-rec-log-badge">—</span></div>
+        <div class="card-head">
+          <h3>🔁 Recorrência Log</h3><span class="cnt-badge" id="go-rec-log-badge">—</span>
+          <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-rec-log-tbody" data-arquivo="recorrencia-log" data-sheet="Recorrência" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+        </div>
         <p class="page-sub" style="padding:0 16px;margin:10px 0">Mesmo técnico atendeu o mesmo cliente de novo (reparo produtivo) em até 30 dias.</p>
         <div class="table-wrap" style="max-height:380px">
           <table class="services">
@@ -123,7 +126,10 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>👤 Recorrência por responsável</h3></div>
+        <div class="card-head">
+          <h3>👤 Recorrência por responsável</h3>
+          <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-rec-resp-tbody" data-arquivo="recorrencia-por-responsavel" data-sheet="Recorrência" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+        </div>
         <div class="qf-tiles" id="go-rec-resp-tiles" style="margin:12px 16px 0">
           <button type="button" class="qf-tile active" data-resp="tecnico">Técnico</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Supervisor</button>
@@ -145,6 +151,7 @@
           <button type="button" class="qf-tile active" data-resp="tecnico">Por Técnico</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Por Supervisor</button>
         </div>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-improd-tbody" data-arquivo="improdutividade" data-sheet="Improdutividade" style="font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services"><thead><tr><th>Responsável</th><th>Improdutividade (%)</th><th>Qtd.</th></tr></thead><tbody id="go-improd-tbody"></tbody></table>
@@ -156,7 +163,10 @@
   <div id="go-aba-tickets" style="display:none">
     <div class="stat-row" id="go-tickets-cards"></div>
     <div class="card">
-      <div class="card-head"><h3>🎫 Chamados no período</h3><span class="cnt-badge" id="go-tickets-badge">—</span></div>
+      <div class="card-head">
+        <h3>🎫 Chamados no período</h3><span class="cnt-badge" id="go-tickets-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-tickets-tbody" data-arquivo="tickets" data-sheet="Tickets" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
           <thead><tr><th>Nº</th><th>Módulo</th><th>Colaborador</th><th>Responsável atual</th><th>Aberto em</th><th>Dias em aberto</th><th>Status</th></tr></thead>
@@ -170,7 +180,10 @@
   <div id="go-aba-absenteismo" style="display:none">
     <div class="stat-row" id="go-abs-cards"></div>
     <div class="card">
-      <div class="card-head"><h3>🧑‍⚕️ Ausências e atestados por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span></div>
+      <div class="card-head">
+        <h3>🧑‍⚕️ Ausências e atestados por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abs-tbody" data-arquivo="absenteismo" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
           <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Total dias fora</th></tr></thead>
@@ -184,7 +197,10 @@
   <div id="go-aba-frotas" style="display:none">
     <div class="stat-row" id="go-frotas-cards"></div>
     <div class="card">
-      <div class="card-head"><h3>🚚 Lavagem e manutenção por veículo</h3><span class="cnt-badge" id="go-frotas-badge">—</span></div>
+      <div class="card-head">
+        <h3>🚚 Lavagem e manutenção por veículo</h3><span class="cnt-badge" id="go-frotas-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-frotas-tbody" data-arquivo="frotas" data-sheet="Frotas" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
           <thead><tr><th>Placa</th><th>Veículo</th><th>Lavagens no período</th><th>Manutenções no período</th><th>Manutenção aberta agora</th></tr></thead>
@@ -457,15 +473,31 @@ function goRenderAbaAtiva(){
 }
 
 // ================= ABA SERVIÇOS =================
+// Cada protocolo fechado com Responsável E Técnico Auxiliar vira duas linhas
+// em produtividade_registros (os dois recebem crédito de produtividade) -
+// correto pra produtividade, mas errado pra contagem operacional (SLA,
+// total de encerrados, cidade×tipo, TMA médio etc), que conta o TICKET, não
+// o crédito por técnico. Aqui dedupe por protocolo (mantém a primeira linha)
+// antes de qualquer cálculo agregado da aba Serviços.
+function dedupePorProtocolo(data){
+  const vistos = new Set();
+  return data.filter(r => {
+    if (!r.protocolo) return true; // sem protocolo pra comparar - mantém
+    if (vistos.has(r.protocolo)) return false;
+    vistos.add(r.protocolo);
+    return true;
+  });
+}
 function renderAbaServicos(data){
-  renderCardsSLA(data);
-  renderTabelaCidadeTipo(data);
-  renderDonut(data);
-  renderTMA(data);
-  renderChartCidades(data);
-  renderTop5(data);
+  const deduped = dedupePorProtocolo(data);
+  renderCardsSLA(deduped);
+  renderTabelaCidadeTipo(deduped);
+  renderDonut(deduped);
+  renderTMA(deduped);
+  renderChartCidades(deduped);
+  renderTop5(deduped);
   renderAberturaReparo();
-  renderResumo(data);
+  renderResumo(deduped);
 }
 
 function renderCardsSLA(data){
@@ -665,7 +697,7 @@ function renderResumo(data){
 // -------- analítico de Serviços: mesma base linha a linha dos cartões/
 // gráficos acima, pra dar pra conferir manualmente que os números batem --------
 function linhasAnaliticoServicos(){
-  return goRegistrosFiltrados().map(r => {
+  return dedupePorProtocolo(goRegistrosFiltrados()).map(r => {
     const dp = dentroDoPrazo(r);
     return {
       protocolo: r.protocolo || '', tecnico: r.tecnico || '', tipo: r.tipo || '',
@@ -707,6 +739,24 @@ document.getElementById('go-btn-exportar-analitico').addEventListener('click', (
   const headers = ['Protocolo','Técnico','Tipo','Área','Localidade','Produtivo','Pontos','Data criação','Data encerramento','TMA (h)','Dentro do SLA'];
   const rows = linhas.map(l => [l.protocolo, l.tecnico, l.tipo, l.area, l.localidade, l.produtivo, l.pontos, l.dataCriacao, l.dataEncerramento, l.tma, l.dentroSla]);
   OPS.downloadXLSX(`gestao-operacional-servicos-analitico-${new Date().toISOString().slice(0,10)}.xlsx`, headers, rows, 'Serviços');
+});
+
+// Exporta exatamente o que já está na tela em qualquer tabela da página -
+// garante que o Excel bate 100% com o que a pessoa está vendo (mesmos
+// filtros de período/supervisor/cidade já aplicados).
+function exportarTabelaParaExcel(tbodyId, nomeArquivo, sheetName){
+  const tbody = document.getElementById(tbodyId);
+  const tabela = tbody && tbody.closest('table');
+  if (!tabela) return;
+  const headers = [...tabela.querySelectorAll('thead th')].map(th => th.textContent.trim());
+  const linhas = [...tbody.querySelectorAll('tr')]
+    .map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim()))
+    .filter(cols => cols.length === headers.length); // ignora linha de "sem dados"
+  if (!linhas.length){ alert('Nada pra exportar ainda — confira os filtros de período/supervisor/cidade.'); return; }
+  OPS.downloadXLSX(`gestao-operacional-${nomeArquivo}-${new Date().toISOString().slice(0,10)}.xlsx`, headers, linhas, sheetName);
+}
+document.querySelectorAll('.go-btn-export-tabela').forEach(btn => {
+  btn.addEventListener('click', () => exportarTabelaParaExcel(btn.dataset.tbody, btn.dataset.arquivo, btn.dataset.sheet));
 });
 
 // ================= ABA RECORRÊNCIA =================

@@ -1331,7 +1331,9 @@ const OPS = (() => {
             planoProduto: row.planoProduto || '',
             responsavel: row.responsavel || '',
             nomeCliente: row.nomeCliente || '',
-            tecnicoAuxiliar: (row.tecnicoAuxiliar || '').replace(/^\s*\d+\s*-?\s*/, '').trim(),
+            // se vier mais de um auxiliar na mesma célula (separados por
+            // vírgula), só considera o primeiro
+            tecnicoAuxiliar: (row.tecnicoAuxiliar || '').split(',')[0].replace(/^\s*\d+\s*-?\s*/, '').trim(),
           };
         }).filter(Boolean);
 
