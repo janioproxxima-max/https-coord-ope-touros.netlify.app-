@@ -59,6 +59,11 @@
     <p class="page-sub" id="go-sla-aviso" style="display:none;margin:10px 2px 4px"></p>
 
     <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📈 Histórico de SLA (%) por dia</h3></div>
+      <div class="chart-box tall"><canvas id="go-chart-sla-historico"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
       <div class="card-head"><h3>🏙️ Abertura por cidade × tipo de serviço</h3><span class="cnt-badge" id="go-total-badge">—</span></div>
       <div class="table-wrap" style="max-height:320px">
         <table class="services" id="go-table-cidade-tipo"></table>
@@ -346,7 +351,7 @@ let goMapaServicos = null; // lazy-load: só usado no gráfico "Abertura de Repa
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
-let goTecnicoInspetor = {};
+let goTecnicoInspetor = null; // null = ainda não buscado (ver carregarTecnicoInspetorSeNecessario)
 let goRespImprod = 'tecnico', goRespRec = 'tecnico';
 let goCharts = {};
 let goAbaAtiva = 'servicos';
@@ -392,18 +397,10 @@ async function initPage(){
     goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
-    // Inspetor não tem coluna própria no histórico de produtividade - vem do
-    // cadastro de Gestão de Pessoas, casando o nome do técnico (normalizado,
-    // pra não quebrar por acento/maiúscula) com o campo "Inspetor" da pessoa.
-    try{
-      const pessoasParaInspetor = (await OPS.syncPull('PessoasData')) || [];
-      goTecnicoInspetor = {};
-      pessoasParaInspetor.forEach(p => {
-        if (p.nome && p.inspetor) goTecnicoInspetor[OPS.normalize(p.nome)] = p.inspetor;
-      });
-    }catch(err){
-      console.error('Falha ao buscar Inspetor de Gestão de Pessoas', err);
-    }
+    // Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento
+    // e com cota diária) - só busca sob demanda, quando alguém realmente
+    // clica em "Inspetor" (ver carregarTecnicoInspetorSeNecessario), em vez
+    // de gastar essa chamada em toda carga da página.
     await carregarPeriodo();
     popularFiltros();
   }catch(err){
@@ -476,18 +473,20 @@ function popularFiltros(){
   });
 
   document.querySelectorAll('#go-rec-resp-tiles .qf-tile').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       document.querySelectorAll('#go-rec-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goRespRec = btn.dataset.resp;
+      if (goRespRec === 'inspetor') await carregarTecnicoInspetorSeNecessario();
       renderRecorrenciaResp(goRegistrosFiltrados(), goParesFiltrados());
     });
   });
   document.querySelectorAll('#go-improd-resp-tiles .qf-tile').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       document.querySelectorAll('#go-improd-resp-tiles .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goRespImprod = btn.dataset.resp;
+      if (goRespImprod === 'inspetor') await carregarTecnicoInspetorSeNecessario();
       renderImprodutividade(goRegistrosFiltrados());
     });
   });
@@ -544,6 +543,7 @@ function dedupePorProtocolo(data){
 function renderAbaServicos(data){
   const deduped = dedupePorProtocolo(data);
   renderCardsSLA(deduped);
+  renderSlaHistorico(deduped);
   renderTabelaCidadeTipo(deduped);
   renderDonut(deduped);
   renderTMA(deduped);
@@ -572,7 +572,7 @@ function renderCardsSLA(data){
     const pct = arr.length ? (dentroGrupo / arr.length) * 100 : null;
     const cor = pct == null ? 'neutral' : (pct >= cfg.meta ? 'ok' : (pct >= cfg.meta - 10 ? 'warn' : 'crit'));
     const horas = HORAS_SLA_POR_TIPO[cfg.tipos[0]];
-    return `<div class="sla-card ${cor}">
+    return `<div class="sla-card ${cor}" data-grupo="${chave}" style="cursor:pointer" title="Clique pra ver o analítico">
       <div class="sla-label">${cfg.label} (${horas}h)</div>
       <div class="sla-value">${pct == null ? '—' : fmtPct(pct)}</div>
       <div class="sla-meta">Meta: ${cfg.meta}% · ${fmtNum(arr.length)} encerrados</div>
@@ -581,7 +581,7 @@ function renderCardsSLA(data){
   }).join('');
 
   document.getElementById('go-cards-sla').innerHTML = `
-    <div class="sla-card ${corGeral}">
+    <div class="sla-card ${corGeral}" data-grupo="geral" style="cursor:pointer" title="Clique pra ver o analítico">
       <div class="sla-label">SLA Geral</div>
       <div class="sla-value">${fmtPct(pctGeral)}</div>
       <div class="sla-meta">Meta: ${META_SLA_GERAL}% · ${fmtNum(elegiveis.length)} encerrados</div>
@@ -608,18 +608,74 @@ function dentroDoPrazo(r){
   return horas <= limite;
 }
 
+// Histórico diário de SLA (%) por grupo - mesma base/regra de renderCardsSLA
+// (produtivo + dentro dos grupos de SLA + com as duas datas), só que
+// quebrada por dia em vez de agregada no período inteiro.
+function renderSlaHistorico(data){
+  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const porDia = {};
+  elegiveis.forEach(r => {
+    const dia = diaKey(r.data_encerramento);
+    const grupo = grupoSlaDoTipo(r.tipo);
+    if (!dia) return;
+    porDia[dia] = porDia[dia] || {};
+    porDia[dia][grupo] = porDia[dia][grupo] || { dentro: 0, total: 0 };
+    porDia[dia][grupo].total++;
+    if (dentroDoPrazo(r) === true) porDia[dia][grupo].dentro++;
+  });
+  const dias = Object.keys(porDia).sort();
+  const grupos = Object.keys(SLA_GROUPS);
+  const cores = { reparo: '#00d4ff', sa: '#ffd166', ativacao: '#00e5a0', mde: '#ff4d6d' };
+  const datasets = grupos.map(g => ({
+    label: SLA_GROUPS[g].label.replace('SLA ', ''),
+    data: dias.map(d => {
+      const c = porDia[d][g];
+      return c && c.total ? Number(((c.dentro / c.total) * 100).toFixed(1)) : null;
+    }),
+    borderColor: cores[g], backgroundColor: cores[g], spanGaps: true, tension: 0.15, pointRadius: 2.5,
+  }));
+  if (goCharts.slaHistorico) goCharts.slaHistorico.destroy();
+  goCharts.slaHistorico = new Chart(document.getElementById('go-chart-sla-historico'), {
+    type: 'line',
+    data: { labels: dias.map(d => { const [,m,dd] = d.split('-'); return `${dd}/${m}`; }), datasets },
+    options: { ...commonChartOpts,
+      onClick: (evt, elems) => {
+        if (!elems.length) return;
+        const el = elems[0];
+        const dia = dias[el.index];
+        const grupo = grupos[el.datasetIndex];
+        abrirAnalitico('servicos', r => diaKey(r.data_encerramento) === dia && grupoSlaDoTipo(r.tipo) === grupo, `${SLA_GROUPS[grupo].label} · ${dia}`);
+      },
+      scales: {
+        y: { beginAtZero:true, max:100, ticks:{ color:'#8a97ab', callback:v=>v+'%' }, grid:{ color:'#1e2d47' } },
+        x: { ticks:{ color:'#8a97ab', maxRotation:60, minRotation:30 }, grid:{ display:false } },
+      },
+      plugins: { legend: { labels:{ color:'#e2eaf5' } } },
+    },
+  });
+}
+
+// Cidade × tipo agora agrupa pelos 4 buckets de SLA (mesma regra de
+// SLA_GROUPS/grupoSlaDoTipo), em vez de uma coluna por tipo cru - "Outros"
+// junta o que fica fora do SLA (Recolhimento, Redes, Retrabalho etc), pra
+// somar exatamente com o total de encerrados do período.
 function renderTabelaCidadeTipo(data){
-  const tipos = [...new Set(data.map(r => r.tipo))].sort();
-  const cidadesTodas = [...new Set(data.map(r => r.area))];
+  const grupos = Object.keys(SLA_GROUPS).concat(['outros']);
+  const labelGrupo = { ...Object.fromEntries(Object.entries(SLA_GROUPS).map(([k,v]) => [k, v.label.replace('SLA ', '')])), outros: 'Outros' };
+  const grupoDoRegistro = r => grupoSlaDoTipo(r.tipo) || 'outros';
+  const cidadesTodas = [...new Set(data.map(r => r.area || 'Sem informação'))];
   const matriz = {};
-  cidadesTodas.forEach(c => { matriz[c] = {}; tipos.forEach(t => matriz[c][t] = 0); });
-  data.forEach(r => { if (matriz[r.area]) matriz[r.area][r.tipo]++; });
-  const totalPorCidade = c => tipos.reduce((acc,t) => acc + matriz[c][t], 0);
-  const totalPorTipo = t => cidadesTodas.reduce((acc,c) => acc + matriz[c][t], 0);
+  cidadesTodas.forEach(c => { matriz[c] = {}; grupos.forEach(g => matriz[c][g] = 0); });
+  data.forEach(r => { const c = r.area || 'Sem informação'; matriz[c][grupoDoRegistro(r)]++; });
+  const totalPorCidade = c => grupos.reduce((acc,g) => acc + matriz[c][g], 0);
+  const totalPorGrupo = g => cidadesTodas.reduce((acc,c) => acc + matriz[c][g], 0);
   const cidades = cidadesTodas.sort((a,b) => totalPorCidade(b) - totalPorCidade(a));
-  const thead = `<thead><tr><th>Cidade</th>${tipos.map(t => `<th>${t}</th>`).join('')}<th>Total</th></tr></thead>`;
-  const rows = cidades.map(c => `<tr><td>${c}</td>${tipos.map(t => `<td>${matriz[c][t]||'-'}</td>`).join('')}<td style="font-weight:700">${totalPorCidade(c)}</td></tr>`).join('');
-  const totalRow = `<tr style="font-weight:800;color:var(--brand)"><td>Total</td>${tipos.map(t => `<td>${totalPorTipo(t)}</td>`).join('')}<td>${data.length}</td></tr>`;
+  const thead = `<thead><tr><th>Cidade</th>${grupos.map(g => `<th>${labelGrupo[g]}</th>`).join('')}<th>Total</th></tr></thead>`;
+  const rows = cidades.map(c => `<tr><td>${c}</td>${grupos.map(g => {
+    const v = matriz[c][g];
+    return v ? `<td style="cursor:pointer" data-cidade="${c}" data-grupo="${g}" title="Clique pra ver o analítico">${v}</td>` : `<td>-</td>`;
+  }).join('')}<td style="font-weight:700">${totalPorCidade(c)}</td></tr>`).join('');
+  const totalRow = `<tr style="font-weight:800;color:var(--brand)"><td>Total</td>${grupos.map(g => `<td>${totalPorGrupo(g)}</td>`).join('')}<td>${data.length}</td></tr>`;
   document.getElementById('go-table-cidade-tipo').innerHTML = `${thead}<tbody>${rows}${totalRow}</tbody>`;
   document.getElementById('go-total-badge').textContent = `${fmtNum(data.length)} encerrados`;
 }
@@ -632,6 +688,11 @@ function renderDonut(data){
     data: { labels: ['Produtivos','Improdutivos'], datasets: [{ data: [produtivos, improdutivos], backgroundColor: ['#00e5a0','#ff4d6d'] }] },
     plugins: [ChartDataLabels],
     options: { ...commonChartOpts,
+      onClick: (evt, elems) => {
+        if (!elems.length) return;
+        const quer = elems[0].index === 0 ? true : false;
+        abrirAnalitico('servicos', r => isProdutivo(r) === quer, quer ? 'Produtivos' : 'Improdutivos');
+      },
       plugins: {
         legend: { position: 'bottom', labels: { color: '#e2eaf5', boxWidth: 12 } },
         datalabels: { color: '#0b0f1a', font: { weight: '800', size: 13 },
@@ -653,6 +714,11 @@ function renderChartCidades(data){
     data: { labels: entries.map(([c])=>c), datasets: [{ label:'Encerrados', data: entries.map(([,v])=>v), backgroundColor: CHART_COLORS }] },
     plugins: [ChartDataLabels],
     options: { ...commonChartOpts, indexAxis:'y',
+      onClick: (evt, elems) => {
+        if (!elems.length) return;
+        const cidade = entries[elems[0].index][0];
+        abrirAnalitico('servicos', r => (r.area || 'Sem informação') === cidade, `Cidade: ${cidade}`);
+      },
       scales: { x:{ beginAtZero:true, ticks:{color:'#8a97ab'}, grid:{color:'#1e2d47'} }, y:{ ticks:{color:'#e2eaf5'}, grid:{display:false} } },
       plugins: { legend:{ display:false },
         datalabels: { color:'#e2eaf5', anchor:'end', align:'end', font:{ weight:'700', size:11.5 }, formatter: v => fmtNum(v) } } },
@@ -663,7 +729,7 @@ function renderTop5(data){
   data.forEach(r => { counts[r.tipo] = (counts[r.tipo]||0) + 1; });
   const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,5);
   document.getElementById('go-top5-tbody').innerHTML = entries.map(([tipo,n],i) =>
-    `<tr><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>`
+    `<tr style="cursor:pointer" data-tipo="${tipo}" title="Clique pra ver o analítico"><td>${i+1}</td><td>${tipo}</td><td style="font-weight:700">${fmtNum(n)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
 }
 async function renderAberturaReparo(){
@@ -828,6 +894,27 @@ function abrirAnalitico(modo, filtro, rotuloFiltro){
   document.getElementById('go-modal-analitico').style.display = 'flex';
 }
 document.getElementById('go-btn-analitico').addEventListener('click', () => abrirAnalitico('servicos'));
+document.getElementById('go-cards-sla').addEventListener('click', (e) => {
+  const card = e.target.closest('.sla-card[data-grupo]');
+  if (!card) return;
+  const grupo = card.dataset.grupo;
+  const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
+  abrirAnalitico('servicos', filtro, grupo === 'geral' ? 'SLA Geral' : SLA_GROUPS[grupo].label);
+});
+document.getElementById('go-top5-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-tipo]');
+  if (!tr) return;
+  const tipo = tr.dataset.tipo;
+  abrirAnalitico('servicos', r => r.tipo === tipo, `Tipo: ${tipo}`);
+});
+document.getElementById('go-table-cidade-tipo').addEventListener('click', (e) => {
+  const td = e.target.closest('td[data-cidade]');
+  if (!td) return;
+  const { cidade, grupo } = td.dataset;
+  const filtro = r => (r.area || 'Sem informação') === cidade && (grupoSlaDoTipo(r.tipo) || 'outros') === grupo;
+  const labelGrupo = grupo === 'outros' ? 'Outros' : SLA_GROUPS[grupo].label;
+  abrirAnalitico('servicos', filtro, `${cidade} · ${labelGrupo}`);
+});
 document.getElementById('go-btn-analitico-recorrencia').addEventListener('click', () => abrirAnalitico('recorrencia'));
 document.getElementById('go-btn-analitico-improdutividade').addEventListener('click', () => abrirAnalitico('improdutividade'));
 document.getElementById('go-rec-resp-tbody').addEventListener('click', (e) => {
@@ -1173,8 +1260,24 @@ function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === Stri
 
 function respChave(modo, tecnico){
   if (modo === 'supervisor') return goTecnicoSupervisor[tecnico] || '—';
-  if (modo === 'inspetor') return goTecnicoInspetor[OPS.normalize(tecnico)] || '—';
+  if (modo === 'inspetor') return (goTecnicoInspetor && goTecnicoInspetor[OPS.normalize(tecnico)]) || '—';
   return tecnico;
+}
+// Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento e
+// com cota diária) - busca só sob demanda (quando alguém clica em
+// "Inspetor" pela primeira vez), em vez de gastar essa chamada em toda
+// carga da página mesmo pra quem nunca usa essa visão.
+async function carregarTecnicoInspetorSeNecessario(){
+  if (goTecnicoInspetor !== null) return;
+  goTecnicoInspetor = {};
+  try{
+    const pessoas = (await OPS.syncPull('PessoasData')) || [];
+    pessoas.forEach(p => {
+      if (p.nome && p.inspetor) goTecnicoInspetor[OPS.normalize(p.nome)] = p.inspetor;
+    });
+  }catch(err){
+    console.error('Falha ao buscar Inspetor de Gestão de Pessoas', err);
+  }
 }
 
 // ================= ABA FROTAS =================
