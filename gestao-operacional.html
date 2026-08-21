@@ -316,12 +316,12 @@
     <div class="stat-row" id="go-abs-cards"></div>
     <div class="card">
       <div class="card-head">
-        <h3>🧑‍⚕️ Ausências e atestados por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span>
+        <h3>🧑‍⚕️ Ausências, atestados e férias por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abs-tbody" data-arquivo="absenteismo" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
-          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Total dias fora</th></tr></thead>
+          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Dias de férias</th><th>Total dias fora</th></tr></thead>
           <tbody id="go-abs-tbody"></tbody>
         </table>
       </div>
@@ -1592,13 +1592,13 @@ async function renderAbaTickets(){
 async function renderAbaAbsenteismo(){
   const container = document.getElementById('go-abs-tbody');
   if (goPessoas === null){
-    container.innerHTML = `<tr><td colspan="6" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
+    container.innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
     try{
       const [p, a, at] = await Promise.all([OPS.syncPull('PessoasData'), OPS.syncPull('AusenciasData'), OPS.syncPull('AtestadosData')]);
       goPessoas = p || []; goAusencias = a || []; goAtestados = at || [];
     }catch(err){
       console.error('Falha ao buscar dados de absenteísmo', err);
-      container.innerHTML = `<tr><td colspan="6" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      container.innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
       return;
     }
   }
@@ -1611,24 +1611,32 @@ async function renderAbaAbsenteismo(){
   });
 
   const ausenciasPeriodo = goAusencias.filter(a => dentroPeriodo(a.data));
-  const atestadosPeriodo = goAtestados.filter(a => dentroPeriodo(a.dataInicio) || dentroPeriodo(a.dataFim));
+  // "Férias" é só mais um tipo dentro da mesma coleção de atestados (ver
+  // gestao-pessoas.html) - separa aqui pra não misturar com atestado
+  // médico/INSS na tabela.
+  const atestadosPeriodoTodos = goAtestados.filter(a => dentroPeriodo(a.dataInicio) || dentroPeriodo(a.dataFim));
+  const atestadosPeriodo = atestadosPeriodoTodos.filter(a => a.tipo !== 'Férias');
+  const feriasPeriodo = atestadosPeriodoTodos.filter(a => a.tipo === 'Férias');
 
   const linhas = pessoasFiltradas.map(p => {
     const minhasAusencias = ausenciasPeriodo.filter(a => a.colaboradorId === p.id).length;
     const meusAtestados = atestadosPeriodo.filter(a => a.colaboradorId === p.id);
     const diasAtestado = meusAtestados.reduce((acc,a) => acc + Math.max(1, diffDias(a.dataInicio, a.dataFim) + 1), 0);
-    return { nome: p.nome, cidade: p.cidade, supervisor: p.gestor, ausencias: minhasAusencias, diasAtestado, total: minhasAusencias + diasAtestado };
+    const minhasFerias = feriasPeriodo.filter(a => a.colaboradorId === p.id);
+    const diasFerias = minhasFerias.reduce((acc,a) => acc + Math.max(1, diffDias(a.dataInicio, a.dataFim) + 1), 0);
+    return { nome: p.nome, cidade: p.cidade, supervisor: p.gestor, ausencias: minhasAusencias, diasAtestado, diasFerias, total: minhasAusencias + diasAtestado + diasFerias };
   }).filter(l => l.total > 0).sort((a,b) => b.total - a.total);
 
   document.getElementById('go-abs-cards').innerHTML = `
     <div class="stat-card crit"><div class="label">Ausências no período</div><div class="value">${fmtNum(ausenciasPeriodo.length)}</div></div>
     <div class="stat-card crit"><div class="label">Atestados no período</div><div class="value">${fmtNum(atestadosPeriodo.length)}</div></div>
+    <div class="stat-card"><div class="label">Em férias no período</div><div class="value">${fmtNum(feriasPeriodo.length)}</div></div>
     <div class="stat-card"><div class="label">Colaboradores afetados</div><div class="value">${fmtNum(linhas.length)}</div></div>
   `;
   document.getElementById('go-abs-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   container.innerHTML = linhas.map(l =>
-    `<tr><td>${l.nome}</td><td>${l.cidade||'—'}</td><td>${l.supervisor||'—'}</td><td>${l.ausencias}</td><td>${l.diasAtestado}</td><td style="font-weight:700">${l.total}</td></tr>`
-  ).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Nenhuma ausência/atestado no período.</td></tr>`;
+    `<tr><td>${l.nome}</td><td>${l.cidade||'—'}</td><td>${l.supervisor||'—'}</td><td>${l.ausencias}</td><td>${l.diasAtestado}</td><td>${l.diasFerias}</td><td style="font-weight:700">${l.total}</td></tr>`
+  ).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma ausência/atestado/férias no período.</td></tr>`;
 }
 function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
 
