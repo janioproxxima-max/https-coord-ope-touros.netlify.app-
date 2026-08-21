@@ -54,6 +54,14 @@
         <option value="em-dia">Sem manutenção aberta</option>
       </select>
     </div>
+    <div class="field">
+      <label for="f-doc">Documento</label>
+      <select id="f-doc">
+        <option value="">Todos</option>
+        <option value="vencendo">Vencendo ou vencida</option>
+        <option value="em-dia">Em dia</option>
+      </select>
+    </div>
     <div style="flex:1"></div>
     <button class="btn primary" id="btn-add">＋ Adicionar veículo</button>
     <button class="btn" id="btn-export">⇩ Exportar Excel</button>
@@ -217,6 +225,7 @@ const els = {
   status: document.getElementById('f-status'),
   lavagem: document.getElementById('f-lavagem'),
   manutencao: document.getElementById('f-manutencao'),
+  doc: document.getElementById('f-doc'),
   tbody: document.getElementById('tbody'),
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
@@ -233,6 +242,7 @@ function getFiltered(){
   const status = els.status.value;
   const filtroLavagem = els.lavagem.value;
   const filtroManutencao = els.manutencao.value;
+  const filtroDoc = els.doc.value;
   return records.filter(r => {
     if (base && r.base !== base) return false;
     if (status && r.status !== status) return false;
@@ -245,6 +255,12 @@ function getFiltered(){
       const aberta = !!manutencaoAberta(r.placa);
       if (filtroManutencao === 'aberta' && !aberta) return false;
       if (filtroManutencao === 'em-dia' && aberta) return false;
+    }
+    if (filtroDoc){
+      const ds = docStatus(r.vencDoc);
+      const vencendo = ds === 'crit' || ds === 'warn';
+      if (filtroDoc === 'vencendo' && !vencendo) return false;
+      if (filtroDoc === 'em-dia' && vencendo) return false;
     }
     if (q){
       const hay = OPS.normalize(r.placa + ' ' + r.veiculo + ' ' + r.responsavel);
@@ -295,13 +311,26 @@ function renderStats(){
   const disponiveisLavagem = list.filter(r => nextWashInfo(r.placa).disponivel).length;
   const manutencoesAbertas = list.filter(r => manutencaoAberta(r.placa)).length;
   els.statRow.innerHTML = `
-    <div class="stat-card brand"><div class="label">Veículos</div><div class="value">${list.length}</div></div>
-    <div class="stat-card ok"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
-    <div class="stat-card crit"><div class="label">Doc. vencendo/vencida</div><div class="value">${vencendo}</div></div>
-    <div class="stat-card ok"><div class="label">Disponíveis p/ lavagem</div><div class="value">${disponiveisLavagem}</div></div>
-    <div class="stat-card ${manutencoesAbertas ? 'crit' : ''}"><div class="label">Manutenções abertas</div><div class="value">${manutencoesAbertas}</div></div>
+    <div class="stat-card brand" style="cursor:pointer" data-filtro="todos" title="Clique pra limpar os filtros"><div class="label">Veículos</div><div class="value">${list.length}</div></div>
+    <div class="stat-card ok" style="cursor:pointer" data-filtro="ativos" title="Clique pra ver o analítico"><div class="label">Ativos</div><div class="value">${ativos}</div></div>
+    <div class="stat-card crit" style="cursor:pointer" data-filtro="doc" title="Clique pra ver o analítico"><div class="label">Doc. vencendo/vencida</div><div class="value">${vencendo}</div></div>
+    <div class="stat-card ok" style="cursor:pointer" data-filtro="lavagem" title="Clique pra ver o analítico"><div class="label">Disponíveis p/ lavagem</div><div class="value">${disponiveisLavagem}</div></div>
+    <div class="stat-card ${manutencoesAbertas ? 'crit' : ''}" style="cursor:pointer" data-filtro="manutencao" title="Clique pra ver o analítico"><div class="label">Manutenções abertas</div><div class="value">${manutencoesAbertas}</div></div>
   `;
 }
+// clique no card de situação -> aplica o filtro equivalente e rola pra
+// tabela, que já é o analítico linha a linha (mesma base dos cards).
+els.statRow.addEventListener('click', (e) => {
+  const card = e.target.closest('[data-filtro]');
+  if (!card) return;
+  [els.status, els.lavagem, els.manutencao, els.doc].forEach(el => { el.value = ''; });
+  if (card.dataset.filtro === 'ativos') els.status.value = 'ativo';
+  else if (card.dataset.filtro === 'doc') els.doc.value = 'vencendo';
+  else if (card.dataset.filtro === 'lavagem') els.lavagem.value = 'disponivel';
+  else if (card.dataset.filtro === 'manutencao') els.manutencao.value = 'aberta';
+  renderAll();
+  document.getElementById('table-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
 function renderTable(){
   let list = getFiltered();
@@ -414,7 +443,7 @@ document.getElementById('f-grafico-frota').addEventListener('change', renderFrot
 
 function renderAll(){ renderStats(); renderTable(); renderFrotaChart(); }
 
-[els.search, els.base, els.status, els.lavagem, els.manutencao].forEach(el => {
+[els.search, els.base, els.status, els.lavagem, els.manutencao, els.doc].forEach(el => {
   el.addEventListener('input', renderAll);
   el.addEventListener('change', renderAll);
 });
