@@ -225,9 +225,9 @@
           <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-rec-resp-tbody" data-arquivo="recorrencia-por-responsavel" data-sheet="Recorrência" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
         </div>
         <div class="qf-tiles" id="go-rec-resp-tiles" style="margin:12px 16px 0">
-          <button type="button" class="qf-tile active" data-resp="tecnico">Técnico</button>
+          <button type="button" class="qf-tile active" data-resp="inspetor">Inspetor</button>
           <button type="button" class="qf-tile" data-resp="supervisor">Supervisor</button>
-          <button type="button" class="qf-tile" data-resp="inspetor">Inspetor</button>
+          <button type="button" class="qf-tile" data-resp="coordenador">Coordenador</button>
         </div>
         <div class="table-wrap" style="max-height:320px">
           <table class="services"><thead><tr><th>Resp.</th><th>Cidade</th><th>%</th><th>Qtd.</th></tr></thead><tbody id="go-rec-resp-tbody"></tbody></table>
@@ -244,15 +244,14 @@
       <div class="chart-box tall"><canvas id="go-chart-rec-cidade"></canvas></div>
     </div>
 
-    <div class="two-col">
-      <div class="card">
-        <div class="card-head"><h3>📅 Tendência mensal de Recorrência (%)</h3></div>
-        <div class="chart-box"><canvas id="go-chart-rec-tendencia"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>🔧 Pareto por Tipo de Serviço</h3></div>
-        <div class="chart-box"><canvas id="go-chart-rec-pareto"></canvas></div>
-      </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📅 Tendência mensal de Recorrência (%)</h3></div>
+      <div class="chart-box"><canvas id="go-chart-rec-tendencia"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>🔧 Pareto por Tipo de Serviço</h3></div>
+      <div class="chart-box tall"><canvas id="go-chart-rec-pareto"></canvas></div>
     </div>
   </div>
 
@@ -622,7 +621,7 @@ let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goTecnicoSupervisor = {};
 let goTecnicoInspetor = null; // null = ainda não buscado (ver carregarTecnicoInspetorSeNecessario)
-let goRespImprod = 'tecnico', goRespRec = 'tecnico';
+let goRespImprod = 'tecnico', goRespRec = 'inspetor';
 let goCharts = {};
 let goAbaAtiva = 'servicos';
 
@@ -748,6 +747,7 @@ function popularFiltros(){
       btn.classList.add('active');
       goRespRec = btn.dataset.resp;
       if (goRespRec === 'inspetor') await carregarTecnicoInspetorSeNecessario();
+      else if (goRespRec === 'coordenador') await carregarPessoasCacheSeNecessario();
       renderRecorrenciaResp(goRegistrosFiltrados(), goParesFiltrados());
     });
   });
@@ -1412,6 +1412,8 @@ async function renderAbaRecorrencia(data, pares){
     `<tr style="cursor:pointer" data-tecnico="${l.tecnico}" title="Clique pra ver os protocolos"><td>${tituloCase(l.tecnico)}</td><td>${fmtNum(l.qtd)}</td><td>${fmtPct1(l.pct)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
 
+  if (goRespRec === 'inspetor') await carregarTecnicoInspetorSeNecessario();
+  if (goAbaAtiva !== 'recorrencia') return; // trocou de aba enquanto buscava
   renderRecorrenciaResp(data, pares);
   renderRecorrenciaCidade(data, pares);
   renderRecorrenciaTendencia(data, pares);
@@ -1633,7 +1635,17 @@ function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === Stri
 function respChave(modo, tecnico){
   if (modo === 'supervisor') return goTecnicoSupervisor[tecnico] || '—';
   if (modo === 'inspetor') return (goTecnicoInspetor && goTecnicoInspetor[OPS.normalize(tecnico)]) || '—';
+  if (modo === 'coordenador') return coordenadorDoTecnico(tecnico);
   return tecnico;
+}
+// coordenador é quem o SUPERVISOR do técnico responde (campo "gestor" do
+// cadastro de pessoas, só que aplicado no supervisor, não no técnico -
+// ex: técnico -> supervisor Joel Dias Tavares -> gestor dele = coordenador).
+function coordenadorDoTecnico(tecnico){
+  const supervisor = goTecnicoSupervisor[tecnico];
+  if (!supervisor) return '—';
+  const pessoaSupervisor = (goPessoasCache || []).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(supervisor));
+  return (pessoaSupervisor && pessoaSupervisor.gestor) || '—';
 }
 // Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento e
 // com cota diária) - busca só sob demanda (quando alguém clica em
