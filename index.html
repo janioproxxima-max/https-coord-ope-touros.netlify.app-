@@ -34,21 +34,16 @@ const IX_DESCRICOES = {
   'gestao-pessoas': 'Organograma, cadastro de colaboradores e centro de custo.',
   'frotas':         'Veículos da unidade, responsáveis e manutenção.',
 };
-const IX_EXTRAS = [
-  { key: 'indicadores', href: 'indicadores.html', label: 'Indicadores de Desempenho', icon: '📊', descricao: 'KPIs da unidade — SLA, produtividade e metas.', emConstrucao: true },
-];
-
 function renderModuleGrid(){
   const access = getCurrentAccess();
   const cards = OPS_NAV_LINKS
     .filter(l => l.href !== 'index.html')
     .map(l => ({ key: l.href.replace('.html',''), href: l.href, label: l.label, icon: l.icon, descricao: IX_DESCRICOES[l.href.replace('.html','')] || '' }))
-    .concat(IX_EXTRAS)
     .filter(c => hasAccess(c.key, access));
 
   document.getElementById('ix-module-grid').innerHTML = cards.map(c => `
     <a class="module-card" href="${c.href}">
-      <span class="tag ${c.emConstrucao ? 'soon' : 'live'}">${c.emConstrucao ? 'Em construção' : 'Ativo'}</span>
+      <span class="tag live">Ativo</span>
       <span class="icon">${c.icon}</span>
       <h3>${c.label}</h3>
       <p>${c.descricao}</p>
