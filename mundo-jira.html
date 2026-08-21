@@ -1182,6 +1182,15 @@ function processarLinhasProdutividade(rows){
       // pode vir com grafia um pouco diferente conforme a exportação
       const idxDataCriacao = ['Data de Criação','Data/Hora Criação','Data Criação','Data/Hora de Criação','Data Criação do Chamado']
         .map(idx).find(i => i >= 0) ?? -1;
+      // quando um serviço é reagendado, o Aniel cria um sub-protocolo novo
+      // ("8733594/2") com Data de Criação própria - "zerando" o prazo de
+      // SLA se usada direto. "Data/Hora Abertura Original" traz a
+      // data/hora do PRIMEIRO agendamento (a mesma Data de Criação da
+      // perna "/1") sempre que a linha é uma reabertura; na perna "/1" ela
+      // vem com um valor sentinela "01/01/0001", que OPS.parseBRDateTime
+      // já descarta (retorna null) - por isso o fallback pra idxDataCriacao
+      // funciona sem checagem extra.
+      const idxAberturaOriginal = idx('Data/Hora Abertura Original');
       // "Nº Cliente" é o identificador estável do contrato/cliente na base
       // do Aniel. Recorrência e Recorrência LOG usam esse campo pra saber
       // se é o MESMO cliente sendo revisitado.
@@ -1288,7 +1297,8 @@ function processarLinhasProdutividade(rows){
           }
 
           const dtEncerramento = idxDataEncerramento >= 0 ? OPS.parseBRDateTime(row[idxDataEncerramento] || '') : null;
-          const dtCriacao = idxDataCriacao >= 0 ? OPS.parseBRDateTime(row[idxDataCriacao] || '') : null;
+          const dtAberturaOriginal = idxAberturaOriginal >= 0 ? OPS.parseBRDateTime(row[idxAberturaOriginal] || '') : null;
+          const dtCriacao = dtAberturaOriginal || (idxDataCriacao >= 0 ? OPS.parseBRDateTime(row[idxDataCriacao] || '') : null);
           // mesmo truque de fuso horário usado no encerramento — preserva o
           // dia/hora local em vez de deixar o toISOString() deslocar
           const dataCriacaoISO = dtCriacao
