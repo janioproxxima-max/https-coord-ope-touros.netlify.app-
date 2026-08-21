@@ -501,6 +501,23 @@
   </div>
 </div>
 
+<!-- Modal: SLA por cidade (% dentro do prazo por cidade, pra um grupo de SLA) -->
+<div class="modal-backdrop" id="go-modal-sla-cidade" style="display:none">
+  <div class="modal" style="max-width:min(560px,92vw)">
+    <h3 id="go-sla-cidade-titulo">🏙️ SLA por cidade</h3>
+    <p class="modal-sub">Clique numa cidade pra ver o analítico linha a linha.</p>
+    <div class="table-wrap" style="max-height:60vh">
+      <table class="services">
+        <thead><tr><th>Cidade</th><th>%</th><th>Encerrados</th></tr></thead>
+        <tbody id="go-sla-cidade-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="go-btn-fechar-sla-cidade">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
      reaproveitado por Serviços, Recorrência e Improdutividade (ver ANALITICO_CONFIG) -->
 <div class="modal-backdrop" id="go-modal-analitico" style="display:none">
@@ -838,6 +855,7 @@ function renderCardsSLA(data){
       <div class="sla-value">${pct == null ? '—' : fmtPct(pct)}</div>
       <div class="sla-meta">Meta: ${cfg.meta}% · ${fmtNum(arr.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${pct == null ? 0 : Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
+      <button type="button" class="btn ghost" data-cidade-grupo="${chave}" style="margin-top:10px;font-size:11px;padding:4px 8px;width:100%">🏙️ Por cidade</button>
     </div>`;
   }).join('');
 
@@ -847,6 +865,7 @@ function renderCardsSLA(data){
       <div class="sla-value">${fmtPct(pctGeral)}</div>
       <div class="sla-meta">Meta: ${META_SLA_GERAL}% · ${fmtNum(elegiveis.length)} encerrados</div>
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
+      <button type="button" class="btn ghost" data-cidade-grupo="geral" style="margin-top:10px;font-size:11px;padding:4px 8px;width:100%">🏙️ Por cidade</button>
     </div>${cardsPorGrupo}`;
 
   const avisoEl = document.getElementById('go-sla-aviso');
@@ -1163,11 +1182,58 @@ function abrirAnalitico(modo, filtro, rotuloFiltro){
 }
 document.getElementById('go-btn-analitico').addEventListener('click', () => abrirAnalitico('servicos'));
 document.getElementById('go-cards-sla').addEventListener('click', (e) => {
+  const btnCidade = e.target.closest('[data-cidade-grupo]');
+  if (btnCidade){
+    e.stopPropagation();
+    abrirSlaPorCidade(btnCidade.dataset.cidadeGrupo);
+    return;
+  }
   const card = e.target.closest('.sla-card[data-grupo]');
   if (!card) return;
   const grupo = card.dataset.grupo;
   const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
   abrirAnalitico('servicos', filtro, grupo === 'geral' ? 'SLA Geral' : SLA_GROUPS[grupo].label);
+});
+
+// SLA por cidade: mesma base/regra de renderCardsSLA, só que agrupada por
+// cidade (r.area) em vez do agregado geral - clique numa linha abre o
+// analítico linha a linha já filtrado por cidade + grupo (mesmo padrão do
+// clique na tabela "Abertura por cidade × tipo").
+function abrirSlaPorCidade(grupo){
+  const data = dedupePorProtocolo(goRegistrosFiltrados());
+  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
+  const porCidade = {};
+  elegiveis.forEach(r => {
+    const cidade = r.area || 'Sem informação';
+    porCidade[cidade] = porCidade[cidade] || { dentro: 0, total: 0 };
+    porCidade[cidade].total++;
+    if (dentroDoPrazo(r) === true) porCidade[cidade].dentro++;
+  });
+  const linhas = Object.entries(porCidade).map(([cidade, v]) => ({
+    cidade, pct: v.total ? (v.dentro / v.total) * 100 : 0, total: v.total,
+  })).sort((a,b) => b.pct - a.pct);
+
+  const label = grupo === 'geral' ? 'SLA Geral' : SLA_GROUPS[grupo].label;
+  document.getElementById('go-sla-cidade-titulo').textContent = `🏙️ ${label} — por cidade`;
+  document.getElementById('go-sla-cidade-tbody').innerHTML = linhas.map(l => `<tr style="cursor:pointer" data-cidade="${l.cidade}" title="Clique pra ver o analítico">
+    <td>${l.cidade}</td><td>${fmtPct(l.pct)}</td><td>${fmtNum(l.total)}</td>
+  </tr>`).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+  document.getElementById('go-modal-sla-cidade').style.display = 'flex';
+
+  document.getElementById('go-sla-cidade-tbody').onclick = (e) => {
+    const tr = e.target.closest('tr[data-cidade]');
+    if (!tr) return;
+    const cidade = tr.dataset.cidade;
+    const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo) && (r.area || 'Sem informação') === cidade;
+    document.getElementById('go-modal-sla-cidade').style.display = 'none';
+    abrirAnalitico('servicos', filtro, `${label} · ${cidade}`);
+  };
+}
+document.getElementById('go-btn-fechar-sla-cidade').addEventListener('click', () => {
+  document.getElementById('go-modal-sla-cidade').style.display = 'none';
+});
+document.getElementById('go-modal-sla-cidade').addEventListener('click', (e) => {
+  if (e.target.id === 'go-modal-sla-cidade') document.getElementById('go-modal-sla-cidade').style.display = 'none';
 });
 document.getElementById('go-top5-tbody').addEventListener('click', (e) => {
   const tr = e.target.closest('tr[data-tipo]');
