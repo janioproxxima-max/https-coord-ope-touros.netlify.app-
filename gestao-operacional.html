@@ -2708,7 +2708,9 @@ function desenharHistoricoAuditorias(){
       <td>${label}</td><td>${tituloCase(a.tecnico || '—')}</td><td>${a.protocolo || '—'}</td>
       <td>${OPS.formatDateTimeBR(a.data)}</td>
       <td>${a.nota != null ? a.nota : '—'}</td><td style="max-width:260px">${checklistTexto}</td>
-      <td style="max-width:220px">${a.observacao || '—'}</td>
+      <td style="max-width:180px">${a.observacao
+        ? `<details><summary style="cursor:pointer;color:var(--brand);font-size:12px">📝 Ver</summary><div style="margin-top:6px;white-space:pre-wrap">${a.observacao}</div></details>`
+        : '—'}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma auditoria registrada nessa semana pra esse inspetor.</td></tr>`;
 }
