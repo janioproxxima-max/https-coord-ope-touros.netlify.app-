@@ -422,6 +422,17 @@
 
     <div class="sla-grid" id="go-insp-tarefas-cards" style="margin-bottom:18px"></div>
 
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📜 Histórico de Auditorias (semana selecionada)</h3><span class="cnt-badge" id="go-insp-hist-badge">—</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">O que foi feito, quando e o que foi registrado — Auditorias Internas, Pós Atendimento, Durante o Atendimento, Ferramental e SESMT do inspetor selecionado acima.</p>
+      <div class="table-wrap" style="max-height:360px">
+        <table class="services">
+          <thead><tr><th>Tipo</th><th>Técnico auditado</th><th>Protocolo</th><th>Quando</th><th>Nota</th><th>Checklist</th><th>Observação</th></tr></thead>
+          <tbody id="go-insp-hist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <p class="page-sub" style="margin:0 2px 14px">Tabelas abaixo usam o filtro de período do topo da página (não a semana das tarefas acima), agrupadas por Inspetor.</p>
 
     <div class="card" style="margin-bottom:18px">
@@ -440,7 +451,7 @@
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-insp-log-tbody" data-arquivo="inspetor-recorrencia-log" data-sheet="Recorrência LOG" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
       <div class="table-wrap" style="max-height:320px">
-        <table class="services"><thead><tr><th>Inspetor</th><th>Técnico</th><th>Tipo</th><th>Protocolo anterior</th><th>Protocolo atual</th><th>Data atual</th><th>Cidade</th></tr></thead><tbody id="go-insp-log-tbody"></tbody></table>
+        <table class="services"><thead><tr><th>ID Cliente</th><th>Quantidade de visitas</th><th>Inspetor responsável</th></tr></thead><tbody id="go-insp-log-tbody"></tbody></table>
       </div>
     </div>
 
@@ -1632,13 +1643,21 @@ async function carregarTecnicoInspetorSeNecessario(){
   if (goTecnicoInspetor !== null) return;
   goTecnicoInspetor = {};
   try{
-    const pessoas = (await OPS.syncPull('PessoasData')) || [];
-    pessoas.forEach(p => {
+    // reaproveita o mesmo cache de PessoasData do resto da página (Apps
+    // Script tem cota diária - evita buscar a mesma planilha duas vezes).
+    const pessoas = await carregarPessoasCacheSeNecessario();
+    (pessoas || []).forEach(p => {
       if (p.nome && p.inspetor) goTecnicoInspetor[OPS.normalize(p.nome)] = p.inspetor;
     });
   }catch(err){
     console.error('Falha ao buscar Inspetor de Gestão de Pessoas', err);
   }
+}
+// nº de "equipes" (técnicos Instalador/Reparador ativos) que um inspetor
+// supervisiona - usado pra escalar a meta semanal dele (ex: 3 auditorias
+// internas × nº de equipes).
+function numEquipesInspetor(inspetor){
+  return (goPessoasCache || []).filter(p => p.nome && p.inspetor === inspetor && p.status === 'ativo' && ehInstaladorReparador(p.nome)).length;
 }
 
 // ================= ABA FROTAS =================
@@ -2559,14 +2578,18 @@ function inspetorLogado(){
 // semana, independente do tamanho da equipe. 5 são registráveis por
 // formulário (auditorias_registros); Recorrência/Levagens/Manutenção
 // reaproveitam dados que já existem no site. --------
+// escalaPorEquipe: true = meta é "por equipe" (× nº de técnicos
+// Instalador/Reparador ativos do inspetor) - ex: Alexssandro com 10
+// equipes e meta base 3 precisa de 3×10=30, com mínimo aceitável de 70%
+// disso (21). Cards sem esse flag usam a meta fixa como estava.
 const INSP_TAREFAS = [
-  { chave: 'interna', label: 'Auditorias Internas', icon: '✅', meta: 3, sufixo: 'por semana', tipo: 'log' },
-  { chave: 'pos_atendimento', label: 'Auditorias Pós Atendimento', icon: '✅', meta: 1, sufixo: 'por semana', tipo: 'log' },
-  { chave: 'durante_atendimento', label: 'Auditorias Durante o Atendimento', icon: '✅', meta: 1, sufixo: 'por semana', tipo: 'log' },
+  { chave: 'interna', label: 'Auditorias Internas', icon: '✅', meta: 3, sufixo: 'por equipe/semana', tipo: 'log', escalaPorEquipe: true },
+  { chave: 'pos_atendimento', label: 'Auditorias Pós Atendimento', icon: '✅', meta: 1, sufixo: 'por equipe/semana', tipo: 'log', escalaPorEquipe: true },
+  { chave: 'durante_atendimento', label: 'Auditorias Durante o Atendimento', icon: '✅', meta: 1, sufixo: 'por equipe/semana', tipo: 'log', escalaPorEquipe: true },
   { chave: 'ferramental', label: 'Ferramental', icon: '🧰', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
   { chave: 'sesmt', label: 'Medidas SESMT', icon: '🦺', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
   { chave: 'recorrencia', label: 'Recorrência', icon: '🔁', meta: 7, sufixo: 'meta relativa', tipo: 'existente' },
-  { chave: 'lavagens', label: 'Levagens', icon: '💧', meta: 1, sufixo: 'por semana', tipo: 'existente' },
+  { chave: 'lavagens', label: 'Levagens', icon: '💧', meta: 1, sufixo: 'por equipe/semana', tipo: 'existente', escalaPorEquipe: true },
   { chave: 'manutencao', label: 'Manutenção', icon: '🔧', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'existente' },
 ];
 // Checklist inicial (proposta) pra cada tipo - dá pra ajustar os itens
@@ -2606,12 +2629,30 @@ function desenharTarefasInspetor(){
     sesmt: contarAuditorias('sesmt'), recorrencia: pctRecorrencia, lavagens: lavagensSemana, manutencao: manutMeu,
   };
 
+  const equipes = numEquipesInspetor(goInspSelecionado);
   container.innerHTML = INSP_TAREFAS.map(t => {
     const valor = valores[t.chave];
     const ehPct = t.chave === 'recorrencia';
     const valorTexto = ehPct ? fmtPct1(valor) : fmtNum(valor);
-    const cor = t.meta == null ? 'neutral' : (ehPct ? (valor <= t.meta ? 'ok' : 'crit') : (valor >= t.meta ? 'ok' : 'crit'));
-    const metaTexto = t.meta == null ? 'Sem meta' : `Meta: ${ehPct ? '≤' : '≥'}${t.meta}${ehPct ? '%' : ''}`;
+    let cor, metaTexto;
+    if (t.meta == null){
+      cor = 'neutral'; metaTexto = 'Sem meta';
+    } else if (ehPct){
+      cor = valor <= t.meta ? 'ok' : 'crit';
+      metaTexto = `Meta: ≤${t.meta}%`;
+    } else if (t.escalaPorEquipe){
+      // meta por equipe × nº de equipes do inspetor, com mínimo aceitável
+      // de 70% do total escalado (mesmo padrão ok/warn/crit dos cards de SLA)
+      const metaEscalada = t.meta * equipes;
+      const minimo = Math.ceil(metaEscalada * 0.7);
+      cor = valor >= metaEscalada ? 'ok' : (valor >= minimo ? 'warn' : 'crit');
+      metaTexto = equipes
+        ? `Meta: ${metaEscalada} (${t.meta}×${equipes} equipes) · mín. 70% = ${minimo}`
+        : `Meta: ${t.meta}/equipe · sem equipe cadastrada`;
+    } else {
+      cor = valor >= t.meta ? 'ok' : 'crit';
+      metaTexto = `Meta: ≥${t.meta}`;
+    }
     return `<div class="sla-card ${cor}" ${t.tipo === 'log' ? `style="cursor:pointer" data-tarefa="${t.chave}" title="Clique pra registrar"` : ''}>
       <div class="sla-label">${t.icon} ${t.label}</div>
       <div class="sla-value">${valorTexto}</div>
@@ -2621,6 +2662,35 @@ function desenharTarefasInspetor(){
   container.querySelectorAll('[data-tarefa]').forEach(card => {
     card.addEventListener('click', () => abrirModalAuditoria(card.dataset.tarefa));
   });
+
+  desenharHistoricoAuditorias();
+}
+
+// histórico das auditorias registradas (Internas/Pós Atendimento/Durante o
+// Atendimento/Ferramental/SESMT) do inspetor selecionado, na mesma semana
+// dos cards acima - o que foi feito, quando e o que foi marcado.
+function desenharHistoricoAuditorias(){
+  const historico = goInspAuditorias
+    .filter(a => a.inspetor === goInspSelecionado)
+    .slice()
+    .sort((a,b) => new Date(b.data) - new Date(a.data));
+  document.getElementById('go-insp-hist-badge').textContent = `${fmtNum(historico.length)} registro(s)`;
+  document.getElementById('go-insp-hist-tbody').innerHTML = historico.map(a => {
+    const tarefa = INSP_TAREFAS.find(t => t.chave === a.tipo);
+    const label = tarefa ? `${tarefa.icon} ${tarefa.label}` : a.tipo;
+    const itensChecklist = Object.entries(a.checklist || {});
+    const marcados = itensChecklist.filter(([,ok]) => ok).length;
+    const checklistTexto = itensChecklist.length
+      ? `${marcados}/${itensChecklist.length} ok` + (marcados < itensChecklist.length
+        ? ` · faltou: ${itensChecklist.filter(([,ok]) => !ok).map(([item]) => item).join('; ')}` : '')
+      : '—';
+    return `<tr>
+      <td>${label}</td><td>${tituloCase(a.tecnico || '—')}</td><td>${a.protocolo || '—'}</td>
+      <td>${OPS.formatDateTimeBR(a.data)}</td>
+      <td>${a.nota != null ? a.nota : '—'}</td><td style="max-width:260px">${checklistTexto}</td>
+      <td style="max-width:220px">${a.observacao || '—'}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma auditoria registrada nessa semana pra esse inspetor.</td></tr>`;
 }
 
 function abrirModalAuditoria(tipo){
@@ -2667,6 +2737,18 @@ document.getElementById('go-insp-modal-salvar').addEventListener('click', async 
     btn.disabled = false; btn.textContent = '💾 Salvar';
   }
 });
+document.getElementById('go-insp-rec-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-inspetor]');
+  if (!tr) return;
+  const insp = tr.dataset.inspetor;
+  abrirAnalitico('recorrencia', p => inspetorDoTecnico(p.tecnico) === insp, tituloCase(insp));
+});
+document.getElementById('go-insp-log-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-cliente]');
+  if (!tr) return;
+  const clienteId = tr.dataset.cliente;
+  abrirAnalitico('recorrencia', p => p.cliente_id === clienteId, `Cliente ${clienteId}`);
+});
 function desenharAbaInspetor(){
   const data = goRegistrosFiltrados();
   const pares = goParesFiltrados();
@@ -2694,17 +2776,28 @@ function desenharAbaInspetor(){
     return { insp, cidade: cidadeMaisFreqDe(cidadesPorInsp, insp), qtd, pct: produtivosPorInsp[insp] ? (qtd/produtivosPorInsp[insp])*100 : 0 };
   }).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-insp-rec-tbody').innerHTML = linhasRec.map(l =>
-    `<tr><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
+    `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver o analítico"><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
   ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
 
   // -------- Recorrência LOG por Inspetor --------
-  const logOrdenado = pares.slice().sort((a,b) => new Date(b.data_atual) - new Date(a.data_atual)).slice(0, 300);
-  document.getElementById('go-insp-log-badge').textContent = `${fmtNum(pares.length)} recorrência(s)`;
-  document.getElementById('go-insp-log-tbody').innerHTML = logOrdenado.map(p => `<tr>
-    <td>${tituloCase(inspetorDoTecnico(p.tecnico))}</td><td>${tituloCase(p.tecnico)}</td><td>${p.tipo}</td>
-    <td>${p.protocolo_anterior||'—'}</td><td>${p.protocolo_atual||'—'}</td><td>${diaKey(p.data_atual)}</td>
-    <td>${p.area||'—'}${p.localidade?' · '+p.localidade:''}</td>
-  </tr>`).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
+  // agrupa por cliente (mesmo critério de recorrência do mundo-jira.html:
+  // reparo produtivo com cliente_id) - "Inspetor responsável" é o do
+  // técnico da visita mais recente daquele cliente.
+  const visitasPorCliente = {};
+  data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id).forEach(r => {
+    (visitasPorCliente[r.cliente_id] = visitasPorCliente[r.cliente_id] || []).push(r);
+  });
+  const linhasLog = Object.entries(visitasPorCliente)
+    .filter(([, visitas]) => visitas.length >= 2)
+    .map(([clienteId, visitas]) => {
+      visitas.sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
+      const ultimo = visitas[visitas.length - 1];
+      return { clienteId, qtd: visitas.length, insp: inspetorDoTecnico(ultimo.tecnico) };
+    }).sort((a,b) => b.qtd - a.qtd);
+  document.getElementById('go-insp-log-badge').textContent = `${fmtNum(linhasLog.length)} cliente(s)`;
+  document.getElementById('go-insp-log-tbody').innerHTML = linhasLog.map(l => `<tr style="cursor:pointer" data-cliente="${l.clienteId}" title="Clique pra ver o analítico">
+    <td>${l.clienteId}</td><td>${fmtNum(l.qtd)}</td><td>${tituloCase(l.insp)}</td>
+  </tr>`).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhum cliente com recorrência no período.</td></tr>`;
 
   // -------- Improdutividade por Inspetor --------
   const gruposImprod = {};
