@@ -26,6 +26,7 @@
     <button type="button" class="qf-tile" data-aba="improdutividade">📉 Improdutividade</button>
     <button type="button" class="qf-tile" data-aba="tickets">🎫 Tickets</button>
     <button type="button" class="qf-tile" data-aba="absenteismo">🧑‍⚕️ Absenteísmo</button>
+    <button type="button" class="qf-tile" data-aba="ferias">🏖️ Férias</button>
     <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
     <button type="button" class="qf-tile" data-aba="premiacao">🏆 Premiação</button>
     <button type="button" class="qf-tile" data-aba="produtividade-tecnica">📊 Produtividade Técnica</button>
@@ -323,6 +324,54 @@
         <table class="services">
           <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Dias de férias</th><th>Total dias fora</th></tr></thead>
           <tbody id="go-abs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: FÉRIAS ================= -->
+  <div id="go-aba-ferias" style="display:none">
+    <div class="panel toolbar" style="margin-bottom:14px">
+      <div>
+        <p class="page-sub" id="go-fer-status" style="margin:0">Nenhuma planilha importada ainda.</p>
+      </div>
+      <div style="flex:1"></div>
+      <input type="file" id="go-fer-file" accept=".xlsx,.xls,.csv" style="display:none">
+      <button type="button" class="btn primary" id="go-fer-btn-importar">📥 Importar planilha (Diretoria de Operações)</button>
+    </div>
+
+    <div class="stat-row" id="go-fer-cards"></div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>📋 Situação por colaborador</h3><span class="cnt-badge" id="go-fer-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-fer-tbody" data-arquivo="ferias" data-sheet="Férias" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Um colaborador pode ter mais de um ciclo (período aquisitivo) em aberto — aqui mostra sempre o mais urgente de cada um.</p>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Função</th><th>Status</th><th>Período aquisitivo</th><th>Limite ideal</th><th>Limite máximo</th><th>Agendado/Confeccionado</th></tr></thead>
+          <tbody id="go-fer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📅 Ocupação mensal (quantos de férias por mês)</h3></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Barra sólida = já agendado/confeccionado. Barra tracejada = sugestão pra quem ainda não tem data, calculada respeitando o limite de cada um e tentando manter só 1 por mês (só sobe pra 2+ quando os prazos realmente colidem).</p>
+      <div class="chart-box tall"><canvas id="go-fer-chart-mes"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>💡 Sugestão de programação anual</h3><span class="cnt-badge" id="go-fer-sug-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-fer-sug-tbody" data-arquivo="ferias-sugestao" data-sheet="Sugestão" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só quem ainda não tem férias agendadas/confeccionadas. Ordenado por urgência (limite mais próximo primeiro).</p>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Função</th><th>Limite ideal</th><th>Mês sugerido</th><th>Motivo</th></tr></thead>
+          <tbody id="go-fer-sug-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -734,7 +783,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
+      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -792,6 +841,7 @@ function goRenderAbaAtiva(){
   else if (goAbaAtiva === 'improdutividade') renderImprodutividade(goRegistrosFiltrados());
   else if (goAbaAtiva === 'tickets') renderAbaTickets();
   else if (goAbaAtiva === 'absenteismo') renderAbaAbsenteismo();
+  else if (goAbaAtiva === 'ferias') renderAbaFerias();
   else if (goAbaAtiva === 'frotas') renderAbaFrotas();
   else if (goAbaAtiva === 'premiacao') renderAbaPremiacao();
   else if (goAbaAtiva === 'produtividade-tecnica') renderAbaProdutividadeTecnica();
@@ -1639,6 +1689,306 @@ async function renderAbaAbsenteismo(){
   ).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma ausência/atestado/férias no período.</td></tr>`;
 }
 function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
+
+// ================= ABA FÉRIAS =================
+// Importa a planilha "Diretoria de Operações" (RH, todas as unidades) e
+// guarda só quem é da Touros - por CC (411092) OU por bater o nome com
+// alguém do cadastro de Gestão de Pessoas (supervisor/inspetor ficam num CC
+// regional, não no da unidade). Um colaborador pode ter mais de um "ciclo"
+// (período aquisitivo) em aberto na planilha; cada import substitui toda a
+// base (mesmo padrão do Mapa de Serviços).
+let goFerias = null;
+const FERIAS_META_KEY = 'ops_touros_ferias_import_meta_v1';
+const FERIAS_META_STATUS = ['VENCIDA SEM AGENDAMENTO', 'PROGRAMADA', 'CONFECCIONADO', 'FERIAS NAO VENCIDAS'];
+
+function parseFeriasData(str){
+  const s = (str || '').toString().trim();
+  if (!s || /sem\s*previsao/i.test(s)) return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function feriasDataISO(str){
+  const d = parseFeriasData(str);
+  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null;
+}
+function feriasNum(str){
+  const n = parseFloat((str || '').toString().replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+function feriasMesKey(dataISO){ return dataISO ? dataISO.slice(0, 7) : null; }
+
+document.getElementById('go-fer-btn-importar').addEventListener('click', () => document.getElementById('go-fer-file').click());
+document.getElementById('go-fer-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) importarFerias(file);
+});
+
+async function importarFerias(file){
+  const btn = document.getElementById('go-fer-btn-importar');
+  btn.disabled = true; btn.textContent = '📖 Lendo...';
+  try{
+    await carregarPessoasCacheSeNecessario();
+    const rows = await new Promise((resolve) => OPS.readSpreadsheetFile(file, resolve));
+    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
+    btn.textContent = '⚙️ Processando...';
+    const headers = rows[0];
+    const idx = (nome) => headers.findIndex(h => OPS.normalize(h) === OPS.normalize(nome));
+    const idxCC = idx('CC | Descrição');
+    const idxMatricula = idx('Matrícula');
+    const idxNome = idx('Nome');
+    const idxAdmissao = idx('Dt. Admissão');
+    const idxPeriodo = idx('Perido Aquisitivo');
+    const idxLimiteIdeal = idx('Dt. Limite Ideal');
+    const idxAgendamento = idx('Data Agendamento');
+    const idxLimiteMax = idx('Dt. Limite Max');
+    const idxInicioConf = idx('Dt Início de Férias Confeccionada');
+    const idxFimConf = idx('Dt Final de Férias Confeccionada');
+    const idxAviso = idx('Data Aviso de Férias');
+    const idxStatus = idx('Status');
+    const idxFuncao = idx('Nome Função');
+    const idxVenc = idx('Férias Venc.');
+    const idxPropor = idx('Férias Propor.');
+    const idxAntec = idx('Férias Antec.');
+    const idxQtdDias = idx('Qtd. Dias de Férias');
+    const idxDiasPagos = idx('Dias Pagos');
+    if (idxNome < 0 || idxStatus < 0){
+      alert('Não reconheci as colunas dessa planilha (esperava "Nome", "Status" etc). Confira se é a planilha certa.');
+      return;
+    }
+
+    const nomesRoster = new Set((goPessoasCache || []).map(p => p.nome && OPS.normalize(p.nome)).filter(Boolean));
+    const registros = [];
+    rows.slice(1).forEach(row => {
+      const nome = (row[idxNome] || '').toString().trim();
+      if (!nome) return;
+      const cc = idxCC >= 0 ? (row[idxCC] || '').toString().trim() : '';
+      const ehTouros = OPS.normalize(cc).includes('touros') || nomesRoster.has(OPS.normalize(nome));
+      if (!ehTouros) return;
+      const periodo = idxPeriodo >= 0 ? (row[idxPeriodo] || '').toString().split('-') : [];
+      registros.push({
+        id: OPS.uid(),
+        matricula: idxMatricula >= 0 ? (row[idxMatricula] || '').toString().trim() : '',
+        nome,
+        cargo: idxFuncao >= 0 ? (row[idxFuncao] || '').toString().trim() : '',
+        cc,
+        data_admissao: idxAdmissao >= 0 ? feriasDataISO(row[idxAdmissao]) : null,
+        periodo_aquisitivo_inicio: periodo[0] ? feriasDataISO(periodo[0]) : null,
+        periodo_aquisitivo_fim: periodo[1] ? feriasDataISO(periodo[1]) : null,
+        data_limite_ideal: idxLimiteIdeal >= 0 ? feriasDataISO(row[idxLimiteIdeal]) : null,
+        data_agendamento: idxAgendamento >= 0 ? feriasDataISO(row[idxAgendamento]) : null,
+        data_limite_max: idxLimiteMax >= 0 ? feriasDataISO(row[idxLimiteMax]) : null,
+        data_inicio_confeccionada: idxInicioConf >= 0 ? feriasDataISO(row[idxInicioConf]) : null,
+        data_fim_confeccionada: idxFimConf >= 0 ? feriasDataISO(row[idxFimConf]) : null,
+        data_aviso: idxAviso >= 0 ? feriasDataISO(row[idxAviso]) : null,
+        status: idxStatus >= 0 ? (row[idxStatus] || '').toString().trim() : '',
+        ferias_venc: idxVenc >= 0 ? feriasNum(row[idxVenc]) : 0,
+        ferias_propor: idxPropor >= 0 ? feriasNum(row[idxPropor]) : 0,
+        ferias_antec: idxAntec >= 0 ? feriasNum(row[idxAntec]) : 0,
+        qtd_dias: idxQtdDias >= 0 ? feriasNum(row[idxQtdDias]) : 0,
+        dias_pagos: idxDiasPagos >= 0 ? feriasNum(row[idxDiasPagos]) : 0,
+      });
+    });
+    if (!registros.length){ alert('Nenhum colaborador da Touros encontrado nessa planilha.'); return; }
+
+    btn.textContent = '☁️ Enviando...';
+    await OPS_SUPABASE.del('ferias_registros', 'id=not.is.null');
+    const TAMANHO_LOTE = 500;
+    for (let i = 0; i < registros.length; i += TAMANHO_LOTE){
+      await OPS_SUPABASE.upsert('ferias_registros', registros.slice(i, i + TAMANHO_LOTE), 'id');
+    }
+    const meta = { data: new Date().toISOString(), usuario: nomeDoLogin(), total: registros.length };
+    OPS.saveData(FERIAS_META_KEY, meta);
+    goFerias = registros;
+    desenharAbaFerias();
+  }catch(err){
+    console.error('Falha ao importar férias', err);
+    alert('Não consegui importar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '📥 Importar planilha (Diretoria de Operações)';
+  }
+}
+
+async function renderAbaFerias(){
+  const meta = OPS.loadData(FERIAS_META_KEY);
+  document.getElementById('go-fer-status').textContent = meta
+    ? `📥 Última importação: ${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario} · ${fmtNum(meta.total)} registro(s) da Touros`
+    : 'Nenhuma planilha importada ainda.';
+  if (goFerias === null){
+    document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+    try{
+      goFerias = (await OPS_SUPABASE.select('ferias_registros')) || [];
+    }catch(err){
+      console.error('Falha ao buscar férias', err);
+      document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      return;
+    }
+  }
+  if (goAbaAtiva !== 'ferias') return;
+  desenharAbaFerias();
+}
+
+// escolhe, entre os ciclos (períodos aquisitivos) de um colaborador, o mais
+// relevante pra mostrar agora: já agendado/confeccionado > vencido sem
+// agendamento > não vencido com limite mais próximo.
+function cicloPrimarioFerias(registrosDoNome){
+  const agendado = registrosDoNome.find(r => r.status === 'CONFECCIONADO' || r.status === 'PROGRAMADA');
+  if (agendado) return agendado;
+  const vencida = registrosDoNome.find(r => r.status === 'VENCIDA SEM AGENDAMENTO');
+  if (vencida) return vencida;
+  const naoVencidas = registrosDoNome.filter(r => r.status === 'FERIAS NAO VENCIDAS')
+    .sort((a, b) => new Date(a.data_limite_ideal || '2999-12-31') - new Date(b.data_limite_ideal || '2999-12-31'));
+  if (naoVencidas.length) return naoVencidas[0];
+  return registrosDoNome[0];
+}
+
+// algoritmo guloso: ordena por urgência (limite mais próximo primeiro) e
+// encaixa cada pessoa no mês, entre agora e o limite dela, que já tiver
+// menos gente de férias - só empurra pra 2+ no mesmo mês quando os prazos
+// de fato colidem e não sobra outro mês livre antes do limite.
+function calcularSugestaoFerias(pessoas){
+  const jaAgendados = pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA');
+  const pendentes = pessoas.filter(p => p.registro.status === 'VENCIDA SEM AGENDAMENTO' || p.registro.status === 'FERIAS NAO VENCIDAS');
+
+  const ocupacao = {};
+  jaAgendados.forEach(p => {
+    const mes = feriasMesKey(p.registro.data_inicio_confeccionada || p.registro.data_agendamento);
+    if (mes) ocupacao[mes] = (ocupacao[mes] || 0) + 1;
+  });
+
+  const hoje = new Date();
+  const comDeadline = pendentes
+    .map(p => ({ ...p, deadline: p.registro.data_limite_ideal || p.registro.data_limite_max }))
+    .filter(p => p.deadline)
+    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  const semDeadline = pendentes.filter(p => !(p.registro.data_limite_ideal || p.registro.data_limite_max));
+
+  const sugestoes = [];
+  comDeadline.forEach(p => {
+    const deadlineDt = new Date(p.deadline + 'T00:00:00');
+    const candidatos = [];
+    const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // se o limite já passou (vencida), não faz sentido sugerir um mês que já
+    // foi - trata como urgência máxima: único candidato é o mês atual.
+    let limiteMes = new Date(deadlineDt.getFullYear(), deadlineDt.getMonth(), 1);
+    if (limiteMes < cursor) limiteMes = new Date(cursor);
+    while (cursor <= limiteMes){
+      candidatos.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    let melhor = candidatos[0];
+    candidatos.forEach(m => { if ((ocupacao[m] || 0) < (ocupacao[melhor] || 0)) melhor = m; });
+    ocupacao[melhor] = (ocupacao[melhor] || 0) + 1;
+    sugestoes.push({
+      nome: p.nome, cargo: p.registro.cargo, deadline: p.deadline, mesSugerido: melhor,
+      motivo: candidatos.length === 1
+        ? 'Único mês possível antes do limite'
+        : (ocupacao[melhor] > 1 ? 'Mês com menor concentração (colisão de prazos)' : 'Mês com menor concentração'),
+    });
+  });
+  semDeadline.forEach(p => sugestoes.push({ nome: p.nome, cargo: p.registro.cargo, deadline: null, mesSugerido: null, motivo: 'Sem data limite na planilha' }));
+
+  return { sugestoes, ocupacao, jaAgendados };
+}
+
+function desenharAbaFerias(){
+  const porNome = {};
+  (goFerias || []).forEach(r => { (porNome[r.nome] = porNome[r.nome] || []).push(r); });
+  const pessoas = Object.entries(porNome).map(([nome, registros]) => ({ nome, registro: cicloPrimarioFerias(registros) }));
+
+  const vencidas = pessoas.filter(p => p.registro.status === 'VENCIDA SEM AGENDAMENTO').length;
+  const agendadas = pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA').length;
+  const naoVencidas = pessoas.filter(p => p.registro.status === 'FERIAS NAO VENCIDAS').length;
+  document.getElementById('go-fer-cards').innerHTML = `
+    <div class="stat-card ${vencidas ? 'crit' : 'ok'}"><div class="label">Vencida sem agendamento</div><div class="value">${fmtNum(vencidas)}</div></div>
+    <div class="stat-card ok"><div class="label">Agendada / Confeccionada</div><div class="value">${fmtNum(agendadas)}</div></div>
+    <div class="stat-card"><div class="label">Não vencida</div><div class="value">${fmtNum(naoVencidas)}</div></div>
+    <div class="stat-card brand"><div class="label">Colaboradores com férias na planilha</div><div class="value">${fmtNum(pessoas.length)}</div></div>
+  `;
+
+  const PRIORIDADE_STATUS = { 'VENCIDA SEM AGENDAMENTO': 0, 'PROGRAMADA': 1, 'CONFECCIONADO': 1, 'FERIAS NAO VENCIDAS': 2 };
+  const linhas = pessoas.slice().sort((a, b) => {
+    const pa = PRIORIDADE_STATUS[a.registro.status] ?? 3, pb = PRIORIDADE_STATUS[b.registro.status] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return new Date(a.registro.data_limite_ideal || '2999-12-31') - new Date(b.registro.data_limite_ideal || '2999-12-31');
+  });
+  const STATUS_COR = { 'VENCIDA SEM AGENDAMENTO': 'crit', 'PROGRAMADA': 'ok', 'CONFECCIONADO': 'ok', 'FERIAS NAO VENCIDAS': 'neutral' };
+  document.getElementById('go-fer-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
+  document.getElementById('go-fer-tbody').innerHTML = linhas.map(p => {
+    const r = p.registro;
+    const periodo = (r.periodo_aquisitivo_inicio || r.periodo_aquisitivo_fim)
+      ? `${r.periodo_aquisitivo_inicio ? OPS.formatDateBR(r.periodo_aquisitivo_inicio) : '—'} a ${r.periodo_aquisitivo_fim ? OPS.formatDateBR(r.periodo_aquisitivo_fim) : '—'}`
+      : '—';
+    const agendado = (r.data_inicio_confeccionada || r.data_agendamento)
+      ? `${OPS.formatDateBR(r.data_inicio_confeccionada || r.data_agendamento)}${r.data_fim_confeccionada ? ' a ' + OPS.formatDateBR(r.data_fim_confeccionada) : ''}`
+      : '—';
+    return `<tr>
+      <td>${tituloCase(p.nome)}</td><td>${tituloCase(r.cargo || '—')}</td>
+      <td><span class="badge ${STATUS_COR[r.status] || 'neutral'}"><span class="dot"></span>${tituloCase(r.status || '—')}</span></td>
+      <td>${periodo}</td>
+      <td>${r.data_limite_ideal ? OPS.formatDateBR(r.data_limite_ideal) : '—'}</td>
+      <td>${r.data_limite_max ? OPS.formatDateBR(r.data_limite_max) : '—'}</td>
+      <td>${agendado}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhum dado importado ainda.</td></tr>`;
+
+  const { sugestoes, ocupacao } = calcularSugestaoFerias(pessoas);
+
+  const sugestoesValidas = sugestoes.filter(s => s.mesSugerido).sort((a, b) => new Date(a.deadline || '2999-12-31') - new Date(b.deadline || '2999-12-31'));
+  document.getElementById('go-fer-sug-badge').textContent = `${fmtNum(sugestoes.length)} pendente(s)`;
+  document.getElementById('go-fer-sug-tbody').innerHTML = sugestoes.map(s => `<tr>
+    <td>${tituloCase(s.nome)}</td><td>${tituloCase(s.cargo || '—')}</td>
+    <td>${s.deadline ? OPS.formatDateBR(s.deadline) : '—'}</td>
+    <td>${s.mesSugerido ? formatarMesCurto(s.mesSugerido) : '—'}</td>
+    <td>${s.motivo}</td>
+  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Ninguém pendente de agendamento.</td></tr>`;
+
+  // gráfico: janela rolante de 12 meses a partir do mês atual, estendida se
+  // alguma sugestão/agendamento já confirmado cair além disso
+  const hoje = new Date();
+  const mesesChave = Object.keys(ocupacao);
+  let horizonteMeses = 12;
+  mesesChave.forEach(m => {
+    const [y, mo] = m.split('-').map(Number);
+    const diff = (y - hoje.getFullYear()) * 12 + (mo - 1 - hoje.getMonth()) + 1;
+    if (diff > horizonteMeses) horizonteMeses = diff;
+  });
+  const janela = [];
+  for (let i = 0; i < horizonteMeses; i++){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    janela.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const agendadoPorMes = {};
+  pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA').forEach(p => {
+    const mes = feriasMesKey(p.registro.data_inicio_confeccionada || p.registro.data_agendamento);
+    if (mes) agendadoPorMes[mes] = (agendadoPorMes[mes] || 0) + 1;
+  });
+  const sugeridoPorMes = {};
+  sugestoesValidas.forEach(s => { sugeridoPorMes[s.mesSugerido] = (sugeridoPorMes[s.mesSugerido] || 0) + 1; });
+
+  if (goCharts.ferMes) goCharts.ferMes.destroy();
+  goCharts.ferMes = new Chart(document.getElementById('go-fer-chart-mes'), {
+    type: 'bar',
+    data: {
+      labels: janela.map(formatarMesCurto),
+      datasets: [
+        { label: 'Já agendado/confeccionado', data: janela.map(m => agendadoPorMes[m] || 0), backgroundColor: '#00e5a0', stack: 's' },
+        { label: 'Sugestão', data: janela.map(m => sugeridoPorMes[m] || 0), backgroundColor: '#ffd166', stack: 's' },
+      ],
+    },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts,
+      scales: {
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', stepSize: 1 }, grid: { color: '#1e2d47' }, stacked: true },
+        x: { ticks: { color: '#e2eaf5', maxRotation: 55, minRotation: 35, font: { size: 10.5 } }, grid: { display: false }, stacked: true },
+      },
+      plugins: { legend: { labels: { color: '#e2eaf5' } },
+        datalabels: { display: ctx => ctx.raw > 0, color: '#0a1220', anchor: 'center', align: 'center', font: { weight: '700', size: 10 } } },
+    },
+  });
+}
 
 function respChave(modo, tecnico){
   if (modo === 'supervisor') return goTecnicoSupervisor[tecnico] || '—';
