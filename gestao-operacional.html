@@ -2124,7 +2124,15 @@ async function carregarSemanaPremiacao(){
 // nome com nome do meio: "joel.tavares" só reconstruía "Joel Tavares", que
 // nunca batia com o nome completo "JOEL DIAS TAVARES" - todo supervisor
 // caía no ramo "vê tudo" por engano, tanto aqui quanto no Inspetor).
+// nome de verdade de quem tá logado - a fonte mais confiável é o que foi
+// salvo na sessão NO MOMENTO DO LOGIN, direto da mesma linha da planilha
+// de acessos que autenticou (ver common.js:attempt) - o usuarioLogin do
+// cadastro de Gestão de Pessoas já divergiu do login real de verdade (ex:
+// "marcello.rocha" no login vs "marcello.junior" no cadastro), então serve
+// só de segundo fallback, não como fonte principal.
 function nomeDoLogin(){
+  const nomeSessao = (sessionStorage.getItem('ops_user_nome') || '').trim();
+  if (nomeSessao) return nomeSessao;
   const usuario = (sessionStorage.getItem('ops_user') || '').trim();
   if (!usuario) return '';
   const pessoa = (goPessoasCache || []).find(p => p.usuarioLogin && OPS.normalize(p.usuarioLogin) === OPS.normalize(usuario));

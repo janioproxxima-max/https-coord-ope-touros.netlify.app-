@@ -1456,7 +1456,7 @@ const OPS_USERS_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1YADg1BB
 
 // Lista de emergência: usada apenas se a planilha não puder ser lida
 // (sem internet, link não configurado, ou a planilha ficou fora do ar).
-const OPS_USERS_FALLBACK = { coordenador: { senha: 'ops2024', acesso: 'TOTAL' } };
+const OPS_USERS_FALLBACK = { coordenador: { senha: 'ops2024', acesso: 'TOTAL', nome: '' } };
 
 // Módulos válidos pra usar na coluna LIMITE DE ACESSO (mesma chave do href, sem .html)
 const OPS_MODULE_KEYS = ['index', 'mapa-servicos', 'mundo-jira', 'gestao-operacional', 'gestao-pessoas', 'frotas', 'alerta'];
@@ -1481,7 +1481,8 @@ async function fetchSheetUsers(){
       const u = (cols[0] || '').trim();
       const p = (cols[1] || '').trim();
       const acesso = parseAcesso(cols[2]);
-      if (u && p) map[u] = { senha: p, acesso };
+      const nome = (cols[4] || '').trim();
+      if (u && p) map[u] = { senha: p, acesso, nome };
     });
     return map;
   }catch(e){
@@ -1541,6 +1542,11 @@ function showLogin(onSuccess){
       if (user && user.senha === p){
         sessionStorage.setItem('ops_user', u);
         sessionStorage.setItem('ops_access', JSON.stringify(user.acesso));
+        // nome de verdade direto da mesma linha que autenticou - fonte mais
+        // confiável do que tentar casar login com cadastros separados
+        // (ex: usuarioLogin de Gestão de Pessoas pode divergir do login
+        // real, como aconteceu com "marcello.rocha" vs "marcello.junior").
+        sessionStorage.setItem('ops_user_nome', user.nome || '');
         wrap.remove();
         onSuccess();
       } else {
