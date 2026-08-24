@@ -115,6 +115,8 @@
         <option value="frotas">Frotas</option>
         <option value="acesso">Problema com Acesso</option>
         <option value="reclamacao">Reclamação</option>
+        <option value="gestao">Gestão</option>
+        <option value="pagamento">Pagamento</option>
       </select>
     </div>
     <div class="field">
@@ -239,12 +241,7 @@
     <form id="mj-form-novo">
       <div class="field">
         <label>Módulo</label>
-        <select id="mj-n-modulo" required>
-          <option value="material">Material</option>
-          <option value="frotas">Frotas</option>
-          <option value="acesso">Problema com Acesso</option>
-          <option value="reclamacao">Reclamação</option>
-        </select>
+        <select id="mj-n-modulo" required></select>
       </div>
 
       <div id="mj-n-bloco-material">
@@ -295,20 +292,112 @@
               <option value="Manutenção de Smartphone">Manutenção de Smartphone</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      <div id="mj-n-bloco-gestao" style="display:none">
+        <div class="field">
+          <label>Tipo</label>
+          <select id="mj-n-gestao-tipo">
+            <option value="ferias">Férias</option>
+            <option value="folga">Folga</option>
+            <option value="escala">Alteração de Escala</option>
+            <option value="reuniao">Reunião 1:1</option>
+          </select>
+        </div>
+
+        <div id="mj-n-bloco-gestao-ferias">
           <div class="grid2">
-            <div class="field"><label>Inspetor</label><input class="input" id="mj-n-pc-inspetor" readonly></div>
-            <div class="field"><label>Supervisor</label><input class="input" id="mj-n-pc-supervisor" readonly></div>
+            <div class="field"><label>Mês desejado</label><input class="input" type="month" id="mj-n-gestao-ferias-mes"></div>
+            <div class="field">
+              <label>Período do mês</label>
+              <select id="mj-n-gestao-ferias-quinzena">
+                <option value="inteiro">Mês inteiro</option>
+                <option value="q1">1ª quinzena (dia 1 a 15)</option>
+                <option value="q2">2ª quinzena (dia 16 ao fim)</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--ink-faint);margin:-6px 0 10px">⚠️ Só é possível solicitar férias com no mínimo 60 dias de antecedência do início do período escolhido — é só um pedido de validação, a data exata fica a critério da coordenação.</p>
+        </div>
+
+        <div id="mj-n-bloco-gestao-folga" style="display:none">
+          <div class="grid2">
+            <div class="field"><label>Dia</label><input class="input" type="number" min="1" max="31" id="mj-n-gestao-folga-dia"></div>
+            <div class="field">
+              <label>Mês</label>
+              <select id="mj-n-gestao-folga-mes">
+                <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+                <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+                <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+                <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="field">
-          <label>Evidência (foto)</label>
-          <input type="file" accept="image/*" id="mj-n-pc-evidencia-input">
-          <div id="mj-n-pc-evidencia-preview" style="display:none;margin-top:8px">
-            <img id="mj-n-pc-evidencia-preview-img" style="max-height:100px;border-radius:6px;display:block">
-            <button type="button" class="btn ghost" id="mj-btn-pc-remover-evidencia" style="margin-top:4px;font-size:11px;padding:3px 8px">✕ Remover foto</button>
+        <div id="mj-n-bloco-gestao-escala" style="display:none">
+          <div class="field">
+            <label>Motivo da alteração</label>
+            <textarea class="input" id="mj-n-gestao-escala-motivo" rows="3"></textarea>
           </div>
         </div>
+
+        <div id="mj-n-bloco-gestao-reuniao" style="display:none">
+          <div class="field">
+            <label>Tema</label>
+            <input class="input" id="mj-n-gestao-reuniao-tema" placeholder="Sobre o que é a reunião?">
+          </div>
+          <div class="field">
+            <label>Quem pode participar</label>
+            <select id="mj-n-gestao-reuniao-participantes">
+              <option value="Supervisão e Coordenação">Supervisão e Coordenação</option>
+              <option value="Apenas Coordenação">Apenas Coordenação</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="mj-n-bloco-pagamento" style="display:none">
+        <div class="field">
+          <label>Tipo</label>
+          <select id="mj-n-pagamento-tipo">
+            <option value="frotas">Frotas</option>
+            <option value="campo">Campo</option>
+          </select>
+        </div>
+
+        <div id="mj-n-bloco-pagamento-frotas">
+          <div class="field">
+            <label>Veículo / placa</label>
+            <select id="mj-n-pag-veiculo"><option value="">Selecione a placa...</option></select>
+          </div>
+          <div class="field">
+            <label>Quem pediu</label>
+            <select id="mj-n-pag-quempediu"><option value="">Selecione o colaborador...</option></select>
+          </div>
+        </div>
+
+        <div id="mj-n-bloco-pagamento-campo" style="display:none">
+          <div class="field">
+            <label>Colaborador</label>
+            <select id="mj-n-pag-colaborador"><option value="">Selecione o colaborador...</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" id="mj-n-bloco-evidencia">
+        <label>Evidência (foto)</label>
+        <input type="file" accept="image/*" id="mj-n-pc-evidencia-input">
+        <div id="mj-n-pc-evidencia-preview" style="display:none;margin-top:8px">
+          <img id="mj-n-pc-evidencia-preview-img" style="max-height:100px;border-radius:6px;display:block">
+          <button type="button" class="btn ghost" id="mj-btn-pc-remover-evidencia" style="margin-top:4px;font-size:11px;padding:3px 8px">✕ Remover foto</button>
+        </div>
+      </div>
+
+      <div class="field" id="mj-n-bloco-encaminhado">
+        <label>Encaminhado para</label>
+        <select id="mj-n-encaminhado"></select>
       </div>
 
       <div id="mj-n-bloco-frotas" style="display:none">
@@ -425,7 +514,26 @@ const MJ_TRANSICOES = {
   resolvido: [],
   cancelado: [],
 };
-const MJ_MODULO_LABEL = { material: 'Problema de Campo', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação' };
+const MJ_MODULO_LABEL = { material: 'Problema de Campo', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação', gestao: 'Gestão', pagamento: 'Pagamento' };
+const MJ_MODULOS_TECNICO = ['material', 'frotas', 'acesso', 'reclamacao'];
+const MJ_MODULOS_SUPERVISAO = [...MJ_MODULOS_TECNICO, 'gestao', 'pagamento'];
+const MJ_GESTAO_TIPO_LABEL = { ferias: 'Férias', folga: 'Folga', escala: 'Alteração de Escala', reuniao: 'Reunião 1:1' };
+const MJ_GESTAO_MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MJ_GESTAO_QUINZENA_LABEL = { q1: '1ª quinzena', q2: '2ª quinzena', inteiro: 'Mês inteiro' };
+const MJ_PAGAMENTO_TIPO_LABEL = { frotas: 'Frotas', campo: 'Campo' };
+
+function formatarMesPtBr(mesStr){
+  if (!mesStr) return '—';
+  const [ano, mes] = mesStr.split('-');
+  return `${MJ_GESTAO_MESES[Number(mes)] || mes}/${ano}`;
+}
+function detalheGestao(t){
+  if (t.tipoGestao === 'ferias') return `${formatarMesPtBr(t.feriasMes)} — ${MJ_GESTAO_QUINZENA_LABEL[t.feriasQuinzena] || '—'}`;
+  if (t.tipoGestao === 'folga') return `${t.folgaDia || '—'} de ${MJ_GESTAO_MESES[Number(t.folgaMes)] || '—'}`;
+  if (t.tipoGestao === 'escala') return t.escalaMotivo || '—';
+  if (t.tipoGestao === 'reuniao') return `${t.reuniaoTema || '—'} — ${t.reuniaoParticipantes || '—'}`;
+  return '—';
+}
 const MJ_CATEGORIA_LABEL = {
   equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT',
   manutencao: 'Manutenção', lavagem: 'Prioridade de Lavagem', avarias: 'Avarias/Sinistro',
@@ -455,6 +563,12 @@ function ticketParaSupabase(t){
     supervisor: t.supervisor, coordenador: t.coordenador, criado_por: t.criadoPor,
     criado_em: t.criadoEm, status: t.status, responsavel_atual: t.responsavelAtual,
     responsavel_atual_nome: t.responsavelAtualNome, data_apropriacao: t.dataApropriacao,
+    tipo_problema_campo: t.tipoProblemaCampo, sub_opcao: t.subOpcao,
+    equipamento: t.equipamento, serial: t.serial,
+    tipo_gestao: t.tipoGestao, ferias_mes: t.feriasMes, ferias_quinzena: t.feriasQuinzena,
+    folga_dia: t.folgaDia, folga_mes: t.folgaMes, escala_motivo: t.escalaMotivo,
+    reuniao_tema: t.reuniaoTema, reuniao_participantes: t.reuniaoParticipantes,
+    tipo_pagamento: t.tipoPagamento, pagamento_quem_pediu: t.pagamentoQuemPediu,
   };
 }
 function ticketDeSupabase(r){
@@ -465,6 +579,12 @@ function ticketDeSupabase(r){
     supervisor: r.supervisor, coordenador: r.coordenador, criadoPor: r.criado_por,
     criadoEm: r.criado_em, status: r.status, responsavelAtual: r.responsavel_atual,
     responsavelAtualNome: r.responsavel_atual_nome, dataApropriacao: r.data_apropriacao,
+    tipoProblemaCampo: r.tipo_problema_campo, subOpcao: r.sub_opcao,
+    equipamento: r.equipamento, serial: r.serial,
+    tipoGestao: r.tipo_gestao, feriasMes: r.ferias_mes, feriasQuinzena: r.ferias_quinzena,
+    folgaDia: r.folga_dia, folgaMes: r.folga_mes, escalaMotivo: r.escala_motivo,
+    reuniaoTema: r.reuniao_tema, reuniaoParticipantes: r.reuniao_participantes,
+    tipoPagamento: r.tipo_pagamento, pagamentoQuemPediu: r.pagamento_quem_pediu,
   };
 }
 function comentarioParaSupabase(c){
@@ -526,10 +646,24 @@ function adicionarHistorico(ticketId, tipo, detalhe){
 }
 
 function populateVeiculosSelect(){
-  const sel = document.getElementById('mj-n-veiculo');
   const ativos = veiculos.filter(v => v.status !== 'inativo');
-  sel.innerHTML = '<option value="">Selecione a placa...</option>' +
+  const opcoes = '<option value="">Selecione a placa...</option>' +
     ativos.map(v => `<option value="${v.placa}">${v.placa}${v.veiculo ? ' — ' + v.veiculo : ''}</option>`).join('');
+  ['mj-n-veiculo', 'mj-n-pag-veiculo'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = opcoes;
+  });
+}
+
+function popularSelectColaboradoresCampo(selectEl){
+  if (!selectEl) return;
+  const campo = pessoas.filter(p => {
+    if (!p.nome) return false;
+    const cargo = OPS.normalize(p.cargo);
+    return cargo.includes('instalador') && cargo.includes('reparador');
+  }).sort((a, b) => a.nome.localeCompare(b.nome));
+  selectEl.innerHTML = '<option value="">Selecione o colaborador...</option>' +
+    campo.map(p => `<option value="${p.nome}">${p.nome}</option>`).join('');
 }
 
 // ---------- descobre quem está logado e qual o papel dele ----------
@@ -619,7 +753,7 @@ function ticketVisivelPara(t, papel, colab){
   }
   if (papel === 'tecnico') return t.criadoPor === usuarioAtual;
   if (papel === 'inspetor') return colab && nomesEquivalentes(t.inspetor, colab.nome);
-  if (papel === 'supervisor') return colab && nomesEquivalentes(t.supervisor, colab.nome);
+  if (papel === 'supervisor') return colab && (nomesEquivalentes(t.supervisor, colab.nome) || t.supervisor === 'Nível Supervisão');
   return t.criadoPor === usuarioAtual;
 }
 
@@ -744,30 +878,56 @@ function renderAll(){
 
 // ---------- criar chamado ----------
 const modalNovo = document.getElementById('mj-modal-novo');
+function popularSelectModulo(){
+  const papel = papelAtual();
+  const permitidos = papel === 'tecnico' ? MJ_MODULOS_TECNICO : MJ_MODULOS_SUPERVISAO;
+  document.getElementById('mj-n-modulo').innerHTML = permitidos.map(m => `<option value="${m}">${MJ_MODULO_LABEL[m]}</option>`).join('');
+}
 document.getElementById('mj-btn-novo').onclick = () => {
   document.getElementById('mj-form-novo').reset();
   pcEvidenciaBase64 = null;
   document.getElementById('mj-n-pc-evidencia-preview').style.display = 'none';
+  popularSelectModulo();
+  populateVeiculosSelect();
+  popularSelectColaboradoresCampo(document.getElementById('mj-n-pag-quempediu'));
+  popularSelectColaboradoresCampo(document.getElementById('mj-n-pag-colaborador'));
   atualizarCamposModulo();
   modalNovo.style.display = 'flex';
 };
 document.getElementById('mj-btn-cancelar-novo').onclick = () => modalNovo.style.display = 'none';
 modalNovo.addEventListener('click', e => { if (e.target === modalNovo) modalNovo.style.display = 'none'; });
 
+// ---------- "Encaminhado para": pessoa real (quando existir) ou nível genérico ----------
+function opcoesEncaminhamento(){
+  const colab = colaboradorAtual();
+  const opcoes = [];
+  if (colab && colab.gestor) opcoes.push(colab.gestor);
+  opcoes.push('Nível Supervisão', 'Nível Coordenação');
+  return opcoes;
+}
+function popularSelectEncaminhado(){
+  const sel = document.getElementById('mj-n-encaminhado');
+  const opcoes = opcoesEncaminhamento();
+  sel.innerHTML = opcoes.map(o => `<option value="${o}">${o}</option>`).join('');
+  sel.value = opcoes[0];
+}
+
 function atualizarCamposModulo(){
   const modulo = document.getElementById('mj-n-modulo').value;
   document.getElementById('mj-n-bloco-material').style.display = modulo === 'material' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-frotas').style.display = modulo === 'frotas' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-acesso').style.display = modulo === 'acesso' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-gestao').style.display = modulo === 'gestao' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-pagamento').style.display = modulo === 'pagamento' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-evidencia').style.display = (modulo === 'material' || modulo === 'pagamento') ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-encaminhado').style.display = modulo === 'reclamacao' ? 'none' : 'block';
   document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
   document.getElementById('mj-n-descricao-label').textContent =
-    modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' || modulo === 'material' ? 'Observação' : 'Descrição da necessidade');
-  if (modulo === 'material'){
-    const colab = colaboradorAtual();
-    document.getElementById('mj-n-pc-inspetor').value = colab ? (colab.inspetor || '—') : '—';
-    document.getElementById('mj-n-pc-supervisor').value = colab ? (colab.gestor || '—') : '—';
-  }
+    modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' || modulo === 'material' || modulo === 'gestao' || modulo === 'pagamento' ? 'Observação' : 'Descrição da necessidade');
+  if (modulo !== 'reclamacao') popularSelectEncaminhado();
   atualizarCamposPcTipo();
+  atualizarCamposGestaoTipo();
+  atualizarCamposPagamentoTipo();
 }
 document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
 
@@ -785,6 +945,24 @@ function atualizarCamposPcEstoqueProblema(){
 }
 document.getElementById('mj-n-pc-tipo').addEventListener('change', atualizarCamposPcTipo);
 document.getElementById('mj-n-pc-estoque-problema').addEventListener('change', atualizarCamposPcEstoqueProblema);
+
+// ---------- Gestão: Férias × Folga × Alteração de Escala × Reunião 1:1 ----------
+function atualizarCamposGestaoTipo(){
+  const tipo = document.getElementById('mj-n-gestao-tipo').value;
+  document.getElementById('mj-n-bloco-gestao-ferias').style.display = tipo === 'ferias' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-gestao-folga').style.display = tipo === 'folga' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-gestao-escala').style.display = tipo === 'escala' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-gestao-reuniao').style.display = tipo === 'reuniao' ? 'block' : 'none';
+}
+document.getElementById('mj-n-gestao-tipo').addEventListener('change', atualizarCamposGestaoTipo);
+
+// ---------- Pagamento: Frotas × Campo ----------
+function atualizarCamposPagamentoTipo(){
+  const tipo = document.getElementById('mj-n-pagamento-tipo').value;
+  document.getElementById('mj-n-bloco-pagamento-frotas').style.display = tipo === 'frotas' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-pagamento-campo').style.display = tipo === 'campo' ? 'block' : 'none';
+}
+document.getElementById('mj-n-pagamento-tipo').addEventListener('change', atualizarCamposPagamentoTipo);
 
 let pcEvidenciaBase64 = null;
 document.getElementById('mj-n-pc-evidencia-input').addEventListener('change', async (e) => {
@@ -811,6 +989,12 @@ function proximoNumero(){
   return mjSeq;
 }
 
+function inicioPeriodoFerias(mesStr, quinzena){
+  const [ano, mes] = mesStr.split('-').map(Number);
+  const dia = quinzena === 'q2' ? 16 : 1;
+  return new Date(ano, mes - 1, dia);
+}
+
 document.getElementById('mj-form-novo').addEventListener('submit', async (e) => {
   e.preventDefault();
   const modulo = document.getElementById('mj-n-modulo').value;
@@ -829,7 +1013,50 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
       : '')
     : '';
 
+  // Gestão: Férias × Folga × Alteração de Escala × Reunião 1:1
+  const gestaoTipo = document.getElementById('mj-n-gestao-tipo').value;
+  let gestaoCampos = null;
+  if (modulo === 'gestao'){
+    if (gestaoTipo === 'ferias'){
+      const mes = document.getElementById('mj-n-gestao-ferias-mes').value;
+      const quinzena = document.getElementById('mj-n-gestao-ferias-quinzena').value;
+      if (!mes){ alert('Selecione o mês desejado para as férias.'); return; }
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const inicio = inicioPeriodoFerias(mes, quinzena);
+      const diasDeAntecedencia = Math.floor((inicio - hoje) / 86400000);
+      if (diasDeAntecedencia < 60){
+        alert(`⚠️ Férias só podem ser solicitadas com no mínimo 60 dias de antecedência.\n\nO início do período escolhido tem apenas ${diasDeAntecedencia} dia(s) de antecedência.`);
+        return;
+      }
+      gestaoCampos = { feriasMes: mes, feriasQuinzena: quinzena };
+    } else if (gestaoTipo === 'folga'){
+      const dia = document.getElementById('mj-n-gestao-folga-dia').value;
+      if (!dia){ alert('Preencha o dia da folga.'); return; }
+      gestaoCampos = { folgaDia: Number(dia), folgaMes: Number(document.getElementById('mj-n-gestao-folga-mes').value) };
+    } else if (gestaoTipo === 'escala'){
+      const motivo = document.getElementById('mj-n-gestao-escala-motivo').value.trim();
+      if (!motivo){ alert('Descreva o motivo da alteração de escala.'); return; }
+      gestaoCampos = { escalaMotivo: motivo };
+    } else if (gestaoTipo === 'reuniao'){
+      const tema = document.getElementById('mj-n-gestao-reuniao-tema').value.trim();
+      if (!tema){ alert('Descreva o tema da reunião.'); return; }
+      gestaoCampos = { reuniaoTema: tema, reuniaoParticipantes: document.getElementById('mj-n-gestao-reuniao-participantes').value };
+    }
+  }
+
+  // Pagamento: Frotas × Campo
+  const pagTipo = document.getElementById('mj-n-pagamento-tipo').value;
+  if (modulo === 'pagamento'){
+    if (pagTipo === 'frotas' && (!document.getElementById('mj-n-pag-veiculo').value || !document.getElementById('mj-n-pag-quempediu').value)){
+      alert('Selecione o veículo e quem pediu.'); return;
+    }
+    if (pagTipo === 'campo' && !document.getElementById('mj-n-pag-colaborador').value){
+      alert('Selecione o colaborador.'); return;
+    }
+  }
+
   const agora = new Date().toISOString();
+  const encaminhado = modulo === 'reclamacao' ? null : document.getElementById('mj-n-encaminhado').value;
   const ticket = {
     id: OPS.uid ? OPS.uid() : ('t' + Date.now() + Math.random().toString(36).slice(2)),
     numero: proximoNumero(),
@@ -837,16 +1064,29 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     categoria: modulo === 'frotas' ? document.getElementById('mj-n-frotas-categoria').value
       : modulo === 'acesso' ? document.getElementById('mj-n-acesso-sistema').value
       : null,
-    item: modulo === 'material' ? pcProblema : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
+    item: modulo === 'material' ? pcProblema
+      : modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim()
+      : modulo === 'pagamento' ? (pagTipo === 'frotas' ? document.getElementById('mj-n-pag-veiculo').value : document.getElementById('mj-n-pag-colaborador').value)
+      : '',
     tipoProblemaCampo: modulo === 'material' ? pcTipo : null,
     subOpcao: modulo === 'material' ? pcSubOpcao : null,
     equipamento: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-equipamento').value.trim() : '',
     serial: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-serial').value.trim() : '',
+    tipoGestao: modulo === 'gestao' ? gestaoTipo : null,
+    feriasMes: gestaoCampos ? gestaoCampos.feriasMes || null : null,
+    feriasQuinzena: gestaoCampos ? gestaoCampos.feriasQuinzena || null : null,
+    folgaDia: gestaoCampos ? gestaoCampos.folgaDia || null : null,
+    folgaMes: gestaoCampos ? gestaoCampos.folgaMes || null : null,
+    escalaMotivo: gestaoCampos ? gestaoCampos.escalaMotivo || null : null,
+    reuniaoTema: gestaoCampos ? gestaoCampos.reuniaoTema || null : null,
+    reuniaoParticipantes: gestaoCampos ? gestaoCampos.reuniaoParticipantes || null : null,
+    tipoPagamento: modulo === 'pagamento' ? pagTipo : null,
+    pagamentoQuemPediu: modulo === 'pagamento' && pagTipo === 'frotas' ? document.getElementById('mj-n-pag-quempediu').value : null,
     descricao: document.getElementById('mj-n-descricao').value.trim(),
     colaboradorNome: colab ? colab.nome : usuarioAtual,
     matricula: colab ? (colab.matricula || '') : '',
     inspetor: colab ? (colab.inspetor || '') : '',
-    supervisor: colab ? (colab.gestor || '') : '',
+    supervisor: encaminhado,
     coordenador: 'Jânio Dantas',
     criadoPor: usuarioAtual,
     criadoEm: agora,
@@ -862,7 +1102,7 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
 
   // evidência (foto) anexada na abertura vira a primeira mensagem do chat,
   // reaproveitando o mesmo mecanismo já usado pros comentários
-  if (modulo === 'material' && pcEvidenciaBase64){
+  if ((modulo === 'material' || modulo === 'pagamento') && pcEvidenciaBase64){
     const comentarioEvidencia = { id: OPS.uid(), ticketId: ticket.id, usuario: usuarioAtual, data: agora, mensagem: 'Evidência anexada na abertura do chamado', foto: pcEvidenciaBase64 };
     comentarios.push(comentarioEvidencia);
     await salvarComentarioUnico(comentarioEvidencia);
@@ -907,8 +1147,12 @@ function renderDetalhe(){
     ${t.serial ? `<div class="status-row"><span class="status-name">Serial</span><span class="status-val">${t.serial}</span></div>` : ''}
     ${t.tamanho ? `<div class="status-row"><span class="status-name">Tamanho</span><span class="status-val">${t.tamanho}</span></div>` : ''}
     ${t.quantidade ? `<div class="status-row"><span class="status-name">Quantidade</span><span class="status-val">${t.quantidade}</span></div>` : ''}
+    ${t.tipoGestao ? `<div class="status-row"><span class="status-name">Tipo</span><span class="status-val">${MJ_GESTAO_TIPO_LABEL[t.tipoGestao]}</span></div>` : ''}
+    ${t.tipoGestao ? `<div class="status-row"><span class="status-name">Detalhe</span><span class="status-val">${detalheGestao(t)}</span></div>` : ''}
+    ${t.tipoPagamento ? `<div class="status-row"><span class="status-name">Tipo</span><span class="status-val">${MJ_PAGAMENTO_TIPO_LABEL[t.tipoPagamento]}</span></div>` : ''}
+    ${t.pagamentoQuemPediu ? `<div class="status-row"><span class="status-name">Quem pediu</span><span class="status-val">${t.pagamentoQuemPediu}</span></div>` : ''}
     ${t.inspetor ? `<div class="status-row"><span class="status-name">Inspetor</span><span class="status-val">${t.inspetor}</span></div>` : ''}
-    ${t.supervisor ? `<div class="status-row"><span class="status-name">Supervisor</span><span class="status-val">${t.supervisor}</span></div>` : ''}
+    ${t.supervisor ? `<div class="status-row"><span class="status-name">Encaminhado para</span><span class="status-val">${t.supervisor}</span></div>` : ''}
     <div class="status-row"><span class="status-name">Descrição</span><span class="status-val" style="font-weight:400;text-align:left;max-width:60%">${t.descricao}</span></div>
     <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val">${OPS.formatDateTimeBR(t.criadoEm)}</span></div>
     <div class="status-row"><span class="status-name">Responsável atual</span><span class="status-val">${t.responsavelAtualNome || 'Ninguém ainda'}</span></div>
