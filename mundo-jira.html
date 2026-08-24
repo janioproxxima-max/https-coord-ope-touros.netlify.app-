@@ -1427,7 +1427,19 @@ function mediaPonderada(listaTecnicos, mesKey){
 
 function mesclarProdutividade(resultado){
   const { agregado, quartilPorTecnicoMes } = resultado;
+  // "meses" vira a lista de mes_key que vai ser APAGADA antes de reinserir
+  // em produtividade_registros/produtividade_pares_recorrencia (ver
+  // aplicarResultadoProdutividade) - por isso tem que refletir TODOS os
+  // meses do import bruto (resultado.detalhesRegistros), sem o filtro de
+  // cargo (ehInstaladorReparador) usado abaixo só pro histórico por
+  // técnico. Esse insert roda sempre, pra todo mundo, sem esse filtro - se
+  // "meses" ficasse restrito a quem passa no filtro (e pior, se ninguém
+  // passar porque o cadastro de pessoas ainda não carregou), o apagar não
+  // roda mas o inserir sim, e cada import só empilha por cima do anterior.
+  // Foi exatamente isso que duplicou dezenas de milhares de linhas em
+  // agosto/2026.
   let mesesAtualizados = new Set();
+  (resultado.detalhesRegistros || []).forEach(r => { if (r.mesKey) mesesAtualizados.add(r.mesKey); });
   const registrosTocados = [];
   const detalhesTocados = [];
 
@@ -1437,7 +1449,7 @@ function mesclarProdutividade(resultado){
   }
 
   Object.entries(agregado).forEach(([tecnico, porMes]) => {
-    if (!ehInstaladorReparador(tecnico)) return; // não polui a base com gente de outro cargo
+    if (!ehInstaladorReparador(tecnico)) return; // não polui o histórico por técnico com gente de outro cargo
     let registro = produtividade.find(p => OPS.normalize(p.tecnico) === OPS.normalize(tecnico));
     if (!registro){
       registro = { id: OPS.uid(), tecnico, supervisor: '', coordenador: '', historicoMensal: [], ppcMedio: null, tendencia: null };
@@ -1448,7 +1460,6 @@ function mesclarProdutividade(resultado){
     // coluna "Supervisor" da planilha bruta vem quase sempre vazia
     registro.supervisor = supervisorReal(tecnico) || registro.supervisor;
     Object.entries(porMes).forEach(([mesKey, dados]) => {
-      mesesAtualizados.add(mesKey);
       // supervisor já foi definido acima a partir de Gestão de Pessoas
       const totalOS = dados.produtivos + dados.improdutivos;
       const novoMes = {
