@@ -395,11 +395,6 @@
         </div>
       </div>
 
-      <div class="field" id="mj-n-bloco-encaminhado">
-        <label>Encaminhado para</label>
-        <select id="mj-n-encaminhado"></select>
-      </div>
-
       <div id="mj-n-bloco-frotas" style="display:none">
         <div class="field">
           <label>Veículo / placa</label>
@@ -898,20 +893,6 @@ document.getElementById('mj-btn-cancelar-novo').onclick = () => modalNovo.style.
 modalNovo.addEventListener('click', e => { if (e.target === modalNovo) modalNovo.style.display = 'none'; });
 
 // ---------- "Encaminhado para": pessoa real (quando existir) ou nível genérico ----------
-function opcoesEncaminhamento(){
-  const colab = colaboradorAtual();
-  const opcoes = [];
-  if (colab && colab.gestor) opcoes.push(colab.gestor);
-  opcoes.push('Nível Supervisão', 'Nível Coordenação');
-  return opcoes;
-}
-function popularSelectEncaminhado(){
-  const sel = document.getElementById('mj-n-encaminhado');
-  const opcoes = opcoesEncaminhamento();
-  sel.innerHTML = opcoes.map(o => `<option value="${o}">${o}</option>`).join('');
-  sel.value = opcoes[0];
-}
-
 function atualizarCamposModulo(){
   const modulo = document.getElementById('mj-n-modulo').value;
   document.getElementById('mj-n-bloco-material').style.display = modulo === 'material' ? 'block' : 'none';
@@ -920,11 +901,9 @@ function atualizarCamposModulo(){
   document.getElementById('mj-n-bloco-gestao').style.display = modulo === 'gestao' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-pagamento').style.display = modulo === 'pagamento' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-evidencia').style.display = (modulo === 'material' || modulo === 'pagamento') ? 'block' : 'none';
-  document.getElementById('mj-n-bloco-encaminhado').style.display = modulo === 'reclamacao' ? 'none' : 'block';
   document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
   document.getElementById('mj-n-descricao-label').textContent =
     modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' || modulo === 'material' || modulo === 'gestao' || modulo === 'pagamento' ? 'Observação' : 'Descrição da necessidade');
-  if (modulo !== 'reclamacao') popularSelectEncaminhado();
   atualizarCamposPcTipo();
   atualizarCamposGestaoTipo();
   atualizarCamposPagamentoTipo();
@@ -1056,7 +1035,6 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   }
 
   const agora = new Date().toISOString();
-  const encaminhado = modulo === 'reclamacao' ? null : document.getElementById('mj-n-encaminhado').value;
   const ticket = {
     id: OPS.uid ? OPS.uid() : ('t' + Date.now() + Math.random().toString(36).slice(2)),
     numero: proximoNumero(),
@@ -1086,7 +1064,7 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     colaboradorNome: colab ? colab.nome : usuarioAtual,
     matricula: colab ? (colab.matricula || '') : '',
     inspetor: colab ? (colab.inspetor || '') : '',
-    supervisor: encaminhado,
+    supervisor: colab ? (colab.gestor || '') : '',
     coordenador: 'Jânio Dantas',
     criadoPor: usuarioAtual,
     criadoEm: agora,
@@ -1170,6 +1148,10 @@ function renderDetalhe(){
     if (t.status === 'aguardando_aprovacao_coordenacao' && prox !== 'cancelado' && papel !== 'coordenador') return;
     acoes.push(`<button type="button" class="btn ghost mj-btn-transicao" data-status="${prox}">→ ${MJ_STATUS_LABEL[prox]}</button>`);
   });
+  if (papel !== 'tecnico' && t.modulo !== 'reclamacao' && !['resolvido','cancelado','rejeitado'].includes(t.status)){
+    if (t.supervisor !== 'Nível Supervisão') acoes.push(`<button type="button" class="btn ghost mj-btn-encaminhar" data-nivel="Nível Supervisão">↑ Encaminhar p/ Nível Supervisão</button>`);
+    if (t.supervisor !== 'Nível Coordenação') acoes.push(`<button type="button" class="btn ghost mj-btn-encaminhar" data-nivel="Nível Coordenação">↑ Encaminhar p/ Nível Coordenação</button>`);
+  }
   if (papel === 'coordenador' && t.status === 'aberto'){
     acoes.push(`<button type="button" class="btn ghost danger" id="mj-btn-excluir">🗑 Excluir solicitação</button>`);
   }
@@ -1179,6 +1161,9 @@ function renderDetalhe(){
   if (btnApropriar) btnApropriar.onclick = () => apropriarSe(t.id);
   const btnExcluir = document.getElementById('mj-btn-excluir');
   if (btnExcluir) btnExcluir.onclick = () => excluirTicket(t.id);
+  document.querySelectorAll('.mj-btn-encaminhar').forEach(btn => {
+    btn.onclick = () => encaminharNivel(t.id, btn.dataset.nivel);
+  });
   document.querySelectorAll('.mj-btn-transicao').forEach(btn => {
     btn.onclick = () => mudarStatus(t.id, btn.dataset.status);
   });
@@ -1245,6 +1230,17 @@ async function apropriarSe(id){
   t.dataApropriacao = new Date().toISOString();
   const evento = adicionarHistorico(t.id, 'apropriacao', `${t.responsavelAtualNome} se apropriou da solicitação`);
   if (t.status === 'aberto') t.status = 'em_analise';
+  await salvarTicketUnico(t);
+  await salvarHistoricoUnico(evento);
+  renderDetalhe();
+  renderAll();
+}
+
+async function encaminharNivel(id, nivel){
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  t.supervisor = nivel;
+  const evento = adicionarHistorico(t.id, 'encaminhamento', `Encaminhado para ${nivel}`);
   await salvarTicketUnico(t);
   await salvarHistoricoUnico(evento);
   renderDetalhe();
