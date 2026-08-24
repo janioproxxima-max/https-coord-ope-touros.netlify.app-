@@ -577,6 +577,23 @@
   </div>
 </div>
 
+<!-- Modal: detalhe por colaborador (Área do Inspetor) - genérico, reaproveitado
+     por Improdutividade, Veículos/lavagens e Manutenção por Inspetor -->
+<div class="modal-backdrop" id="go-modal-insp-detalhe" style="display:none">
+  <div class="modal" style="max-width:min(560px,92vw)">
+    <h3 id="go-insp-detalhe-titulo">Detalhe</h3>
+    <div class="table-wrap" style="max-height:60vh">
+      <table class="services">
+        <thead id="go-insp-detalhe-thead"></thead>
+        <tbody id="go-insp-detalhe-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="go-btn-fechar-insp-detalhe">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
      reaproveitado por Serviços, Recorrência e Improdutividade (ver ANALITICO_CONFIG) -->
 <div class="modal-backdrop" id="go-modal-analitico" style="display:none">
@@ -1202,6 +1219,19 @@ function linhasAnaliticoImprodutividade(filtro){
     r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
   ]);
 }
+// visitas de reparo produtivo (não pares) - usado pelo Recorrência LOG por
+// Inspetor, pra "quantidade de visitas" na tabela bater exatamente com o
+// número de linhas do analítico (clicar num par mostrava N-1 linhas em vez
+// de N, já que par é uma TRANSIÇÃO entre 2 visitas, não a visita em si).
+function linhasAnaliticoVisitasCliente(filtro){
+  let data = goRegistrosFiltrados().filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id);
+  if (filtro) data = data.filter(filtro);
+  data = data.slice().sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
+  return data.map((r,i) => [
+    i + 1, r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.descricao || '',
+    r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '', r.area || '',
+  ]);
+}
 
 const ANALITICO_CONFIG = {
   servicos: {
@@ -1218,6 +1248,11 @@ const ANALITICO_CONFIG = {
     titulo: '📋 Analítico de Improdutividade',
     headers: ['Protocolo','Técnico','Tipo','Descrição do encerramento','Área','Localidade','Data encerramento'],
     linhas: linhasAnaliticoImprodutividade, arquivo: 'improdutividade', sheet: 'Improdutividade',
+  },
+  'recorrencia-visitas': {
+    titulo: '📋 Visitas do cliente',
+    headers: ['#','Protocolo','Técnico','Tipo','Descrição','Data','Cidade'],
+    linhas: linhasAnaliticoVisitasCliente, arquivo: 'visitas-cliente', sheet: 'Visitas',
   },
 };
 let goAnaliticoModo = 'servicos';
@@ -2033,16 +2068,17 @@ function numEquipesInspetor(inspetor){
 // ================= ABA FROTAS =================
 async function renderAbaFrotas(){
   const container = document.getElementById('go-frotas-tbody');
-  if (goVeiculos === null){
-    container.innerHTML = `<tr><td colspan="5" style="color:var(--ink-faint)">Carregando dados de frotas...</td></tr>`;
-    try{
-      const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
-      goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
-    }catch(err){
-      console.error('Falha ao buscar dados de frotas', err);
-      container.innerHTML = `<tr><td colspan="5" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
-      return;
-    }
+  // busca sempre fresco (não só na primeira vez) - mesmo motivo da Área do
+  // Inspetor: um registro novo em frotas.html não podia ficar preso atrás
+  // de um cache que só carrega uma vez por sessão da página.
+  container.innerHTML = `<tr><td colspan="5" style="color:var(--ink-faint)">Carregando dados de frotas...</td></tr>`;
+  try{
+    const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
+    goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
+  }catch(err){
+    console.error('Falha ao buscar dados de frotas', err);
+    container.innerHTML = `<tr><td colspan="5" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    return;
   }
   const lavagensPeriodo = goLavagens.filter(l => dentroPeriodo(l.data));
   const manutencoesPeriodo = goManutencoes.filter(m => dentroPeriodo(m.dataAbertura));
@@ -2910,13 +2946,14 @@ async function renderAbaInspetor(){
   });
   document.getElementById('go-insp-tarefas-cards').innerHTML = `<div class="sla-card neutral"><div class="sla-label">Carregando tarefas da semana...</div></div>`;
   await carregarTecnicoInspetorSeNecessario();
-  if (goVeiculos === null){
-    try{
-      const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
-      goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
-    }catch(err){
-      console.error('Falha ao buscar dados de frotas', err);
-    }
+  // busca sempre fresco (não só na primeira vez) - senão uma lavagem/
+  // manutenção registrada em frotas.html depois de já ter aberto essa aba
+  // fica invisível aqui até recarregar a página inteira.
+  try{
+    const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
+    goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
+  }catch(err){
+    console.error('Falha ao buscar dados de frotas', err);
   }
   if (!goInspSemanaSegunda) goInspSemanaSegunda = segundaFeiraDaSemana(new Date());
   const domingo = domingoDaSemana(goInspSemanaSegunda);
@@ -3137,8 +3174,75 @@ document.getElementById('go-insp-log-tbody').addEventListener('click', (e) => {
   const tr = e.target.closest('tr[data-cliente]');
   if (!tr) return;
   const clienteId = tr.dataset.cliente;
-  abrirAnalitico('recorrencia', p => p.cliente_id === clienteId, `Cliente ${clienteId}`);
+  // "recorrencia-visitas" (visitas, não pares) - pra "Quantidade de
+  // visitas" da tabela bater com o número de linhas do analítico
+  abrirAnalitico('recorrencia-visitas', r => r.cliente_id === clienteId, `Cliente ${clienteId}`);
 });
+document.getElementById('go-insp-improd-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-inspetor]');
+  if (!tr) return;
+  detalheImprodutividadePorColaborador(tr.dataset.inspetor);
+});
+document.getElementById('go-insp-veic-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-inspetor]');
+  if (!tr) return;
+  detalheVeiculosPorInspetor(tr.dataset.inspetor);
+});
+document.getElementById('go-insp-manut-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-inspetor]');
+  if (!tr) return;
+  detalheManutencaoPorInspetor(tr.dataset.inspetor);
+});
+// modal genérico "detalhe por colaborador" reaproveitado pelos 3 clicks
+// acima (Improdutividade, Veículos/lavagens e Manutenção por Inspetor)
+function abrirInspetorDetalhe(titulo, headers, linhasHtml){
+  document.getElementById('go-insp-detalhe-titulo').textContent = titulo;
+  document.getElementById('go-insp-detalhe-thead').innerHTML = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  document.getElementById('go-insp-detalhe-tbody').innerHTML = linhasHtml;
+  document.getElementById('go-modal-insp-detalhe').style.display = 'flex';
+}
+document.getElementById('go-btn-fechar-insp-detalhe').addEventListener('click', () => {
+  document.getElementById('go-modal-insp-detalhe').style.display = 'none';
+});
+document.getElementById('go-modal-insp-detalhe').addEventListener('click', (e) => {
+  if (e.target.id === 'go-modal-insp-detalhe') document.getElementById('go-modal-insp-detalhe').style.display = 'none';
+});
+function detalheImprodutividadePorColaborador(insp){
+  const data = goRegistrosFiltrados().filter(r => inspetorDoTecnico(r.tecnico) === insp);
+  const porTec = {};
+  data.forEach(r => {
+    porTec[r.tecnico] = porTec[r.tecnico] || { total: 0, improd: 0 };
+    porTec[r.tecnico].total++;
+    if (!isProdutivo(r)) porTec[r.tecnico].improd++;
+  });
+  const linhas = Object.entries(porTec).map(([tec, v]) => ({
+    tec, pct: v.total ? (v.improd / v.total) * 100 : 0, improd: v.improd, total: v.total,
+  })).sort((a, b) => b.pct - a.pct);
+  const html = linhas.map(l => {
+    const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
+    return `<tr><td>${tituloCase(l.tec)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.improd)}/${fmtNum(l.total)}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+  abrirInspetorDetalhe(`📉 Improdutividade por colaborador — ${tituloCase(insp)}`, ['Colaborador', '%', 'Improd./Total'], html);
+}
+function detalheVeiculosPorInspetor(insp){
+  const meusVeiculos = (goVeiculos || []).filter(v => inspetorDoTecnico(v.responsavel) === insp);
+  const lavagensPeriodo = (goLavagens || []).filter(l => dentroPeriodo(l.data));
+  const html = meusVeiculos.map(v => {
+    const qtd = lavagensPeriodo.filter(l => l.placa === v.placa).length;
+    return `<tr><td>${v.placa}</td><td>${tituloCase(v.responsavel || '—')}</td><td>${fmtNum(qtd)}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhum veículo.</td></tr>`;
+  abrirInspetorDetalhe(`🚚 Veículos e lavagens — ${tituloCase(insp)}`, ['Placa', 'Responsável', 'Lavagens no período'], html);
+}
+function detalheManutencaoPorInspetor(insp){
+  const linhas = (goManutencoes || []).filter(m => m.status === 'aberta').filter(m => {
+    const veic = (goVeiculos || []).find(v => v.placa === m.placa);
+    const inspVeic = veic ? inspetorDoTecnico(veic.responsavel) : 'Sem inspetor';
+    return inspVeic === insp;
+  });
+  const html = linhas.map(m => `<tr><td>${m.placa}</td><td>${m.motivo || '—'}</td><td>${m.dataAbertura ? OPS.formatDateBR(m.dataAbertura) : '—'}</td></tr>`).join('')
+    || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhuma manutenção aberta.</td></tr>`;
+  abrirInspetorDetalhe(`🔧 Manutenções abertas — ${tituloCase(insp)}`, ['Placa', 'Motivo', 'Aberta em'], html);
+}
 function desenharAbaInspetor(){
   const data = goRegistrosFiltrados();
   const pares = goParesFiltrados();
@@ -3205,7 +3309,7 @@ function desenharAbaInspetor(){
   })).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-insp-improd-tbody').innerHTML = linhasImprod.map(l => {
     const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
-    return `<tr><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
+    return `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver por colaborador"><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
   }).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
 
   // -------- Veículos / lavagens por Inspetor (responsável do veículo -> inspetor dele) --------
@@ -3227,7 +3331,7 @@ function desenharAbaInspetor(){
     insp, veiculos: v.veiculos, lavados: v.lavados.size, pct: v.veiculos ? (v.lavados.size/v.veiculos)*100 : 0,
   })).sort((a,b) => b.veiculos - a.veiculos);
   document.getElementById('go-insp-veic-tbody').innerHTML = linhasVeic.map(l =>
-    `<tr><td>${tituloCase(l.insp)}</td><td>${fmtNum(l.veiculos)}</td><td>${fmtNum(l.lavados)}</td><td>${fmtPct1(l.pct)}</td></tr>`
+    `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver por veículo"><td>${tituloCase(l.insp)}</td><td>${fmtNum(l.veiculos)}</td><td>${fmtNum(l.lavados)}</td><td>${fmtPct1(l.pct)}</td></tr>`
   ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados de frotas.</td></tr>`;
 
   // -------- Veículos em manutenção por Inspetor --------
@@ -3238,7 +3342,7 @@ function desenharAbaInspetor(){
     manutPorInsp[insp] = (manutPorInsp[insp]||0)+1;
   });
   document.getElementById('go-insp-manut-tbody').innerHTML = Object.entries(manutPorInsp).sort((a,b) => b[1]-a[1]).map(([insp,qtd]) =>
-    `<tr><td>${tituloCase(insp)}</td><td>${fmtNum(qtd)}</td></tr>`
+    `<tr style="cursor:pointer" data-inspetor="${insp}" title="Clique pra ver os veículos"><td>${tituloCase(insp)}</td><td>${fmtNum(qtd)}</td></tr>`
   ).join('') || `<tr><td colspan="2" style="color:var(--ink-faint)">Nenhum veículo em manutenção agora.</td></tr>`;
 }
 
