@@ -111,7 +111,7 @@
       <label for="mj-f-modulo">Módulo</label>
       <select id="mj-f-modulo">
         <option value="">Todos</option>
-        <option value="material">Material</option>
+        <option value="material">Problema de Campo</option>
         <option value="frotas">Frotas</option>
         <option value="acesso">Problema com Acesso</option>
         <option value="reclamacao">Reclamação</option>
@@ -249,71 +249,66 @@
 
       <div id="mj-n-bloco-material">
         <div class="field">
-          <label>Categoria</label>
-          <select id="mj-n-categoria">
-            <option value="equipamentos">Equipamentos</option>
-            <option value="ferramental">Ferramental</option>
-            <option value="sesmt">SESMT</option>
+          <label>Tipo</label>
+          <select id="mj-n-pc-tipo">
+            <option value="estoque">Estoque</option>
+            <option value="material">Material</option>
           </select>
         </div>
-        <div id="mj-n-bloco-equipamentos-item">
+
+        <div id="mj-n-bloco-pc-estoque">
           <div class="field">
-            <label>Item — Equipamento</label>
-            <select id="mj-n-equipamentos-item">
-              <option value="ONT/ONU">ONT/ONU</option>
-              <option value="Roteador">Roteador</option>
-              <option value="Conector">Conector</option>
-              <option value="Esticador">Esticador</option>
-              <option value="Fixa Cabo">Fixa Cabo</option>
-              <option value="Cabo LAN">Cabo LAN</option>
-              <option value="Outros">Outros</option>
+            <label>Problema</label>
+            <select id="mj-n-pc-estoque-problema">
+              <option value="Problema com a quantidade do KIT de Campo">Problema com a quantidade do KIT de Campo</option>
+              <option value="Problema para devolução de Equipamentos">Problema para devolução de Equipamentos</option>
+              <option value="Material Aniel">Material Aniel</option>
             </select>
           </div>
-        </div>
-        <div id="mj-n-bloco-ferramental-item" style="display:none">
-          <div class="field">
-            <label>Item — Ferramental</label>
-            <select id="mj-n-ferramental-item">
-              <option value="Alicate de Corte">Alicate de Corte</option>
-              <option value="Alicate Decapador S211">Alicate Decapador S211</option>
-              <option value="Bolsa KIT Fibra">Bolsa KIT Fibra</option>
-              <option value="Caneta Laser">Caneta Laser</option>
-              <option value="Clivador">Clivador</option>
-              <option value="Decapador de Cabo Drop">Decapador de Cabo Drop</option>
-              <option value="Escada Interna">Escada Interna</option>
-              <option value="Película para Celular">Película para Celular</option>
-              <option value="Power Meter">Power Meter</option>
-              <option value="Extensão Cabo PP">Extensão Cabo PP</option>
-              <option value="Plug Fêmea">Plug Fêmea</option>
-              <option value="Plug Macho">Plug Macho</option>
-              <option value="Tubo para Álcool">Tubo para Álcool</option>
-              <option value="Broca 6 SDS">Broca 6 SDS</option>
-              <option value="Broca 8 Normal">Broca 8 Normal</option>
-              <option value="Broca 8 SDS">Broca 8 SDS</option>
-              <option value="Capa para Celular">Capa para Celular</option>
-              <option value="Celular">Celular</option>
-              <option value="Outros">Outros</option>
+          <div class="field" id="mj-n-bloco-pc-devolucao" style="display:none">
+            <label>Motivo</label>
+            <select id="mj-n-pc-devolucao-motivo">
+              <option value="Equipamento não provisionando">Equipamento não provisionando</option>
+              <option value="Sem conseguir resetar">Sem conseguir resetar</option>
+              <option value="Marcas de Uso">Marcas de Uso</option>
             </select>
           </div>
-        </div>
-        <div id="mj-n-bloco-sesmt-item" style="display:none">
-          <div class="field">
-            <label>Item — SESMT</label>
-            <select id="mj-n-sesmt-item">
-              <option value="Fardamento">Fardamento</option>
-              <option value="Bota">Bota</option>
-              <option value="Outro Item">Outro Item</option>
+          <div class="field" id="mj-n-bloco-pc-aniel" style="display:none">
+            <label>Situação</label>
+            <select id="mj-n-pc-aniel-tipo">
+              <option value="Equipamento Apenas Físico">Equipamento Apenas Físico</option>
+              <option value="Equipamento Apenas no Sistema">Equipamento Apenas no Sistema</option>
             </select>
           </div>
+          <div class="grid2">
+            <div class="field"><label>Qual o Equipamento?</label><input class="input" id="mj-n-pc-equipamento" placeholder="Ex: ONT, Roteador..."></div>
+            <div class="field"><label>Qual o Serial?</label><input class="input" id="mj-n-pc-serial" placeholder="Número de série"></div>
+          </div>
         </div>
-        <div class="grid2" id="mj-n-bloco-outro-item" style="display:none">
-          <div class="field"><label>Qual item?</label><input class="input" id="mj-n-item" placeholder="Descreva o item"></div>
-          <div class="field"><label>Tamanho (se aplicável)</label><input class="input" id="mj-n-tamanho" placeholder="Ex: G, 42..."></div>
+
+        <div id="mj-n-bloco-pc-material" style="display:none">
+          <div class="field">
+            <label>Problema</label>
+            <select id="mj-n-pc-material-problema">
+              <option value="Manutenção do KIT FTTH">Manutenção do KIT FTTH</option>
+              <option value="Manutenção de Furadeira/Martelete">Manutenção de Furadeira/Martelete</option>
+              <option value="Manutenção de Smartphone">Manutenção de Smartphone</option>
+            </select>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Inspetor</label><input class="input" id="mj-n-pc-inspetor" readonly></div>
+            <div class="field"><label>Supervisor</label><input class="input" id="mj-n-pc-supervisor" readonly></div>
+          </div>
         </div>
-        <div class="field" id="mj-n-bloco-tamanho-normal">
-          <label>Tamanho (se aplicável)</label><input class="input" id="mj-n-tamanho-normal" placeholder="Ex: G, 42...">
+
+        <div class="field">
+          <label>Evidência (foto)</label>
+          <input type="file" accept="image/*" id="mj-n-pc-evidencia-input">
+          <div id="mj-n-pc-evidencia-preview" style="display:none;margin-top:8px">
+            <img id="mj-n-pc-evidencia-preview-img" style="max-height:100px;border-radius:6px;display:block">
+            <button type="button" class="btn ghost" id="mj-btn-pc-remover-evidencia" style="margin-top:4px;font-size:11px;padding:3px 8px">✕ Remover foto</button>
+          </div>
         </div>
-        <div class="field"><label>Quantidade</label><input class="input" type="number" min="1" value="1" id="mj-n-quantidade"></div>
       </div>
 
       <div id="mj-n-bloco-frotas" style="display:none">
@@ -430,7 +425,7 @@ const MJ_TRANSICOES = {
   resolvido: [],
   cancelado: [],
 };
-const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação' };
+const MJ_MODULO_LABEL = { material: 'Problema de Campo', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação' };
 const MJ_CATEGORIA_LABEL = {
   equipamentos: 'Equipamentos', ferramental: 'Ferramental', sesmt: 'SESMT',
   manutencao: 'Manutenção', lavagem: 'Prioridade de Lavagem', avarias: 'Avarias/Sinistro',
@@ -751,6 +746,8 @@ function renderAll(){
 const modalNovo = document.getElementById('mj-modal-novo');
 document.getElementById('mj-btn-novo').onclick = () => {
   document.getElementById('mj-form-novo').reset();
+  pcEvidenciaBase64 = null;
+  document.getElementById('mj-n-pc-evidencia-preview').style.display = 'none';
   atualizarCamposModulo();
   modalNovo.style.display = 'flex';
 };
@@ -764,32 +761,48 @@ function atualizarCamposModulo(){
   document.getElementById('mj-n-bloco-acesso').style.display = modulo === 'acesso' ? 'block' : 'none';
   document.getElementById('mj-n-confidencial-aviso').style.display = modulo === 'reclamacao' ? 'block' : 'none';
   document.getElementById('mj-n-descricao-label').textContent =
-    modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' ? 'Observação' : 'Descrição da necessidade');
-  atualizarCamposCategoria();
+    modulo === 'reclamacao' ? 'Descreva a reclamação' : (modulo === 'acesso' || modulo === 'material' ? 'Observação' : 'Descrição da necessidade');
+  if (modulo === 'material'){
+    const colab = colaboradorAtual();
+    document.getElementById('mj-n-pc-inspetor').value = colab ? (colab.inspetor || '—') : '—';
+    document.getElementById('mj-n-pc-supervisor').value = colab ? (colab.gestor || '—') : '—';
+  }
+  atualizarCamposPcTipo();
 }
 document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
 
-function itemSelectAtivoId(){
-  const categoria = document.getElementById('mj-n-categoria').value;
-  return { equipamentos: 'mj-n-equipamentos-item', ferramental: 'mj-n-ferramental-item', sesmt: 'mj-n-sesmt-item' }[categoria];
+// ---------- Problema de Campo: Estoque × Material ----------
+function atualizarCamposPcTipo(){
+  const tipo = document.getElementById('mj-n-pc-tipo').value;
+  document.getElementById('mj-n-bloco-pc-estoque').style.display = tipo === 'estoque' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-pc-material').style.display = tipo === 'material' ? 'block' : 'none';
+  atualizarCamposPcEstoqueProblema();
 }
-function atualizarCamposCategoria(){
-  const categoria = document.getElementById('mj-n-categoria').value;
-  document.getElementById('mj-n-bloco-equipamentos-item').style.display = categoria === 'equipamentos' ? 'block' : 'none';
-  document.getElementById('mj-n-bloco-ferramental-item').style.display = categoria === 'ferramental' ? 'block' : 'none';
-  document.getElementById('mj-n-bloco-sesmt-item').style.display = categoria === 'sesmt' ? 'block' : 'none';
-  atualizarCampoOutroItem();
+function atualizarCamposPcEstoqueProblema(){
+  const problema = document.getElementById('mj-n-pc-estoque-problema').value;
+  document.getElementById('mj-n-bloco-pc-devolucao').style.display = problema === 'Problema para devolução de Equipamentos' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-pc-aniel').style.display = problema === 'Material Aniel' ? 'block' : 'none';
 }
-function atualizarCampoOutroItem(){
-  const selectAtivo = document.getElementById(itemSelectAtivoId());
-  const ehOutro = selectAtivo && ['Outro Item','Outros'].includes(selectAtivo.value);
-  document.getElementById('mj-n-bloco-outro-item').style.display = ehOutro ? 'grid' : 'none';
-  document.getElementById('mj-n-bloco-tamanho-normal').style.display = ehOutro ? 'none' : 'block';
-}
-document.getElementById('mj-n-categoria').addEventListener('change', atualizarCamposCategoria);
-['mj-n-equipamentos-item','mj-n-ferramental-item','mj-n-sesmt-item'].forEach(id => {
-  document.getElementById(id).addEventListener('change', atualizarCampoOutroItem);
+document.getElementById('mj-n-pc-tipo').addEventListener('change', atualizarCamposPcTipo);
+document.getElementById('mj-n-pc-estoque-problema').addEventListener('change', atualizarCamposPcEstoqueProblema);
+
+let pcEvidenciaBase64 = null;
+document.getElementById('mj-n-pc-evidencia-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try{
+    pcEvidenciaBase64 = await comprimirImagem(file);
+    document.getElementById('mj-n-pc-evidencia-preview-img').src = pcEvidenciaBase64;
+    document.getElementById('mj-n-pc-evidencia-preview').style.display = 'block';
+  }catch(err){
+    alert(err.message === 'foto_grande_demais' ? 'Essa foto ficou grande demais mesmo depois de comprimir. Tenta uma foto mais simples.' : 'Não consegui processar essa imagem. Tenta outra foto.');
+  }
+  e.target.value = '';
 });
+document.getElementById('mj-btn-pc-remover-evidencia').onclick = () => {
+  pcEvidenciaBase64 = null;
+  document.getElementById('mj-n-pc-evidencia-preview').style.display = 'none';
+};
 
 let mjSeq = Number(localStorage.getItem('ops_touros_mundo_jira_seq') || '1000');
 function proximoNumero(){
@@ -802,27 +815,33 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   e.preventDefault();
   const modulo = document.getElementById('mj-n-modulo').value;
   const colab = colaboradorAtual();
-  const categoria = document.getElementById('mj-n-categoria').value;
-  const selectAtivo = document.getElementById(itemSelectAtivoId());
-  const ehOutro = selectAtivo && ['Outro Item','Outros'].includes(selectAtivo.value);
-  const itemDigitado = document.getElementById('mj-n-item').value.trim();
-  const itemFinal = ehOutro ? (itemDigitado || 'Outros') : (selectAtivo ? selectAtivo.value : '');
-  const tamanhoFinal = ehOutro
-    ? document.getElementById('mj-n-tamanho').value.trim()
-    : document.getElementById('mj-n-tamanho-normal').value.trim();
+
+  // Problema de Campo (Estoque × Material) - "item" (usado na lista e no
+  // filtro de busca) vira o problema específico escolhido, pra continuar
+  // dando um resumo útil sem precisar mexer na tabela.
+  const pcTipo = document.getElementById('mj-n-pc-tipo').value;
+  const pcProblema = pcTipo === 'estoque'
+    ? document.getElementById('mj-n-pc-estoque-problema').value
+    : document.getElementById('mj-n-pc-material-problema').value;
+  const pcSubOpcao = pcTipo === 'estoque'
+    ? (pcProblema === 'Problema para devolução de Equipamentos' ? document.getElementById('mj-n-pc-devolucao-motivo').value
+      : pcProblema === 'Material Aniel' ? document.getElementById('mj-n-pc-aniel-tipo').value
+      : '')
+    : '';
 
   const agora = new Date().toISOString();
   const ticket = {
     id: OPS.uid ? OPS.uid() : ('t' + Date.now() + Math.random().toString(36).slice(2)),
     numero: proximoNumero(),
     modulo,
-    categoria: modulo === 'material' ? categoria
-      : modulo === 'frotas' ? document.getElementById('mj-n-frotas-categoria').value
+    categoria: modulo === 'frotas' ? document.getElementById('mj-n-frotas-categoria').value
       : modulo === 'acesso' ? document.getElementById('mj-n-acesso-sistema').value
       : null,
-    item: modulo === 'material' ? itemFinal : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
-    tamanho: tamanhoFinal,
-    quantidade: document.getElementById('mj-n-quantidade').value || 1,
+    item: modulo === 'material' ? pcProblema : (modulo === 'frotas' ? document.getElementById('mj-n-veiculo').value.trim() : ''),
+    tipoProblemaCampo: modulo === 'material' ? pcTipo : null,
+    subOpcao: modulo === 'material' ? pcSubOpcao : null,
+    equipamento: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-equipamento').value.trim() : '',
+    serial: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-serial').value.trim() : '',
     descricao: document.getElementById('mj-n-descricao').value.trim(),
     colaboradorNome: colab ? colab.nome : usuarioAtual,
     matricula: colab ? (colab.matricula || '') : '',
@@ -840,6 +859,16 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   const eventoCriacao = adicionarHistorico(ticket.id, 'criacao', `Chamado aberto (${MJ_MODULO_LABEL[modulo]})`);
   await salvarTicketUnico(ticket);
   await salvarHistoricoUnico(eventoCriacao);
+
+  // evidência (foto) anexada na abertura vira a primeira mensagem do chat,
+  // reaproveitando o mesmo mecanismo já usado pros comentários
+  if (modulo === 'material' && pcEvidenciaBase64){
+    const comentarioEvidencia = { id: OPS.uid(), ticketId: ticket.id, usuario: usuarioAtual, data: agora, mensagem: 'Evidência anexada na abertura do chamado', foto: pcEvidenciaBase64 };
+    comentarios.push(comentarioEvidencia);
+    await salvarComentarioUnico(comentarioEvidencia);
+    pcEvidenciaBase64 = null;
+  }
+
   modalNovo.style.display = 'none';
   renderAll();
 });
@@ -872,8 +901,14 @@ function renderDetalhe(){
     <div class="status-row"><span class="status-name">Colaborador</span><span class="status-val">${t.colaboradorNome || '—'}</span></div>
     ${t.matricula ? `<div class="status-row"><span class="status-name">Matrícula</span><span class="status-val">${t.matricula}</span></div>` : ''}
     ${t.categoria ? `<div class="status-row"><span class="status-name">Categoria</span><span class="status-val">${MJ_CATEGORIA_LABEL[t.categoria]}</span></div>` : ''}
+    ${t.tipoProblemaCampo ? `<div class="status-row"><span class="status-name">Tipo</span><span class="status-val">${t.tipoProblemaCampo === 'estoque' ? 'Estoque' : 'Material'}</span></div>` : ''}
+    ${t.subOpcao ? `<div class="status-row"><span class="status-name">Motivo/Situação</span><span class="status-val">${t.subOpcao}</span></div>` : ''}
+    ${t.equipamento ? `<div class="status-row"><span class="status-name">Equipamento</span><span class="status-val">${t.equipamento}</span></div>` : ''}
+    ${t.serial ? `<div class="status-row"><span class="status-name">Serial</span><span class="status-val">${t.serial}</span></div>` : ''}
     ${t.tamanho ? `<div class="status-row"><span class="status-name">Tamanho</span><span class="status-val">${t.tamanho}</span></div>` : ''}
     ${t.quantidade ? `<div class="status-row"><span class="status-name">Quantidade</span><span class="status-val">${t.quantidade}</span></div>` : ''}
+    ${t.inspetor ? `<div class="status-row"><span class="status-name">Inspetor</span><span class="status-val">${t.inspetor}</span></div>` : ''}
+    ${t.supervisor ? `<div class="status-row"><span class="status-name">Supervisor</span><span class="status-val">${t.supervisor}</span></div>` : ''}
     <div class="status-row"><span class="status-name">Descrição</span><span class="status-val" style="font-weight:400;text-align:left;max-width:60%">${t.descricao}</span></div>
     <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val">${OPS.formatDateTimeBR(t.criadoEm)}</span></div>
     <div class="status-row"><span class="status-name">Responsável atual</span><span class="status-val">${t.responsavelAtualNome || 'Ninguém ainda'}</span></div>
