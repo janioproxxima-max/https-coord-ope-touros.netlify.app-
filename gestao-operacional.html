@@ -2110,6 +2110,7 @@ let goPremiacaoRegistros = [];
 let goPremiacaoCarregando = false;
 
 async function carregarSemanaPremiacao(){
+  await carregarPessoasCacheSeNecessario();
   const inicioStr = goPremiacaoSemanaSegunda.toISOString().slice(0,10);
   const fimStr = domingoDaSemana(goPremiacaoSemanaSegunda).toISOString().slice(0,10);
   const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
@@ -2117,8 +2118,17 @@ async function carregarSemanaPremiacao(){
   goPremiacaoRegistros = dedupePorProtocolo(registros.filter(r => OPS.isTourosUnitCity(r.area)));
 }
 
+// nome de verdade de quem tá logado - casa o "usuarioLogin" salvo na sessão
+// com o cadastro de Gestão de Pessoas, em vez de tentar reconstruir "Nome
+// Sobrenome" a partir do login "nome.sobrenome" (que quebra pra qualquer
+// nome com nome do meio: "joel.tavares" só reconstruía "Joel Tavares", que
+// nunca batia com o nome completo "JOEL DIAS TAVARES" - todo supervisor
+// caía no ramo "vê tudo" por engano, tanto aqui quanto no Inspetor).
 function nomeDoLogin(){
   const usuario = (sessionStorage.getItem('ops_user') || '').trim();
+  if (!usuario) return '';
+  const pessoa = (goPessoasCache || []).find(p => p.usuarioLogin && OPS.normalize(p.usuarioLogin) === OPS.normalize(usuario));
+  if (pessoa) return pessoa.nome;
   if (/^[a-z]+\.[a-z]+$/i.test(usuario)){
     return usuario.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   }
