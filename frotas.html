@@ -147,6 +147,7 @@
   <div class="modal" style="max-width:640px">
     <h3 id="hist-title">Histórico do veículo</h3>
     <p class="modal-sub" id="hist-sub"></p>
+    <div class="stat-row" id="hist-resumo" style="margin-bottom:14px"></div>
 
     <div class="sec-hdr">🚿 Lavagens</div>
     <form id="form-lavagem" style="margin-bottom:10px">
@@ -553,6 +554,16 @@ function openHistorico(placa){
   renderManutencaoList();
   modalHist.style.display = 'flex';
 }
+function renderHistoricoResumo(){
+  const minhasLavagens = lavagens.filter(l => l.placa === histPlacaAtual);
+  const minhasManutencoes = manutencoes.filter(m => m.placa === histPlacaAtual);
+  const abertas = minhasManutencoes.filter(m => m.status === 'aberta').length;
+  document.getElementById('hist-resumo').innerHTML = `
+    <div class="stat-card brand"><div class="label">Lavagens (total)</div><div class="value">${minhasLavagens.length}</div></div>
+    <div class="stat-card ${abertas ? 'crit' : 'ok'}"><div class="label">Manutenções abertas</div><div class="value">${abertas}</div></div>
+    <div class="stat-card"><div class="label">Manutenções (total)</div><div class="value">${minhasManutencoes.length}</div></div>
+  `;
+}
 function closeHistorico(){ modalHist.style.display = 'none'; }
 document.getElementById('btn-hist-close').onclick = closeHistorico;
 modalHist.addEventListener('click', e => { if (e.target === modalHist) closeHistorico(); });
@@ -563,6 +574,7 @@ function renderLavagemList(){
   el.innerHTML = list.length ? list.map(l => `
     <div class="status-row"><span class="status-name">${OPS.formatDateBR(l.data)}</span><span class="status-val" style="font-size:12.5px">${l.pagamento}</span></div>
   `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhuma lavagem registrada.</p>';
+  renderHistoricoResumo();
 }
 
 function renderManutencaoList(){
@@ -603,6 +615,7 @@ function renderManutencaoList(){
       renderAll();
     });
   });
+  renderHistoricoResumo();
 }
 
 let editandoManutencaoId = null;
