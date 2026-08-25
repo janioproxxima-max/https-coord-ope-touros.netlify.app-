@@ -3308,8 +3308,12 @@ async function desenharProdutividadeTempoReal(){
     else if (ehReparoGeral(r)) t.pontosReparo += pts;
     else if (ehRecolhimento(r)) t.pontosRecolhimento += pts;
     if (!isProdutivo(r)) t.improdHoje++;
-    if (r.data_criacao){
-      const h = new Date(r.data_criacao);
+    // data_deslocamento é o horário real de saída pro atendimento (coluna
+    // "Data/Hora Deslocamento" da planilha) - cai pra data_criacao só em
+    // registros antigos, importados antes desse campo existir
+    const horaDeslocamento = r.data_deslocamento || r.data_criacao;
+    if (horaDeslocamento){
+      const h = new Date(horaDeslocamento);
       if (!t.primeiroDeslocamento || h < t.primeiroDeslocamento) t.primeiroDeslocamento = h;
     }
     if (r.data_encerramento){

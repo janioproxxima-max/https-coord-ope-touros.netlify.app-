@@ -1606,13 +1606,11 @@ function processarLinhasProdutividade(rows){
 
           let horasAtendimento = null;
           // tempo de atendimento: do início do deslocamento até o fechamento
-          if (idxDataDeslocamento >= 0){
-            const dtDeslocamento = OPS.parseBRDateTime(row[idxDataDeslocamento] || '');
-            if (dtDeslocamento && dt > dtDeslocamento){
-              horasAtendimento = (dt - dtDeslocamento) / 3600000;
-              bucket.temposAtendimento.push(horasAtendimento);
-              bucketTipo.temposAtendimento.push(horasAtendimento);
-            }
+          const dtDeslocamento = idxDataDeslocamento >= 0 ? OPS.parseBRDateTime(row[idxDataDeslocamento] || '') : null;
+          if (dtDeslocamento && dt > dtDeslocamento){
+            horasAtendimento = (dt - dtDeslocamento) / 3600000;
+            bucket.temposAtendimento.push(horasAtendimento);
+            bucketTipo.temposAtendimento.push(horasAtendimento);
           }
 
           const dtEncerramento = idxDataEncerramento >= 0 ? OPS.parseBRDateTime(row[idxDataEncerramento] || '') : null;
@@ -1640,6 +1638,12 @@ function processarLinhasProdutividade(rows){
             // pra manter o mesmo dia/hora que está na planilha
             dataEncerramento: dtEncerramento
               ? new Date(Date.UTC(dtEncerramento.getFullYear(), dtEncerramento.getMonth(), dtEncerramento.getDate(), dtEncerramento.getHours(), dtEncerramento.getMinutes())).toISOString()
+              : null,
+            // "Data/Hora Deslocamento" da planilha - horário real de início do
+            // atendimento (mais preciso que Data de Criação pra saber quando o
+            // técnico realmente se deslocou pro primeiro serviço do dia)
+            dataDeslocamento: dtDeslocamento
+              ? new Date(Date.UTC(dtDeslocamento.getFullYear(), dtDeslocamento.getMonth(), dtDeslocamento.getDate(), dtDeslocamento.getHours(), dtDeslocamento.getMinutes())).toISOString()
               : null,
           });
         });
@@ -1873,7 +1877,7 @@ function detalheRegistroParaSupabase(r){
     protocolo: r.protocolo, cliente_id: r.clienteId || null, area: r.area, localidade: r.localidade,
     descricao: r.descricao, produtivo: r.produtivo, tma: r.tma,
     pontos: r.pontos || 0, data_encerramento: r.dataEncerramento,
-    data_criacao: r.dataCriacao,
+    data_criacao: r.dataCriacao, data_deslocamento: r.dataDeslocamento,
   };
 }
 function parRecorrenciaParaSupabase(p){
