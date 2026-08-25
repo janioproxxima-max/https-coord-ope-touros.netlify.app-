@@ -679,7 +679,8 @@ function popularSelectColaboradoresCampo(selectEl){
   const campo = pessoas.filter(p => {
     if (!p.nome) return false;
     const cargo = OPS.normalize(p.cargo);
-    return cargo.includes('instalador') && cargo.includes('reparador');
+    return (cargo.includes('instalador') && cargo.includes('reparador'))
+      || cargo.includes('inspetor') || cargo.includes('supervisor');
   }).sort((a, b) => a.nome.localeCompare(b.nome));
   selectEl.innerHTML = '<option value="">Selecione o colaborador...</option>' +
     campo.map(p => `<option value="${p.nome}">${p.nome}</option>`).join('');
@@ -1891,6 +1892,17 @@ async function inserirEmLotes(tabela, registros, tamanhoLote, onConflict){
   }
 }
 
+// apaga por lista de valores de uma coluna (ex: todos os protocolos desse
+// import), em lotes - pra não montar uma URL longa demais nem apagar mais
+// do que o necessário (ver comentário em aplicarResultadoProdutividade)
+async function deletarEmLotesPorValor(tabela, coluna, valores, tamanhoLote){
+  tamanhoLote = tamanhoLote || 200;
+  for (let i = 0; i < valores.length; i += tamanhoLote){
+    const lote = valores.slice(i, i + tamanhoLote).map(v => encodeURIComponent(v)).join(',');
+    if (lote) await OPS_SUPABASE.del(tabela, `${coluna}=in.(${lote})`);
+  }
+}
+
 async function aplicarResultadoProdutividade(resultado){
   const { meses, registrosTocados, detalhesTocados } = mesclarProdutividade(resultado);
   detalhesRegistrosProdutividade = resultado.detalhesRegistros;
@@ -1925,13 +1937,19 @@ async function aplicarResultadoProdutividade(resultado){
   Promise.allSettled([
     inserirEmLotes('produtividade_historico', registrosTocados.map(produtividadeParaSupabase), 500, 'tecnico'),
     inserirEmLotes('produtividade_detalhe_por_tipo', detalhesTocados.map(detalheTipoParaSupabase), 500, 'tecnico,mes_key,tipo'),
-    // limpa o detalhe antigo desses meses antes de inserir o novo, pra não
-    // acumular linhas duplicadas a cada reimportação do mesmo mês
+    // limpa o detalhe antigo antes de inserir o novo, pra não acumular linha
+    // duplicada a cada reimportação - por PROTOCOLO/CLIENTE específico, não
+    // por mês inteiro. Um único chamado pode ter "Data Fim do Atendimento"
+    // num mês e "Data de Encerramento" no mês seguinte (fica em aberto uns
+    // dias entre terminar o atendimento e encerrar o chamado); apagar por
+    // mesKey nesse caso apagava um mês INTEIRO de dados bons só por causa de
+    // um punhado de chamados "vazados" pra ele - já aconteceu de verdade e
+    // sumiu com maio/2026 e junho/2026 inteiros numa reimportação de julho.
     (async () => {
-      for (const mesKey of meses){
-        await OPS_SUPABASE.del('produtividade_registros', `mes_key=eq.${encodeURIComponent(mesKey)}`);
-        await OPS_SUPABASE.del('produtividade_pares_recorrencia', `mes_key=eq.${encodeURIComponent(mesKey)}`);
-      }
+      const protocolos = [...new Set(resultado.detalhesRegistros.map(r => r.protocolo).filter(Boolean))];
+      const clientes = [...new Set(resultado.detalhesRegistros.map(r => r.clienteId).filter(Boolean))];
+      await deletarEmLotesPorValor('produtividade_registros', 'protocolo', protocolos);
+      await deletarEmLotesPorValor('produtividade_pares_recorrencia', 'cliente_id', clientes);
       await inserirEmLotes('produtividade_registros', resultado.detalhesRegistros.map(detalheRegistroParaSupabase), 500);
       await inserirEmLotes('produtividade_pares_recorrencia', resultado.paresRecorrencia.map(parRecorrenciaParaSupabase), 500);
     })(),
@@ -2883,6 +2901,8 @@ async function initPage(){
   populateFiltroTipoProdutividade();
   populateFiltroTecnicoProdutividade();
   renderAll();
+  const ticketParam = new URLSearchParams(location.search).get('ticket');
+  if (ticketParam && tickets.some(t => t.id === ticketParam)) abrirDetalhe(ticketParam);
   return supabaseFuncionou;
 }
 window.OPS_ON_REFRESH = initPage;

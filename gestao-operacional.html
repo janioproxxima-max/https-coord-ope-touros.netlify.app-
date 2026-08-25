@@ -1709,7 +1709,7 @@ async function renderAbaTickets(){
     .slice(0, 300)
     .map(t => {
       const diasAberto = STATUS_ABERTOS.includes(t.status) ? diffDias(t.criado_em, new Date().toISOString()) : '—';
-      return `<tr>
+      return `<tr style="cursor:pointer" title="Abrir no Mundo Jira para tratar" onclick="window.open('mundo-jira.html?ticket=${t.id}', '_blank')">
         <td>#${t.numero}</td><td>${MJ_MODULO_LABEL[t.modulo] || t.modulo}</td>
         <td>${t.colaborador_nome || '—'}</td><td>${t.responsavel_atual_nome || 'Ninguém ainda'}</td>
         <td>${diaKey(t.criado_em)}</td><td>${diasAberto}</td>
