@@ -574,7 +574,12 @@ async function renderAbsenteismoPontoList(nomeColaborador){
     return;
   }
   el.innerHTML = historico.map(r => {
-    const pct = r.horas_previstas ? (r.total_ausencia / r.horas_previstas) * 100 : 0;
+    // absenteísmo de verdade só conta Falta + Atestado Médico - Banco de
+    // Horas, Férias, Feriado etc. são dias combinados/abonados, não entram
+    const cat = r.categorias || {};
+    const ausencia = (cat['FALTA'] || 0) + (cat['ATESTADO MEDICO'] || 0);
+    const pct = r.horas_previstas ? (ausencia / r.horas_previstas) * 100 : 0;
+    const ferias = cat['FERIAS'] || 0;
     return `
     <div class="status-row" style="display:block;padding:8px 0">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -582,7 +587,7 @@ async function renderAbsenteismoPontoList(nomeColaborador){
         <span class="badge ${faixaAbsenteismoPessoas(pct)}"><span class="dot"></span>${fmtPctPessoas(pct)}</span>
       </div>
       <div style="color:var(--ink-dim);font-size:12px;margin-top:2px">
-        Previstas ${fmtHorasPessoas(r.horas_previstas)} · Trabalhadas ${fmtHorasPessoas(r.horas_trabalhadas)} · Ausência ${fmtHorasPessoas(r.total_ausencia)}
+        Previstas ${fmtHorasPessoas(r.horas_previstas)} · Trabalhadas ${fmtHorasPessoas(r.horas_trabalhadas)} · Falta+Atestado ${fmtHorasPessoas(ausencia)}${ferias ? ` · Férias ${fmtHorasPessoas(ferias)}` : ''}
       </div>
     </div>`;
   }).join('');

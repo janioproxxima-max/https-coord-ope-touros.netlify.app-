@@ -337,11 +337,25 @@
         <h3>📋 Absenteísmo por colaborador</h3><span class="cnt-badge" id="go-abp-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abp-tbody" data-arquivo="absenteismo-ponto" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Foto da planilha de ponto importada — clique numa linha pra ver o histórico mensal completo do colaborador.</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Foto da planilha de ponto importada, contando só Falta + Atestado Médico (Banco de Horas, Férias, Feriado etc. não entram) — clique numa linha pra ver o histórico mensal completo do colaborador.</p>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
-          <thead><tr><th>Colaborador</th><th>Cargo</th><th>Horas Previstas</th><th>Horas Trabalhadas</th><th>Total Ausência</th><th>% Ausência</th></tr></thead>
+          <thead><tr><th>Colaborador</th><th>Cargo</th><th>Horas Previstas</th><th>Horas Trabalhadas</th><th>Falta + Atestado</th><th>% Ausência</th></tr></thead>
           <tbody id="go-abp-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>🏖️ Férias registradas no ponto</h3><span class="cnt-badge" id="go-fep-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-fep-tbody" data-arquivo="ferias-ponto" data-sheet="Ferias" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Visão separada da tabela acima — só quem teve horas de "FERIAS" na planilha de ponto, mês a mês. Não conta como absenteísmo.</p>
+      <div class="table-wrap" style="max-height:300px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Cargo</th><th>Meses com férias no ponto</th><th>Total de horas</th></tr></thead>
+          <tbody id="go-fep-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -1794,12 +1808,20 @@ function faixaAbsenteismo(pct){
   return 'crit';
 }
 
+// Absenteísmo "de verdade" só conta Falta e Atestado Médico — Banco de
+// Horas, Férias, Feriado, Day Off etc. são dias combinados/abonados, não
+// ausência no sentido que interessa acompanhar aqui.
+function ausenciaRelevante(r){
+  const c = r.categorias || {};
+  return (c['FALTA'] || 0) + (c['ATESTADO MEDICO'] || 0);
+}
+
 function desenharAbaAbsenteismoPonto(){
   const mesFiltro = document.getElementById('go-abp-mes').value;
   const dados = (goAbsenteismoPonto || []).filter(r => !mesFiltro || r.mes_key === mesFiltro);
 
   const somaPrevistas = dados.reduce((acc, r) => acc + (r.horas_previstas || 0), 0);
-  const somaAusencia = dados.reduce((acc, r) => acc + (r.total_ausencia || 0), 0);
+  const somaAusencia = dados.reduce((acc, r) => acc + ausenciaRelevante(r), 0);
   const taxaUnidade = somaPrevistas ? (somaAusencia / somaPrevistas) * 100 : 0;
   const colaboradoresUnicos = new Set(dados.map(r => r.nome)).size;
 
@@ -1817,7 +1839,7 @@ function desenharAbaAbsenteismoPonto(){
     if (!porColaborador[r.nome]) porColaborador[r.nome] = { nome: r.nome, cargo: r.cargo, previstas: 0, trabalhadas: 0, ausencia: 0 };
     porColaborador[r.nome].previstas += r.horas_previstas || 0;
     porColaborador[r.nome].trabalhadas += r.horas_trabalhadas || 0;
-    porColaborador[r.nome].ausencia += r.total_ausencia || 0;
+    porColaborador[r.nome].ausencia += ausenciaRelevante(r);
   });
   const linhas = Object.values(porColaborador).map(c => ({
     ...c, pct: c.previstas ? (c.ausencia / c.previstas) * 100 : 0,
@@ -1842,7 +1864,7 @@ function desenharAbaAbsenteismoPonto(){
   (goAbsenteismoPonto || []).forEach(r => {
     if (!porMes[r.mes_key]) porMes[r.mes_key] = { previstas: 0, ausencia: 0 };
     porMes[r.mes_key].previstas += r.horas_previstas || 0;
-    porMes[r.mes_key].ausencia += r.total_ausencia || 0;
+    porMes[r.mes_key].ausencia += ausenciaRelevante(r);
   });
   const mesesOrdenados = Object.keys(porMes).sort();
   if (goCharts.absMes) goCharts.absMes.destroy();
@@ -1866,21 +1888,57 @@ function desenharAbaAbsenteismoPonto(){
         datalabels: { color: '#e2eaf5', anchor: 'end', align: 'top', font: { weight: '700', size: 10 }, formatter: v => v.toFixed(1) + '%' } },
     },
   });
+
+  desenharFeriasPonto();
+}
+
+// visão separada, à parte do cálculo de absenteísmo - só quem teve horas de
+// "FERIAS" na planilha de ponto, mês a mês
+function desenharFeriasPonto(){
+  const porColaborador = {};
+  (goAbsenteismoPonto || []).forEach(r => {
+    const horas = (r.categorias || {})['FERIAS'] || 0;
+    if (!horas) return;
+    if (!porColaborador[r.nome]) porColaborador[r.nome] = { nome: r.nome, cargo: r.cargo, meses: 0, horas: 0 };
+    porColaborador[r.nome].meses += 1;
+    porColaborador[r.nome].horas += horas;
+  });
+  const linhas = Object.values(porColaborador).sort((a, b) => b.horas - a.horas);
+  document.getElementById('go-fep-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
+  document.getElementById('go-fep-tbody').innerHTML = linhas.map(c => `
+    <tr class="mj-row" data-nome="${c.nome}" style="cursor:pointer">
+      <td>${tituloCase(c.nome)}</td><td>${tituloCase(c.cargo || '—')}</td>
+      <td>${fmtNum(c.meses)}</td><td>${fmtHoras(c.horas)}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Nenhuma férias registrada no ponto.</td></tr>`;
+  document.querySelectorAll('#go-fep-tbody tr[data-nome]').forEach(tr => {
+    tr.addEventListener('click', () => detalheFeriasPontoColaborador(tr.dataset.nome));
+  });
 }
 
 function detalheAbsenteismoColaborador(nome){
   const historico = (goAbsenteismoPonto || []).filter(r => r.nome === nome).sort((a,b) => a.mes_key.localeCompare(b.mes_key));
   const html = historico.map(r => {
-    const pct = r.horas_previstas ? (r.total_ausencia / r.horas_previstas) * 100 : 0;
+    const ausencia = ausenciaRelevante(r);
+    const pct = r.horas_previstas ? (ausencia / r.horas_previstas) * 100 : 0;
     return `<tr>
       <td>${formatarMesCurto(r.mes_key)}</td>
       <td>${fmtHoras(r.horas_previstas)}</td>
       <td>${fmtHoras(r.horas_trabalhadas)}</td>
-      <td>${fmtHoras(r.total_ausencia)}</td>
+      <td>${fmtHoras(ausencia)}</td>
       <td><span class="badge ${faixaAbsenteismo(pct)}"><span class="dot"></span>${fmtPct1(pct)}</span></td>
     </tr>`;
   }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Sem histórico.</td></tr>`;
-  abrirInspetorDetalhe(`🧑‍⚕️ Histórico de absenteísmo — ${tituloCase(nome)}`, ['Mês', 'Horas Previstas', 'Horas Trabalhadas', 'Total Ausência', '% Ausência'], html);
+  abrirInspetorDetalhe(`🧑‍⚕️ Histórico de absenteísmo (Falta + Atestado) — ${tituloCase(nome)}`, ['Mês', 'Horas Previstas', 'Horas Trabalhadas', 'Falta + Atestado', '% Ausência'], html);
+}
+
+function detalheFeriasPontoColaborador(nome){
+  const historico = (goAbsenteismoPonto || []).filter(r => r.nome === nome && (r.categorias || {})['FERIAS'] > 0).sort((a,b) => a.mes_key.localeCompare(b.mes_key));
+  const html = historico.map(r => `<tr>
+      <td>${formatarMesCurto(r.mes_key)}</td>
+      <td>${fmtHoras((r.categorias || {})['FERIAS'] || 0)}</td>
+    </tr>`).join('') || `<tr><td colspan="2" style="color:var(--ink-faint)">Sem férias registradas no ponto.</td></tr>`;
+  abrirInspetorDetalhe(`🏖️ Férias registradas no ponto — ${tituloCase(nome)}`, ['Mês', 'Horas de Férias'], html);
 }
 
 // ================= ABA FÉRIAS =================
