@@ -3212,8 +3212,8 @@ function desenharTarefasInspetor(){
   // padrão é o mês atual) - não a janela semanal usada pelas metas de
   // auditoria acima, pra bater com a tabela "Recorrência por Inspetor" e o
   // resto do histórico do colaborador.
-  const produtivosMeu = goRegistrosFiltrados().filter(r => isProdutivo(r) && inspetorDoTecnico(r.tecnico) === goInspSelecionado).length;
-  const paresMeuQtd = goParesFiltrados().filter(p => inspetorDoTecnico(p.tecnico) === goInspSelecionado).length;
+  const produtivosMeu = goRegistrosFiltrados().filter(r => isProdutivo(r) && ehInstaladorReparador(r.tecnico) && inspetorDoTecnico(r.tecnico) === goInspSelecionado).length;
+  const paresMeuQtd = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && inspetorDoTecnico(p.tecnico) === goInspSelecionado).length;
   const pctRecorrencia = produtivosMeu ? (paresMeuQtd / produtivosMeu) * 100 : 0;
 
   const veiculosMeu = (goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === goInspSelecionado);
@@ -3437,8 +3437,8 @@ function detalheVeiculosPorInspetor(insp){
 // usado no cálculo do card (filtro global da página, padrão mês atual).
 function detalheRecorrenciaTarefaInspetor(){
   const insp = goInspSelecionado;
-  const data = goRegistrosFiltrados().filter(r => inspetorDoTecnico(r.tecnico) === insp);
-  const pares = goParesFiltrados().filter(p => inspetorDoTecnico(p.tecnico) === insp);
+  const data = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico) && inspetorDoTecnico(r.tecnico) === insp);
+  const pares = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && inspetorDoTecnico(p.tecnico) === insp);
   const produtivosPorTec = {}, paresPorTec = {}, cidadesPorTec = {};
   data.filter(isProdutivo).forEach(r => {
     produtivosPorTec[r.tecnico] = (produtivosPorTec[r.tecnico]||0)+1;
@@ -3471,8 +3471,10 @@ function detalheManutencaoPorInspetor(insp){
   abrirInspetorDetalhe(`🔧 Manutenções abertas — ${tituloCase(insp)}`, ['Placa', 'Motivo', 'Aberta em'], html);
 }
 function desenharAbaInspetor(){
-  const data = goRegistrosFiltrados();
-  const pares = goParesFiltrados();
+  // só conta equipes Instalador e Reparador - mesmo critério das abas
+  // Recorrência e Improdutividade (ver ehInstaladorReparador)
+  const data = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico));
+  const pares = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico));
 
   // -------- Recorrência por Inspetor --------
   const produtivosPorInsp = {}, paresPorInsp = {}, cidadesPorInsp = {};
