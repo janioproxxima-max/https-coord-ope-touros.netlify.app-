@@ -510,7 +510,22 @@
   <!-- ================= ABA: PRODUTIVIDADE TEMPO REAL ================= -->
   <div id="go-aba-produtividade-tempo-real" style="display:none">
     <p class="page-sub" style="margin:0 0 14px">Dados de hoje/mês atual direto do Supabase, sem depender do período selecionado no topo - sempre em tempo real.</p>
+    <div class="panel toolbar" style="margin-bottom:14px">
+      <div class="field">
+        <label for="go-ptr-f-supervisor">Supervisor</label>
+        <select id="go-ptr-f-supervisor"><option value="">Todos os supervisores</option></select>
+      </div>
+      <div class="field">
+        <label for="go-ptr-f-inspetor">Inspetor</label>
+        <select id="go-ptr-f-inspetor"><option value="">Todos os inspetores</option></select>
+      </div>
+    </div>
     <div class="stat-row" id="go-ptr-resumo-cards" style="margin-bottom:18px"></div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🎯 % da equipe na meta do dia (8 pts), por supervisor</h3></div>
+      <div class="sla-grid" id="go-ptr-supervisor-cards" style="margin:0 16px 14px"></div>
+    </div>
 
     <div class="card">
       <div class="card-head">
@@ -3157,6 +3172,22 @@ async function renderAbaProdutividadeTempoReal(){
 function fmtHoraCurta(d){
   return d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '—';
 }
+// filtros de Supervisor/Inspetor só dessa página (não usa o filtro global
+// do topo, que fica escondido no modo isolado) - lista as opções a partir
+// de quem já está no roster (Gestão de Pessoas)
+function popularFiltrosTempoReal(){
+  const selSup = document.getElementById('go-ptr-f-supervisor');
+  const selInsp = document.getElementById('go-ptr-f-inspetor');
+  const supervisores = [...new Set((goPessoasCache || []).map(p => p.gestor).filter(Boolean))].sort();
+  const inspetores = [...new Set((goPessoasCache || []).map(p => p.inspetor).filter(Boolean))].sort();
+  const valSup = selSup.value, valInsp = selInsp.value;
+  selSup.innerHTML = '<option value="">Todos os supervisores</option>' + supervisores.map(s => `<option value="${s.replace(/"/g,'&quot;')}">${tituloCase(s)}</option>`).join('');
+  selInsp.innerHTML = '<option value="">Todos os inspetores</option>' + inspetores.map(i => `<option value="${i.replace(/"/g,'&quot;')}">${tituloCase(i)}</option>`).join('');
+  if (supervisores.includes(valSup)) selSup.value = valSup;
+  if (inspetores.includes(valInsp)) selInsp.value = valInsp;
+  if (!selSup.dataset.ligado){ selSup.dataset.ligado = '1'; selSup.addEventListener('change', desenharProdutividadeTempoReal); }
+  if (!selInsp.dataset.ligado){ selInsp.dataset.ligado = '1'; selInsp.addEventListener('change', desenharProdutividadeTempoReal); }
+}
 async function desenharProdutividadeTempoReal(){
   document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--ink-faint)">Carregando...</td></tr>`;
   const hoje = new Date();
@@ -3173,8 +3204,11 @@ async function desenharProdutividadeTempoReal(){
 
   let registros = [];
   try{
-    registros = await OPS_SUPABASE.select('produtividade_registros',
+    const todos = await OPS_SUPABASE.select('produtividade_registros',
       `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`);
+    // só da unidade Touros - sem esse filtro contava serviço de outra
+    // regional junto (mesma regra usada em goRegistros no resto da página)
+    registros = (todos || []).filter(r => OPS.isTourosUnitCity(r.area));
   }catch(err){
     console.error('Falha ao buscar produtividade tempo real', err);
     document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
@@ -3257,28 +3291,34 @@ async function desenharProdutividadeTempoReal(){
     quartilPorKey[l.key] = posicao <= 0.25 ? 1 : posicao <= 0.5 ? 2 : posicao <= 0.75 ? 3 : 4;
   });
 
-  // cards resumo: quantidade de serviços concluídos hoje, unidade inteira
-  const totalAtivacoes = registrosHoje.filter(ehInstalacao).length;
-  const totalReparos = registrosHoje.filter(ehReparoGeral).length;
-  const totalRecolhimentos = registrosHoje.filter(ehRecolhimento).length;
+  popularFiltrosTempoReal();
+  // monta a partir do roster de Gestão de Pessoas, pra trazer todo mundo
+  // ativo (com Placa/Cidade/Supervisor) mesmo quem não teve nenhum
+  // atendimento hoje ainda - respeita os filtros de Supervisor/Inspetor
+  // desta página (caso alguém queira ver só a equipe de um dos dois)
+  const supervisorFiltro = document.getElementById('go-ptr-f-supervisor').value;
+  const inspetorFiltro = document.getElementById('go-ptr-f-inspetor').value;
+  // mesmo critério de "ativo hoje" do card de Pontuação do dia: fora folga
+  // fixa da semana e fora quem tem atestado/férias cobrindo hoje
+  const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo'
+    && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro))
+    && (!inspetorFiltro || OPS.normalize(p.inspetor || '') === OPS.normalize(inspetorFiltro)))
+    .filter(p => !OPS.isFolgaNoDia(p, hoje))
+    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)));
+
+  // cards resumo: quantidade de serviços concluídos hoje, só do time
+  // filtrado (unidade Touros inteira quando não tem filtro nenhum)
+  const rosterNormSet = new Set(roster.map(p => OPS.normalize(p.nome)));
+  const registrosHojeDoTime = registrosHoje.filter(r => r.tecnico && rosterNormSet.has(OPS.normalize(r.tecnico)));
+  const totalAtivacoes = registrosHojeDoTime.filter(ehInstalacao).length;
+  const totalReparos = registrosHojeDoTime.filter(ehReparoGeral).length;
+  const totalRecolhimentos = registrosHojeDoTime.filter(ehRecolhimento).length;
   document.getElementById('go-ptr-resumo-cards').innerHTML = `
     <div class="stat-card brand"><div class="label">Ativações hoje</div><div class="value">${fmtNum(totalAtivacoes)}</div></div>
     <div class="stat-card brand"><div class="label">Reparos hoje (geral)</div><div class="value">${fmtNum(totalReparos)}</div></div>
     <div class="stat-card brand"><div class="label">Recolhimentos hoje</div><div class="value">${fmtNum(totalRecolhimentos)}</div></div>
   `;
 
-  // monta a partir do roster de Gestão de Pessoas, pra trazer todo mundo
-  // ativo (com Placa/Cidade/Supervisor) mesmo quem não teve nenhum
-  // atendimento hoje ainda
-  // respeita o filtro de Supervisor do topo da página (inclusive o clique
-  // nos quadrados de % da meta, que escreve nesse mesmo campo)
-  const supervisorFiltro = document.getElementById('go-f-supervisor').value;
-  // mesmo critério de "ativo hoje" do card de Pontuação do dia: fora folga
-  // fixa da semana e fora quem tem atestado/férias cobrindo hoje
-  const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo'
-    && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro)))
-    .filter(p => !OPS.isFolgaNoDia(p, hoje))
-    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)));
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
   const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
   const linhas = roster.map(p => {
@@ -3297,6 +3337,29 @@ async function desenharProdutividadeTempoReal(){
       primeiroDeslocamento: t ? t.primeiroDeslocamento : null, ultimoConcluido: t ? t.ultimoConcluido : null,
     };
   }).sort((a,b) => b.pontosDia - a.pontosDia);
+
+  // quadrados de % por supervisor - quantos da equipe já bateram os 8
+  // pontos individualmente hoje ÷ total da equipe (não é soma de pontos -
+  // quem passou muito da meta não "cobre" outro que ainda não bateu)
+  const porSupervisorMeta = {};
+  linhas.forEach(l => {
+    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0 };
+    if (l.pontosDia >= META_PONTOS_DIA) porSupervisorMeta[l.supervisor].bateram++;
+    porSupervisorMeta[l.supervisor].pessoas++;
+  });
+  document.getElementById('go-ptr-supervisor-cards').innerHTML = Object.entries(porSupervisorMeta)
+    .map(([sup, v]) => ({ sup, ...v }))
+    .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
+    .map(({ sup, bateram, pessoas }) => {
+      const pct = pessoas ? (bateram / pessoas) * 100 : 0;
+      const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
+      return `<div class="sla-card ${cor}">
+        <div class="sla-label">${nomeCurto2(sup)}</div>
+        <div class="sla-value">${fmtPct(pct)}</div>
+        <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
+        <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
+      </div>`;
+    }).join('') || `<p style="color:var(--ink-faint);padding:0 2px">Sem colaboradores ativos agora.</p>`;
 
   document.getElementById('go-ptr-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   document.getElementById('go-ptr-tbody').innerHTML = linhas.map(l => `<tr>
