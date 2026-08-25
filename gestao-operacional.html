@@ -512,12 +512,6 @@
     <p class="page-sub" style="margin:0 0 14px">Dados de hoje/mês atual direto do Supabase, sem depender do período selecionado no topo - sempre em tempo real.</p>
     <div class="stat-row" id="go-ptr-resumo-cards" style="margin-bottom:18px"></div>
 
-    <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado) - % da equipe que já bateu a meta, por supervisor. O detalhe pessoa a pessoa está no painel abaixo.</p>
-      <div class="sla-grid" id="go-pt-hoje-supervisor-cards" style="margin:0 16px 14px"></div>
-    </div>
-
     <div class="card">
       <div class="card-head">
         <h3>⚡ Painel por colaborador (tempo real)</h3><span class="cnt-badge" id="go-ptr-badge">—</span>
@@ -3143,91 +3137,6 @@ function nomeCurto2(nome){
   return tituloCase(partes.slice(0,2).join(' '));
 }
 
-// pontuação de HOJE × meta diária - independe do filtro de período/cidade do
-// topo da página: um técnico do Touros pode fechar um atendimento numa
-// cidade fora da lista de unidade (ex: cobrir um chamado em Natal ou
-// Jucurutu) e isso ainda conta pra meta dele, então busca os registros de
-// hoje direto no Supabase, sem o filtro de cidade que goRegistros aplica.
-// Roster vem de quem é Instalador/Reparador (mesmo filtro do donut
-// Produtivos×Improdutivos, fora Coordenação/Supervisão/Inspetor), status
-// ativo, sem folga hoje e sem atestado cobrindo hoje. Os quadrados por
-// supervisor mostram sempre TODO MUNDO (visão geral); só a tabela respeita
-// o filtro de Supervisor do topo da página.
-async function renderPontosHoje(){
-  const hoje = new Date();
-  const hojeStr = hoje.toISOString().slice(0,10);
-  const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
-  const amanhaStr = amanha.toISOString().slice(0,10);
-
-  let registrosHoje = [];
-  try{
-    registrosHoje = await OPS_SUPABASE.select('produtividade_registros',
-      `data_encerramento=gte.${hojeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`);
-  }catch(err){
-    console.error('Falha ao buscar produtividade de hoje', err);
-  }
-  await carregarAtestadosCacheSeNecessario();
-  if (goAbaAtiva !== 'produtividade-tempo-real') return;
-
-  const pontosHojePorTecnicoNorm = {};
-  registrosHoje.forEach(r => {
-    if (!r.tecnico) return;
-    const key = OPS.normalize(r.tecnico);
-    pontosHojePorTecnicoNorm[key] = (pontosHojePorTecnicoNorm[key] || 0) + (parseFloat(r.pontos) || 0);
-  });
-  const supervisorPorNomeNorm = {};
-  Object.entries(goTecnicoSupervisor).forEach(([tec, sup]) => { supervisorPorNomeNorm[OPS.normalize(tec)] = sup; });
-
-  const linhasTodas = (goPessoasCache || [])
-    .filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo')
-    .filter(p => !OPS.isFolgaNoDia(p, hoje))
-    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)))
-    .map(p => ({
-      tecnico: p.nome,
-      cidade: p.cidade || '—',
-      // prioriza o "gestor" do próprio cadastro de pessoas - cobre todo
-      // mundo, mesmo quem ainda não apareceu em produtividade_historico
-      // (ex: colaborador novo, ainda sem atendimento fechado no período
-      // que alimenta essa tabela). goTecnicoSupervisor fica só de reserva.
-      supervisor: p.gestor || supervisorPorNomeNorm[OPS.normalize(p.nome)] || '—',
-      pontos: pontosHojePorTecnicoNorm[OPS.normalize(p.nome)] || 0,
-    }));
-
-  // quadrados: % de atingimento da meta do dia por supervisor = quantos da
-  // equipe já bateram os 8 pontos individualmente ÷ total da equipe (não é
-  // soma de pontos - um colaborador que passou muito da meta não pode
-  // "cobrir" outro que ainda não bateu). Sempre com todo mundo, clicável
-  // pra aplicar o filtro de Supervisor do topo.
-  const porSupervisor = {};
-  linhasTodas.forEach(l => {
-    porSupervisor[l.supervisor] = porSupervisor[l.supervisor] || { bateram: 0, pessoas: 0 };
-    if (l.pontos >= META_PONTOS_DIA) porSupervisor[l.supervisor].bateram += 1;
-    porSupervisor[l.supervisor].pessoas += 1;
-  });
-  const cardsHtml = Object.entries(porSupervisor)
-    .map(([sup, v]) => ({ sup, bateram: v.bateram, pessoas: v.pessoas }))
-    .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
-    .map(({ sup, bateram, pessoas }) => {
-      const pct = pessoas ? (bateram / pessoas) * 100 : 0;
-      const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
-      return `<div class="sla-card ${cor}" data-supervisor="${sup}" style="cursor:pointer" title="Clique pra filtrar a tabela por esse supervisor">
-        <div class="sla-label">${nomeCurto2(sup)}</div>
-        <div class="sla-value">${fmtPct(pct)}</div>
-        <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
-        <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
-      </div>`;
-    }).join('');
-  document.getElementById('go-pt-hoje-supervisor-cards').innerHTML = cardsHtml
-    || `<p style="color:var(--ink-faint);padding:0 2px">Sem colaboradores ativos agora.</p>`;
-  document.querySelectorAll('#go-pt-hoje-supervisor-cards [data-supervisor]').forEach(el => {
-    el.addEventListener('click', () => {
-      document.getElementById('go-f-supervisor').value = el.dataset.supervisor;
-      goRenderAbaAtiva();
-    });
-  });
-
-}
-
 // ================= ABA PRODUTIVIDADE TEMPO REAL =================
 async function renderAbaProdutividadeTempoReal(){
   try{
@@ -3237,7 +3146,7 @@ async function renderAbaProdutividadeTempoReal(){
     return;
   }
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
-  await renderPontosHoje();
+  await carregarAtestadosCacheSeNecessario(); // precisa do goAtestados pra tirar quem está de férias/atestado hoje
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
   await desenharProdutividadeTempoReal();
 }
