@@ -1916,6 +1916,16 @@ function desenharFeriasPonto(){
   });
 }
 
+// monta o texto de "motivo" de uma situação — só as categorias que de fato
+// têm horas (Falta e/ou Atestado Médico), com a quantidade de cada uma
+function motivoAusencia(r){
+  const c = r.categorias || {};
+  const partes = [];
+  if (c['FALTA'] > 0) partes.push(`Falta (${fmtHoras(c['FALTA'])})`);
+  if (c['ATESTADO MEDICO'] > 0) partes.push(`Atestado Médico (${fmtHoras(c['ATESTADO MEDICO'])})`);
+  return partes.join(' + ') || '—';
+}
+
 function detalheAbsenteismoColaborador(nome){
   const historico = (goAbsenteismoPonto || []).filter(r => r.nome === nome).sort((a,b) => a.mes_key.localeCompare(b.mes_key));
   const html = historico.map(r => {
@@ -1927,9 +1937,10 @@ function detalheAbsenteismoColaborador(nome){
       <td>${fmtHoras(r.horas_trabalhadas)}</td>
       <td>${fmtHoras(ausencia)}</td>
       <td><span class="badge ${faixaAbsenteismo(pct)}"><span class="dot"></span>${fmtPct1(pct)}</span></td>
+      <td>${motivoAusencia(r)}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Sem histórico.</td></tr>`;
-  abrirInspetorDetalhe(`🧑‍⚕️ Histórico de absenteísmo (Falta + Atestado) — ${tituloCase(nome)}`, ['Mês', 'Horas Previstas', 'Horas Trabalhadas', 'Falta + Atestado', '% Ausência'], html);
+  }).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Sem histórico.</td></tr>`;
+  abrirInspetorDetalhe(`🧑‍⚕️ Histórico de absenteísmo (Falta + Atestado) — ${tituloCase(nome)}`, ['Mês', 'Horas Previstas', 'Horas Trabalhadas', 'Falta + Atestado', '% Ausência', 'Motivo'], html);
 }
 
 function detalheFeriasPontoColaborador(nome){
