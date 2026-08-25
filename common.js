@@ -1575,6 +1575,12 @@ function hasAccess(moduleKey, access){
 
 function initShell(active, pageTitle){
   document.body.classList.add('has-shell', 'authed');
+  // modo embutido (?embed=1): usado quando uma página abre outra num iframe
+  // (ex: tratar um chamado do Mundo Jira sem sair de Gestão Operacional) -
+  // esconde sidebar/topbar, principalmente pra evitar que o botão de sair
+  // (que limpa o sessionStorage, compartilhado com a página de fora) derrube
+  // a sessão de quem abriu o iframe.
+  const embed = new URLSearchParams(location.search).get('embed') === '1';
 
   const access = getCurrentAccess();
   const activeKey = active.replace('.html', '');
@@ -1640,13 +1646,15 @@ function initShell(active, pageTitle){
       </div>
     `;
   }
-  shellMain.appendChild(topbar);
+  if (!embed) shellMain.appendChild(topbar);
   shellMain.appendChild(shellContent);
 
   const overlayMobile = document.createElement('div');
   overlayMobile.className = 'sb-overlay-mobile';
-  document.body.appendChild(sidebar);
-  document.body.appendChild(overlayMobile);
+  if (!embed){
+    document.body.appendChild(sidebar);
+    document.body.appendChild(overlayMobile);
+  }
   document.body.appendChild(shellMain);
 
   function fecharMenuMobile(){ document.body.classList.remove('sidebar-open-mobile'); }

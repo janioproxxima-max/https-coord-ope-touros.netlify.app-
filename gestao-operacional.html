@@ -639,6 +639,18 @@
   </div>
 </div>
 
+<!-- Modal: tratar chamado do Mundo Jira sem sair da Gestão Operacional (embute
+     mundo-jira.html num iframe, já com o ticket certo aberto) -->
+<div class="modal-backdrop" id="go-modal-ticket" style="display:none">
+  <div class="modal" style="max-width:min(1100px,95vw);width:95vw;height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🎫 Tratar chamado</h3>
+      <button type="button" class="btn ghost" id="go-btn-fechar-ticket">Fechar</button>
+    </div>
+    <iframe id="go-ticket-iframe" style="flex:1;width:100%;border:1px solid var(--line-soft);border-radius:8px;background:var(--bg-raised)"></iframe>
+  </div>
+</div>
+
 <!-- Modal: analítico (linha a linha, pra validar os números agregados) - genérico,
      reaproveitado por Serviços, Recorrência e Improdutividade (ver ANALITICO_CONFIG) -->
 <div class="modal-backdrop" id="go-modal-analitico" style="display:none">
@@ -1469,6 +1481,9 @@ function renderParetoChart(canvasId, entries, onClickEntry){
           callback: function(value){ const l = this.getLabelForValue(value); return l.length > 18 ? l.slice(0,16)+'…' : l; } }, grid:{ display:false } },
       },
       plugins: { legend:{ labels:{ color:'#e2eaf5' } },
+        // o eixo X trunca o nome longo (senão as barras somem espremidas) -
+        // o tooltip mostra a descrição completa, sem cortar
+        tooltip: { callbacks: { title: items => items.length ? top[items[0].dataIndex].label : '' } },
         datalabels: { display: ctx => ctx.dataset.type === 'bar', color:'#e2eaf5', anchor:'end', align:'top', font:{ weight:'700', size:10 }, formatter: v => fmtNum(v) } },
     },
   });
@@ -1709,7 +1724,7 @@ async function renderAbaTickets(){
     .slice(0, 300)
     .map(t => {
       const diasAberto = STATUS_ABERTOS.includes(t.status) ? diffDias(t.criado_em, new Date().toISOString()) : '—';
-      return `<tr style="cursor:pointer" title="Abrir no Mundo Jira para tratar" onclick="window.open('mundo-jira.html?ticket=${t.id}', '_blank')">
+      return `<tr style="cursor:pointer" data-ticket-id="${t.id}" title="Clique pra tratar o chamado">
         <td>#${t.numero}</td><td>${MJ_MODULO_LABEL[t.modulo] || t.modulo}</td>
         <td>${t.colaborador_nome || '—'}</td><td>${t.responsavel_atual_nome || 'Ninguém ainda'}</td>
         <td>${diaKey(t.criado_em)}</td><td>${diasAberto}</td>
@@ -1717,6 +1732,27 @@ async function renderAbaTickets(){
       </tr>`;
     }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhum chamado no período.</td></tr>`;
 }
+document.getElementById('go-tickets-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-ticket-id]');
+  if (!tr) return;
+  abrirTicketEmbutido(tr.dataset.ticketId);
+});
+// abre o chamado do Mundo Jira num iframe, sem sair da Gestão Operacional -
+// ao fechar, recarrega a lista pra já mostrar status/responsável atualizado
+function abrirTicketEmbutido(ticketId){
+  document.getElementById('go-ticket-iframe').src = `mundo-jira.html?ticket=${encodeURIComponent(ticketId)}&embed=1`;
+  document.getElementById('go-modal-ticket').style.display = 'flex';
+}
+function fecharTicketEmbutido(){
+  document.getElementById('go-modal-ticket').style.display = 'none';
+  document.getElementById('go-ticket-iframe').src = 'about:blank';
+  goTickets = [];
+  renderAbaTickets();
+}
+document.getElementById('go-btn-fechar-ticket').addEventListener('click', fecharTicketEmbutido);
+document.getElementById('go-modal-ticket').addEventListener('click', (e) => {
+  if (e.target.id === 'go-modal-ticket') fecharTicketEmbutido();
+});
 
 // ================= ABA ABSENTEÍSMO =================
 // devolve todas as chaves "AAAA-MM" cobertas por um intervalo de datas
