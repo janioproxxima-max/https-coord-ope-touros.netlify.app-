@@ -3149,6 +3149,16 @@ async function carregarAtestadosCacheSeNecessario(){
   }
   return goAtestados;
 }
+async function carregarAusenciasCacheSeNecessario(){
+  if (goAusencias !== null) return goAusencias;
+  try{
+    goAusencias = (await OPS.syncPull('AusenciasData')) || [];
+  }catch(err){
+    console.error('Falha ao buscar Ausências', err);
+    goAusencias = [];
+  }
+  return goAusencias;
+}
 
 // primeiro + segundo nome só, pra não ficar gigante na tabela
 function nomeCurto2(nome){
@@ -3165,7 +3175,10 @@ async function renderAbaProdutividadeTempoReal(){
     return;
   }
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
-  await carregarAtestadosCacheSeNecessario(); // precisa do goAtestados pra tirar quem está de férias/atestado hoje
+  await Promise.all([
+    carregarAtestadosCacheSeNecessario(), // goAtestados: férias/atestado cobrindo hoje
+    carregarAusenciasCacheSeNecessario(), // goAusencias: falta/BH/outro registrado pra hoje
+  ]);
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
   await desenharProdutividadeTempoReal();
 }
@@ -3204,11 +3217,13 @@ async function desenharProdutividadeTempoReal(){
 
   let registros = [];
   try{
-    const todos = await OPS_SUPABASE.select('produtividade_registros',
-      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`);
-    // só da unidade Touros - sem esse filtro contava serviço de outra
-    // regional junto (mesma regra usada em goRegistros no resto da página)
-    registros = (todos || []).filter(r => OPS.isTourosUnitCity(r.area));
+    // NÃO filtra por área/cidade aqui (diferente do resto da página) - um
+    // técnico do Touros pode fechar atendimento numa cidade fora da lista
+    // da unidade (ex: cobrir um chamado em Natal ou Jucurutu) e isso ainda
+    // conta pra meta/pontos dele. Quem decide se o registro conta é o
+    // ROSTER (Gestão de Pessoas, roster mais abaixo), não a área do serviço.
+    registros = await OPS_SUPABASE.select('produtividade_registros',
+      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`) || [];
   }catch(err){
     console.error('Falha ao buscar produtividade tempo real', err);
     document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
@@ -3304,7 +3319,10 @@ async function desenharProdutividadeTempoReal(){
     && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro))
     && (!inspetorFiltro || OPS.normalize(p.inspetor || '') === OPS.normalize(inspetorFiltro)))
     .filter(p => !OPS.isFolgaNoDia(p, hoje))
-    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)));
+    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)))
+    // ausência registrada manualmente pra hoje (Falta/BH/Outro) - registro
+    // avulso de um dia só, diferente do atestado/férias (que é um intervalo)
+    .filter(p => !(goAusencias || []).some(a => a.colaboradorId === p.id && diaKey(a.data) === hojeStr));
 
   // cards resumo: quantidade de serviços concluídos hoje, só do time
   // filtrado (unidade Touros inteira quando não tem filtro nenhum)
