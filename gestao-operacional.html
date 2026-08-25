@@ -3160,7 +3160,7 @@ function popularSeletorInspetor(){
     : `<option value="">Nenhum inspetor cadastrado</option>`;
   if (!sel.dataset.ligado){
     sel.dataset.ligado = '1';
-    sel.addEventListener('change', () => { goInspSelecionado = sel.value || null; desenharTarefasInspetor(); });
+    sel.addEventListener('change', () => { goInspSelecionado = sel.value || null; desenharTarefasInspetor(); desenharAbaInspetor(); });
   }
 }
 function inspetorLogado(){
@@ -3184,7 +3184,7 @@ const INSP_TAREFAS = [
   { chave: 'durante_atendimento', label: 'Auditorias Durante o Atendimento', icon: '✅', meta: 1, sufixo: 'por equipe/semana', tipo: 'log', escalaPorEquipe: true },
   { chave: 'ferramental', label: 'Ferramental', icon: '🧰', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
   { chave: 'sesmt', label: 'Medidas SESMT', icon: '🦺', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
-  { chave: 'recorrencia', label: 'Recorrência', icon: '🔁', meta: 7, sufixo: 'meta relativa', tipo: 'existente' },
+  { chave: 'recorrencia', label: 'Recorrência', icon: '🔁', meta: 8, sufixo: 'clique pra ver por colaborador', tipo: 'existente', clicavel: true },
   { chave: 'lavagens', label: 'Lavagens', icon: '💧', meta: null, sufixo: 'veículos lavados no mês', tipo: 'existente', coberturaMensal: true },
   { chave: 'manutencao', label: 'Manutenção', icon: '🔧', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'existente' },
 ];
@@ -3252,8 +3252,8 @@ function desenharTarefasInspetor(){
     } else if (t.meta == null){
       cor = 'neutral'; metaTexto = 'Sem meta';
     } else if (ehPct){
-      cor = valor <= t.meta ? 'ok' : 'crit';
-      metaTexto = `Meta: ≤${t.meta}%`;
+      cor = valor < t.meta ? 'ok' : 'crit';
+      metaTexto = `Meta: <${t.meta}%`;
     } else if (t.escalaPorEquipe){
       // meta por equipe × nº de equipes do inspetor, com mínimo aceitável
       // de 70% do total escalado (mesmo padrão ok/warn/crit dos cards de SLA)
@@ -3267,14 +3267,18 @@ function desenharTarefasInspetor(){
       cor = valor >= t.meta ? 'ok' : 'crit';
       metaTexto = `Meta: ≥${t.meta}`;
     }
-    return `<div class="sla-card ${cor}" ${t.tipo === 'log' ? `style="cursor:pointer" data-tarefa="${t.chave}" title="Clique pra registrar"` : ''}>
+    const ehClicavel = t.tipo === 'log' || t.clicavel;
+    return `<div class="sla-card ${cor}" ${ehClicavel ? `style="cursor:pointer" data-tarefa="${t.chave}" title="${t.tipo === 'log' ? 'Clique pra registrar' : 'Clique pra ver por colaborador'}"` : ''}>
       <div class="sla-label">${t.icon} ${t.label}</div>
       <div class="sla-value">${valorTexto}</div>
       <div class="sla-meta">${metaTexto} · ${t.sufixo}</div>
     </div>`;
   }).join('');
   container.querySelectorAll('[data-tarefa]').forEach(card => {
-    card.addEventListener('click', () => abrirModalAuditoria(card.dataset.tarefa));
+    card.addEventListener('click', () => {
+      if (card.dataset.tarefa === 'recorrencia') detalheRecorrenciaTarefaInspetor();
+      else abrirModalAuditoria(card.dataset.tarefa);
+    });
   });
 
   desenharHistoricoAuditorias();
@@ -3396,6 +3400,12 @@ document.getElementById('go-btn-fechar-insp-detalhe').addEventListener('click', 
 document.getElementById('go-modal-insp-detalhe').addEventListener('click', (e) => {
   if (e.target.id === 'go-modal-insp-detalhe') document.getElementById('go-modal-insp-detalhe').style.display = 'none';
 });
+document.getElementById('go-insp-detalhe-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-tecnico]');
+  if (!tr) return;
+  const tec = tr.dataset.tecnico;
+  abrirAnalitico('recorrencia', p => p.tecnico === tec, tituloCase(tec));
+});
 function detalheImprodutividadePorColaborador(insp){
   const data = goRegistrosFiltrados().filter(r => inspetorDoTecnico(r.tecnico) === insp);
   const porTec = {};
@@ -3421,6 +3431,34 @@ function detalheVeiculosPorInspetor(insp){
     return `<tr><td>${v.placa}</td><td>${tituloCase(v.responsavel || '—')}</td><td>${fmtNum(qtd)}</td></tr>`;
   }).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhum veículo.</td></tr>`;
   abrirInspetorDetalhe(`🚚 Veículos e lavagens — ${tituloCase(insp)}`, ['Placa', 'Responsável', 'Lavagens no período'], html);
+}
+// abre, a partir do card de Recorrência das tarefas do inspetor selecionado,
+// o detalhamento por colaborador (técnico) daquele inspetor - mesmo período
+// usado no cálculo do card (filtro global da página, padrão mês atual).
+function detalheRecorrenciaTarefaInspetor(){
+  const insp = goInspSelecionado;
+  const data = goRegistrosFiltrados().filter(r => inspetorDoTecnico(r.tecnico) === insp);
+  const pares = goParesFiltrados().filter(p => inspetorDoTecnico(p.tecnico) === insp);
+  const produtivosPorTec = {}, paresPorTec = {}, cidadesPorTec = {};
+  data.filter(isProdutivo).forEach(r => {
+    produtivosPorTec[r.tecnico] = (produtivosPorTec[r.tecnico]||0)+1;
+  });
+  pares.forEach(p => {
+    paresPorTec[p.tecnico] = (paresPorTec[p.tecnico]||0)+1;
+    const c = p.area || 'Sem informação';
+    cidadesPorTec[p.tecnico] = cidadesPorTec[p.tecnico] || {};
+    cidadesPorTec[p.tecnico][c] = (cidadesPorTec[p.tecnico][c]||0)+1;
+  });
+  const cidadeMaisFreq = mapa => Object.keys(mapa).length ? Object.entries(mapa).sort((a,b) => b[1]-a[1])[0][0] : '—';
+  const linhas = Object.keys(produtivosPorTec).map(tec => {
+    const qtd = paresPorTec[tec] || 0;
+    return { tec, cidade: cidadeMaisFreq(cidadesPorTec[tec] || {}), qtd, pct: produtivosPorTec[tec] ? (qtd/produtivosPorTec[tec])*100 : 0 };
+  }).sort((a,b) => b.pct - a.pct);
+  const html = linhas.map(l => {
+    const cor = l.pct < 8 ? 'ok' : 'crit';
+    return `<tr style="cursor:pointer" data-tecnico="${l.tec.replace(/"/g, '&quot;')}" title="Clique pra ver os serviços"><td>${tituloCase(l.tec)}</td><td>${l.cidade}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
+  abrirInspetorDetalhe(`🔁 Recorrência por colaborador — ${tituloCase(insp)}`, ['Colaborador', 'Cidade', '% Recorrência', 'Qtd'], html);
 }
 function detalheManutencaoPorInspetor(insp){
   const linhas = (goManutencoes || []).filter(m => m.status === 'aberta').filter(m => {
@@ -3457,7 +3495,7 @@ function desenharAbaInspetor(){
   const linhasRec = Object.keys(produtivosPorInsp).map(insp => {
     const qtd = paresPorInsp[insp] || 0;
     return { insp, cidade: cidadeMaisFreqDe(cidadesPorInsp, insp), qtd, pct: produtivosPorInsp[insp] ? (qtd/produtivosPorInsp[insp])*100 : 0 };
-  }).sort((a,b) => b.pct - a.pct);
+  }).filter(l => !goInspSelecionado || l.insp === goInspSelecionado).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-insp-rec-tbody').innerHTML = linhasRec.map(l =>
     `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver o analítico"><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td>${fmtPct1(l.pct)}</td><td>${fmtNum(l.qtd)}</td></tr>`
   ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados.</td></tr>`;
@@ -3476,7 +3514,7 @@ function desenharAbaInspetor(){
       visitas.sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
       const ultimo = visitas[visitas.length - 1];
       return { clienteId, qtd: visitas.length, insp: inspetorDoTecnico(ultimo.tecnico) };
-    }).sort((a,b) => b.qtd - a.qtd);
+    }).filter(l => !goInspSelecionado || l.insp === goInspSelecionado).sort((a,b) => b.qtd - a.qtd);
   document.getElementById('go-insp-log-badge').textContent = `${fmtNum(linhasLog.length)} cliente(s)`;
   document.getElementById('go-insp-log-tbody').innerHTML = linhasLog.map(l => `<tr style="cursor:pointer" data-cliente="${l.clienteId}" title="Clique pra ver o analítico">
     <td>${l.clienteId}</td><td>${fmtNum(l.qtd)}</td><td>${tituloCase(l.insp)}</td>
@@ -3495,7 +3533,7 @@ function desenharAbaInspetor(){
   const linhasImprod = Object.entries(gruposImprod).map(([insp,v]) => ({
     insp, cidade: cidadeMaisFreqDe(Object.fromEntries([[insp, v.cidades]]), insp),
     pct: v.total ? (v.improd/v.total)*100 : 0, qtd: v.improd,
-  })).sort((a,b) => b.pct - a.pct);
+  })).filter(l => !goInspSelecionado || l.insp === goInspSelecionado).sort((a,b) => b.pct - a.pct);
   document.getElementById('go-insp-improd-tbody').innerHTML = linhasImprod.map(l => {
     const cor = l.pct <= 10 ? 'ok' : (l.pct <= 25 ? 'warn' : 'crit');
     return `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver por colaborador"><td>${tituloCase(l.insp)}</td><td>${l.cidade}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(l.pct)}</span></td><td>${fmtNum(l.qtd)}</td></tr>`;
@@ -3518,7 +3556,7 @@ function desenharAbaInspetor(){
   });
   const linhasVeic = Object.entries(veicPorInsp).map(([insp,v]) => ({
     insp, veiculos: v.veiculos, lavados: v.lavados.size, pct: v.veiculos ? (v.lavados.size/v.veiculos)*100 : 0,
-  })).sort((a,b) => b.veiculos - a.veiculos);
+  })).filter(l => !goInspSelecionado || l.insp === goInspSelecionado).sort((a,b) => b.veiculos - a.veiculos);
   document.getElementById('go-insp-veic-tbody').innerHTML = linhasVeic.map(l =>
     `<tr style="cursor:pointer" data-inspetor="${l.insp}" title="Clique pra ver por veículo"><td>${tituloCase(l.insp)}</td><td>${fmtNum(l.veiculos)}</td><td>${fmtNum(l.lavados)}</td><td>${fmtPct1(l.pct)}</td></tr>`
   ).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados de frotas.</td></tr>`;
@@ -3530,7 +3568,9 @@ function desenharAbaInspetor(){
     const insp = veic ? inspetorDoTecnico(veic.responsavel) : 'Sem inspetor';
     manutPorInsp[insp] = (manutPorInsp[insp]||0)+1;
   });
-  document.getElementById('go-insp-manut-tbody').innerHTML = Object.entries(manutPorInsp).sort((a,b) => b[1]-a[1]).map(([insp,qtd]) =>
+  document.getElementById('go-insp-manut-tbody').innerHTML = Object.entries(manutPorInsp)
+    .filter(([insp]) => !goInspSelecionado || insp === goInspSelecionado)
+    .sort((a,b) => b[1]-a[1]).map(([insp,qtd]) =>
     `<tr style="cursor:pointer" data-inspetor="${insp}" title="Clique pra ver os veículos"><td>${tituloCase(insp)}</td><td>${fmtNum(qtd)}</td></tr>`
   ).join('') || `<tr><td colspan="2" style="color:var(--ink-faint)">Nenhum veículo em manutenção agora.</td></tr>`;
 }
