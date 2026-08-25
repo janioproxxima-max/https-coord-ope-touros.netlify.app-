@@ -536,8 +536,8 @@
       <div class="table-wrap" style="max-height:600px;overflow-x:hidden">
         <table class="services compact">
           <thead><tr>
-            <th>Equipe</th><th>Placa</th><th>Cidade</th><th>Supervisor</th><th>Quartil mês</th>
-            <th>Instal.</th><th>Reparo</th><th>Recol.</th><th>Pts. Dia</th>
+            <th>Equipe</th><th>Cidade</th><th>Supervisor</th><th>Quartil mês</th>
+            <th>Instal.</th><th>Reparo</th><th>Recol.</th><th>Mud. End.</th><th>Pts. Dia</th>
             <th>Pts. Dia Ant.</th><th>Pts. Mês</th><th>PPC</th><th>Improd.</th>
             <th>1º Desloc.</th><th>Últ. Concl.</th>
           </tr></thead>
@@ -3171,7 +3171,7 @@ async function renderAbaProdutividadeTempoReal(){
   try{
     await carregarPessoasCacheSeNecessario();
   }catch(err){
-    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
     return;
   }
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
@@ -3209,7 +3209,7 @@ function popularFiltrosTempoReal(){
   if (!selInsp.dataset.ligado){ selInsp.dataset.ligado = '1'; selInsp.addEventListener('change', desenharProdutividadeTempoReal); }
 }
 async function desenharProdutividadeTempoReal(){
-  document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--ink-faint)">Carregando...</td></tr>`;
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
   const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
@@ -3233,7 +3233,7 @@ async function desenharProdutividadeTempoReal(){
       `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`) || [];
   }catch(err){
     console.error('Falha ao buscar produtividade tempo real', err);
-    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
     return;
   }
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
@@ -3248,12 +3248,13 @@ async function desenharProdutividadeTempoReal(){
   const ehInstalacao = r => grupoSlaDoTipo(r.tipo) === 'ativacao';
   const ehRecolhimento = r => (r.tipo || '').toUpperCase() === 'RECOLHIMENTO';
   const ehReparoGeral = r => TIPOS_REPARO_GERAL.has((r.tipo || '').toUpperCase());
+  const ehMudancaEndereco = r => grupoSlaDoTipo(r.tipo) === 'mde';
 
   const porTecnico = {};
   function pegaTecnico(nome){
     const key = OPS.normalize(nome);
     if (!porTecnico[key]) porTecnico[key] = {
-      pontosInstalacao: 0, pontosReparo: 0, pontosRecolhimento: 0, pontosDia: 0,
+      pontosInstalacao: 0, pontosReparo: 0, pontosRecolhimento: 0, pontosMudancaEndereco: 0, pontosDia: 0,
       pontosMes: 0, diasMes: new Set(), improdHoje: 0, primeiroDeslocamento: null, ultimoConcluido: null,
     };
     return porTecnico[key];
@@ -3273,6 +3274,7 @@ async function desenharProdutividadeTempoReal(){
     if (ehInstalacao(r)) t.pontosInstalacao += pts;
     else if (ehReparoGeral(r)) t.pontosReparo += pts;
     else if (ehRecolhimento(r)) t.pontosRecolhimento += pts;
+    else if (ehMudancaEndereco(r)) t.pontosMudancaEndereco += pts;
     if (!isProdutivo(r)) t.improdHoje++;
     // data_deslocamento é o horário real de saída pro atendimento (coluna
     // "Data/Hora Deslocamento" da planilha) - cai pra data_criacao só em
@@ -3338,10 +3340,12 @@ async function desenharProdutividadeTempoReal(){
   const totalAtivacoes = registrosHojeDoTime.filter(ehInstalacao).length;
   const totalReparos = registrosHojeDoTime.filter(ehReparoGeral).length;
   const totalRecolhimentos = registrosHojeDoTime.filter(ehRecolhimento).length;
+  const totalMudancaEndereco = registrosHojeDoTime.filter(ehMudancaEndereco).length;
   document.getElementById('go-ptr-resumo-cards').innerHTML = `
     <div class="stat-card brand"><div class="label">Ativações hoje</div><div class="value">${fmtNum(totalAtivacoes)}</div></div>
     <div class="stat-card brand"><div class="label">Reparos hoje (geral)</div><div class="value">${fmtNum(totalReparos)}</div></div>
     <div class="stat-card brand"><div class="label">Recolhimentos hoje</div><div class="value">${fmtNum(totalRecolhimentos)}</div></div>
+    <div class="stat-card brand"><div class="label">Mudança de Endereço hoje</div><div class="value">${fmtNum(totalMudancaEndereco)}</div></div>
   `;
 
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
@@ -3352,10 +3356,11 @@ async function desenharProdutividadeTempoReal(){
     const diaAnterior = diaAnteriorPorTecnico[key];
     const diasMesQtd = t ? t.diasMes.size : 0;
     return {
-      nome: p.nome, placa: p.veiculo || '—', cidade: p.cidade || '—', supervisor: p.gestor || '—',
+      nome: p.nome, cidade: p.cidade || '—', supervisor: p.gestor || '—',
       quartil: quartilPorKey[key] || null,
       pontosInstalacao: t ? t.pontosInstalacao : 0, pontosReparo: t ? t.pontosReparo : 0,
-      pontosRecolhimento: t ? t.pontosRecolhimento : 0, pontosDia: t ? t.pontosDia : 0,
+      pontosRecolhimento: t ? t.pontosRecolhimento : 0, pontosMudancaEndereco: t ? t.pontosMudancaEndereco : 0,
+      pontosDia: t ? t.pontosDia : 0,
       pontosDiaAnterior: diaAnterior ? diaAnterior.pontos : null,
       pontosMes: t ? t.pontosMes : 0, ppc: diasMesQtd ? t.pontosMes / diasMesQtd : null,
       improdHoje: t ? t.improdHoje : 0,
@@ -3388,15 +3393,15 @@ async function desenharProdutividadeTempoReal(){
 
   document.getElementById('go-ptr-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   document.getElementById('go-ptr-tbody').innerHTML = linhas.map(l => `<tr>
-    <td>${nomeCurto2(l.nome)}</td><td>${l.placa}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
+    <td>${tituloCase(l.nome)}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
     <td>${l.quartil ? `<span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º</span>` : '—'}</td>
-    <td>${l.pontosInstalacao.toFixed(2)}</td><td>${l.pontosReparo.toFixed(2)}</td><td>${l.pontosRecolhimento.toFixed(2)}</td>
+    <td>${l.pontosInstalacao.toFixed(2)}</td><td>${l.pontosReparo.toFixed(2)}</td><td>${l.pontosRecolhimento.toFixed(2)}</td><td>${l.pontosMudancaEndereco.toFixed(2)}</td>
     <td><span class="badge ${corPontosDia(l.pontosDia)}"><span class="dot"></span>${l.pontosDia.toFixed(2)}</span></td>
     <td>${l.pontosDiaAnterior == null ? '—' : l.pontosDiaAnterior.toFixed(2)}</td>
     <td>${l.pontosMes.toFixed(2)}</td><td>${l.ppc == null ? '—' : l.ppc.toFixed(2)}</td>
     <td>${fmtNum(l.improdHoje)}</td>
     <td>${fmtHoraCurta(l.primeiroDeslocamento)}</td><td>${fmtHoraCurta(l.ultimoConcluido)}</td>
-  </tr>`).join('') || `<tr><td colspan="14" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
+  </tr>`).join('') || `<tr><td colspan="15" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
 }
 
 // ================= ABA SLA (fila de protocolos em aberto) =================
