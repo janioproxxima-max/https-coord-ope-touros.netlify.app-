@@ -825,6 +825,26 @@ function dentroPeriodo(dataStr){
 }
 
 async function initPage(){
+  // ?isolar=1 esconde o cabeçalho, as qf-tiles de aba e a barra de filtro de
+  // período - usado quando essa página é embutida inteira num iframe só pra
+  // mostrar UMA aba (ex: produtividade-tempo-real.html). Roda ANTES de
+  // qualquer busca de dados (não depois), senão o iframe mostra a Gestão
+  // Operacional inteira "piscando" (Serviços, filtros, todas as abas) até o
+  // período carregar, e só depois esconde tudo.
+  if (new URLSearchParams(location.search).get('isolar') === '1'){
+    const pageHead = document.querySelector('.page-head');
+    const toolbar = document.querySelector('.panel.toolbar');
+    if (pageHead) pageHead.style.display = 'none';
+    document.getElementById('go-abas').style.display = 'none';
+    if (toolbar) toolbar.style.display = 'none';
+  }
+  // ?aba=<chave> abre direto numa aba específica (mesmo atalho acima) - vai
+  // antes de carregarPeriodo() por igual motivo: quem entra direto numa aba
+  // que não depende do período (caso do Tempo Real) não devia esperar essa
+  // busca terminar só pra trocar de aba depois.
+  const abaQuery = new URLSearchParams(location.search).get('aba');
+  if (abaQuery && document.getElementById('go-aba-' + abaQuery)) irParaAba(abaQuery);
+
   document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
   try{
     // busca só uma vez: histórico por técnico (tabela pequena) — não depende do período
@@ -837,22 +857,6 @@ async function initPage(){
     // de gastar essa chamada em toda carga da página.
     await carregarPeriodo();
     popularFiltros();
-    // ?aba=<chave> abre direto numa aba específica (usado pelo atalho de
-    // Produtividade Tempo Real no menu lateral, que embute essa página
-    // inteira num iframe já nessa aba)
-    const abaQuery = new URLSearchParams(location.search).get('aba');
-    if (abaQuery && document.getElementById('go-aba-' + abaQuery)) irParaAba(abaQuery);
-    // ?isolar=1 esconde o cabeçalho, as qf-tiles de aba e a barra de filtro
-    // de período - usado quando essa página é embutida inteira num iframe
-    // só pra mostrar UMA aba (ex: produtividade-tempo-real.html), sem
-    // parecer que "veio a Gestão Operacional inteira" dentro da outra tela
-    if (new URLSearchParams(location.search).get('isolar') === '1'){
-      const pageHead = document.querySelector('.page-head');
-      const toolbar = document.querySelector('.panel.toolbar');
-      if (pageHead) pageHead.style.display = 'none';
-      document.getElementById('go-abas').style.display = 'none';
-      if (toolbar) toolbar.style.display = 'none';
-    }
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';
