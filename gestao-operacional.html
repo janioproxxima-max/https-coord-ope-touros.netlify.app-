@@ -1012,7 +1012,12 @@ async function renderAbaCardsGeral(){
   });
   const totalClientesRec = Object.keys(visitasPorCliente).length;
   const clientesComRecorrencia = Object.values(visitasPorCliente).filter(v => v.length >= 2).length;
-  const pctClientesRec = totalClientesRec ? (clientesComRecorrencia / totalClientesRec) * 100 : 0;
+  // % baseada na quantidade de reparos produtivos (mesma base do card
+  // "Recorrência" acima), não na quantidade de clientes atendidos - client
+  // recorrente é evento raro comparado ao total de reparos, então essa base
+  // dá um número bem menor (e mais correto pra comparar com metas de
+  // referência de mercado, tipo 0,5%).
+  const pctClientesRec = produtivosRec ? (clientesComRecorrencia / produtivosRec) * 100 : 0;
 
   // Improdutividade (mesma regra de ehInstaladorReparador da aba Improdutividade)
   const dataImprod = deduped.filter(r => ehInstaladorReparador(r.tecnico));
@@ -1046,8 +1051,8 @@ async function renderAbaCardsGeral(){
     cardSla('mde', 'SLA Mud. de Endereço'),
     { key: 'recorrencia', label: 'Recorrência', valor: fmtPct1(pctRec), cor: pctRec <= 3 ? 'ok' : 'crit',
       meta: `${fmtNum(paresRec.length)} par(es) detectado(s)`, onClick: () => { irParaAba('recorrencia'); } },
-    { key: 'recorrencia-log', label: 'Recorrência LOG', valor: fmtPct1(pctClientesRec), cor: pctClientesRec <= 3 ? 'ok' : 'crit',
-      meta: `${fmtNum(clientesComRecorrencia)} de ${fmtNum(totalClientesRec)} cliente(s) recorreram`,
+    { key: 'recorrencia-log', label: 'Recorrência LOG', valor: fmtPct1(pctClientesRec), cor: pctClientesRec <= 0.5 ? 'ok' : (pctClientesRec <= 1 ? 'warn' : 'crit'),
+      meta: `${fmtNum(clientesComRecorrencia)} cliente(s) recorrente(s) de ${fmtNum(produtivosRec)} reparo(s) produtivo(s) (${fmtNum(totalClientesRec)} cliente(s) atendido(s))`,
       onClick: () => { irParaAba('recorrencia'); },
       verAnalitico: () => abrirAnalitico('recorrencia', null, 'Recorrência LOG (clientes com 2+ visitas)') },
     { key: 'improdutividade', label: 'Improdutividade', valor: fmtPct1(pctImprod), cor: pctImprod <= 10 ? 'ok' : 'crit',
@@ -1131,13 +1136,15 @@ function serieHistoricoCard(key){
     });
   }
   if (key === 'recorrencia-log'){
+    // % baseada em reparos produtivos do mês (mesma base do card
+    // "Recorrência"), não na quantidade de clientes atendidos
     return meses.map(mes => {
-      const doMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id && diaKey(r.data_encerramento).slice(0,7) === mes);
+      const produtivosMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
+      const doMesReparo = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id && diaKey(r.data_encerramento).slice(0,7) === mes);
       const porCliente = {};
-      doMes.forEach(r => { porCliente[r.cliente_id] = (porCliente[r.cliente_id]||0) + 1; });
-      const total = Object.keys(porCliente).length;
+      doMesReparo.forEach(r => { porCliente[r.cliente_id] = (porCliente[r.cliente_id]||0) + 1; });
       const recorrentes = Object.values(porCliente).filter(q => q >= 2).length;
-      return { mes, valor: total ? (recorrentes/total)*100 : 0 };
+      return { mes, valor: produtivosMes ? (recorrentes/produtivosMes)*100 : 0 };
     });
   }
   if (key === 'improdutividade'){
