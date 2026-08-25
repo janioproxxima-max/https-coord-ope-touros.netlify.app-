@@ -237,6 +237,17 @@
     </div>
 
     <div class="card" style="margin-bottom:18px;margin-top:18px">
+      <div class="card-head">
+        <h3>📋 Recorrência LOG (por cliente)</h3><span class="cnt-badge" id="go-rec-cliente-log-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-rec-cliente-log-tbody" data-arquivo="recorrencia-log-cliente" data-sheet="Recorrência LOG" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Um cliente por linha - quantas vezes ele voltou a chamar reparo no período, e quem foi o técnico da visita mais recente.</p>
+      <div class="table-wrap" style="max-height:320px">
+        <table class="services"><thead><tr><th>ID Cliente</th><th>Quantidade de visitas</th><th>Técnico responsável</th></tr></thead><tbody id="go-rec-cliente-log-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
       <div class="card-head" style="display:flex;align-items:center;gap:10px">
         <h3>🏙️ % Recorrência por Cidade</h3>
         <button type="button" class="btn ghost" id="go-btn-analitico-recorrencia" style="margin-left:auto;font-size:12px;padding:5px 10px">📋 Ver analítico</button>
@@ -1560,6 +1571,8 @@ async function renderAbaRecorrencia(data, pares){
     `<tr style="cursor:pointer" data-tecnico="${l.tecnico}" title="Clique pra ver os protocolos"><td>${tituloCase(l.tecnico)}</td><td>${fmtNum(l.qtd)}</td><td>${fmtPct1(l.pct)}</td></tr>`
   ).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhuma recorrência no período.</td></tr>`;
 
+  renderRecorrenciaLogCliente(data);
+
   if (goRespRec === 'inspetor') await carregarTecnicoInspetorSeNecessario();
   if (goAbaAtiva !== 'recorrencia') return; // trocou de aba enquanto buscava
   renderRecorrenciaResp(data, pares);
@@ -1567,6 +1580,32 @@ async function renderAbaRecorrencia(data, pares){
   renderRecorrenciaTendencia(data, pares);
   renderRecorrenciaPareto(pares);
 }
+// mesma visão do "Recorrência LOG por Inspetor" (aba Inspetor), só que sem
+// recorte por inspetor - um cliente por linha, quantas visitas de reparo
+// produtivo ele teve no período e quem foi o técnico da mais recente.
+function renderRecorrenciaLogCliente(data){
+  const visitasPorCliente = {};
+  data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id).forEach(r => {
+    (visitasPorCliente[r.cliente_id] = visitasPorCliente[r.cliente_id] || []).push(r);
+  });
+  const linhas = Object.entries(visitasPorCliente)
+    .filter(([, visitas]) => visitas.length >= 2)
+    .map(([clienteId, visitas]) => {
+      visitas.sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
+      const ultimo = visitas[visitas.length - 1];
+      return { clienteId, qtd: visitas.length, tecnico: ultimo.tecnico };
+    }).sort((a,b) => b.qtd - a.qtd);
+  document.getElementById('go-rec-cliente-log-badge').textContent = `${fmtNum(linhas.length)} cliente(s)`;
+  document.getElementById('go-rec-cliente-log-tbody').innerHTML = linhas.map(l => `<tr style="cursor:pointer" data-cliente="${l.clienteId}" title="Clique pra ver as visitas">
+    <td>${l.clienteId}</td><td>${fmtNum(l.qtd)}</td><td>${tituloCase(l.tecnico)}</td>
+  </tr>`).join('') || `<tr><td colspan="3" style="color:var(--ink-faint)">Nenhum cliente com recorrência no período.</td></tr>`;
+}
+document.getElementById('go-rec-cliente-log-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-cliente]');
+  if (!tr) return;
+  const clienteId = tr.dataset.cliente;
+  abrirAnalitico('recorrencia-visitas', r => r.cliente_id === clienteId, `Cliente ${clienteId}`);
+});
 function renderRecorrenciaCidade(data, pares){
   const produtivosPorArea = {}, paresPorArea = {};
   data.filter(isProdutivo).forEach(r => { produtivosPorArea[r.area] = (produtivosPorArea[r.area]||0)+1; });
