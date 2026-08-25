@@ -2224,6 +2224,14 @@ async function carregarTecnicoInspetorSeNecessario(){
     (pessoas || []).forEach(p => {
       if (p.nome && p.inspetor) goTecnicoInspetor[OPS.normalize(p.nome)] = p.inspetor;
     });
+    // quem é INSPETOR de cargo conta como "inspetor de si mesmo" (a menos
+    // que tenha um inspetor explícito acima dele) - sem isso, o veículo/moto
+    // do próprio inspetor nunca aparece dentro dos "veículos do inspetor"
+    (pessoas || []).forEach(p => {
+      if (!p.nome || !OPS.normalize(p.cargo || '').includes('inspetor')) return;
+      const key = OPS.normalize(p.nome);
+      if (!goTecnicoInspetor[key]) goTecnicoInspetor[key] = p.nome;
+    });
   }catch(err){
     console.error('Falha ao buscar Inspetor de Gestão de Pessoas', err);
   }
@@ -3107,7 +3115,7 @@ async function renderAbaSlaFila(){
 // cruzados via o responsável do veículo -> inspetor dele (Gestão de
 // Pessoas). Mesmo filtro de período/supervisor/cidade do topo da página.
 let goInspSemanaSegunda = null, goInspSemanaInicioStr = '', goInspSemanaFimStr = '';
-let goInspRegistrosSemana = [], goInspParesSemana = [], goInspAuditorias = [];
+let goInspAuditorias = [];
 let goInspSelecionado = null;
 
 async function renderAbaInspetor(){
@@ -3131,16 +3139,9 @@ async function renderAbaInspetor(){
   goInspSemanaFimStr = domingo.toISOString().slice(0,10);
   document.getElementById('go-insp-semana-label').textContent = `Tarefas da semana: ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingo)}`;
   try{
-    const [regs, pares, auds] = await Promise.all([
-      OPS_SUPABASE.select('produtividade_registros', `data_encerramento=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data_encerramento=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
-      OPS_SUPABASE.select('produtividade_pares_recorrencia', `data_atual=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data_atual=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
-      OPS_SUPABASE.select('auditorias_registros', `data=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data=lte.${goInspSemanaFimStr}T23:59:59.999Z`),
-    ]);
-    goInspRegistrosSemana = (regs||[]).filter(r => OPS.isTourosUnitCity(r.area));
-    goInspParesSemana = (pares||[]).filter(p => OPS.isTourosUnitCity(p.area));
-    goInspAuditorias = auds || [];
+    goInspAuditorias = await OPS_SUPABASE.select('auditorias_registros', `data=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data=lte.${goInspSemanaFimStr}T23:59:59.999Z`) || [];
   }catch(err){
-    console.error('Falha ao buscar dados da semana do inspetor', err);
+    console.error('Falha ao buscar auditorias da semana do inspetor', err);
   }
   if (goAbaAtiva !== 'inspetor') return; // trocou de aba enquanto buscava
   popularSeletorInspetor();
@@ -3207,10 +3208,13 @@ function desenharTarefasInspetor(){
     container.innerHTML = `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--ink-faint)">Nenhum inspetor cadastrado em Gestão de Pessoas ainda (campo "Inspetor" no cadastro do técnico).</div></div>`;
     return;
   }
-  const regsMeu = goInspRegistrosSemana.filter(r => inspetorDoTecnico(r.tecnico) === goInspSelecionado);
-  const paresMeu = goInspParesSemana.filter(p => inspetorDoTecnico(p.tecnico) === goInspSelecionado);
-  const produtivosMeu = regsMeu.filter(isProdutivo).length;
-  const pctRecorrencia = produtivosMeu ? (paresMeu.length / produtivosMeu) * 100 : 0;
+  // Recorrência do card usa o mesmo período do filtro global da página (o
+  // padrão é o mês atual) - não a janela semanal usada pelas metas de
+  // auditoria acima, pra bater com a tabela "Recorrência por Inspetor" e o
+  // resto do histórico do colaborador.
+  const produtivosMeu = goRegistrosFiltrados().filter(r => isProdutivo(r) && inspetorDoTecnico(r.tecnico) === goInspSelecionado).length;
+  const paresMeuQtd = goParesFiltrados().filter(p => inspetorDoTecnico(p.tecnico) === goInspSelecionado).length;
+  const pctRecorrencia = produtivosMeu ? (paresMeuQtd / produtivosMeu) * 100 : 0;
 
   const veiculosMeu = (goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === goInspSelecionado);
   const placasMeu = new Set(veiculosMeu.map(v => v.placa));
