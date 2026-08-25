@@ -420,6 +420,21 @@ function mostrarGraficoImprodutividade(tecnico){
 }
 
 // ================= ABA JUSTIFICATIVA SLA =================
+// Cada protocolo fechado com Responsável E Técnico Auxiliar vira duas linhas
+// em produtividade_registros (os dois recebem crédito de produtividade) -
+// certo pra pontos, errado pra contagem operacional de SLA (contaria o
+// mesmo chamado 2x no total/dentro/fora, e ele apareceria duplicado na
+// lista de fora do prazo). Mesmo dedupePorProtocolo já usado em
+// gestao-operacional.html antes de qualquer cálculo de SLA.
+function dedupePorProtocolo(data){
+  const vistos = new Set();
+  return data.filter(r => {
+    if (!r.protocolo) return true;
+    if (vistos.has(r.protocolo)) return false;
+    vistos.add(r.protocolo);
+    return true;
+  });
+}
 async function carregarJustificativaSla(){
   const container = document.getElementById('al-sla-conteudo');
   container.innerHTML = `<div class="card"><div style="padding:20px;color:var(--ink-faint)">Carregando...</div></div>`;
@@ -433,7 +448,7 @@ async function carregarJustificativaSla(){
     OPS_SUPABASE.select('produtividade_registros', filtro),
     carregarTratamentos('sla'),
   ]);
-  const base = (registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const base = dedupePorProtocolo(registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
   const porCidadeGrupo = {}; // cidade|grupo -> {dentro, total, foraDoPrazo:[]}
   base.forEach(r => {
     const cidade = r.area || 'Sem informação';

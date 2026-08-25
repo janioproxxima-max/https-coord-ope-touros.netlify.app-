@@ -1591,6 +1591,22 @@ function renderResumo(data){
 // (Serviços/Recorrência/Improdutividade) registra seu modo em
 // ANALITICO_CONFIG; "filtro" é um predicado opcional aplicado quando o
 // usuário clica numa barra/linha específica de um gráfico (drill-down) --------
+// data_criacao/data_encerramento/data_deslocamento (produtividade_registros)
+// são gravados com a hora local da planilha disfarçada de UTC (Date.UTC com
+// os números crus, pra não deslocar a DATA ao serializar - ver fmtHoraCurta
+// mais abaixo pro mesmo truque). OPS.formatDateTimeBR usa getters locais
+// (toLocaleDateString/toLocaleTimeString) e por isso desloca a hora em 3h
+// quando usado direto nesses três campos - essa versão lê com os getters
+// UTC, sem aplicar fuso nenhum em cima de um valor que já é a hora certa.
+function formatDateTimeBRProdutividade(v){
+  const d = OPS.toDateSafe(v);
+  if (!d) return '—';
+  const dia = String(d.getUTCDate()).padStart(2,'0');
+  const mes = String(d.getUTCMonth()+1).padStart(2,'0');
+  const hh = String(d.getUTCHours()).padStart(2,'0');
+  const mm = String(d.getUTCMinutes()).padStart(2,'0');
+  return `${dia}/${mes}/${d.getUTCFullYear()} · ${hh}:${mm}`;
+}
 function linhasAnaliticoServicos(filtro){
   let data = dedupePorProtocolo(goRegistrosFiltrados());
   if (filtro) data = data.filter(filtro);
@@ -1600,8 +1616,8 @@ function linhasAnaliticoServicos(filtro){
       r.protocolo || '', r.tecnico || '', r.tipo || '', r.area || '', r.localidade || '',
       isProdutivo(r) ? 'Sim' : 'Não',
       r.pontos != null ? r.pontos : '',
-      r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
-      r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+      r.data_criacao ? formatDateTimeBRProdutividade(r.data_criacao) : '',
+      r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '',
       isFinite(parseFloat(r.tma)) ? Number(r.tma).toFixed(2) : '',
       dp == null ? '—' : (dp ? 'Sim' : 'Não'),
     ];
@@ -1624,7 +1640,7 @@ function linhasAnaliticoImprodutividade(filtro){
   return data.map(r => [
     r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.descricao || '',
     r.area || '', r.localidade || '',
-    r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+    r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '',
   ]);
 }
 // visitas de reparo produtivo (não pares) - usado pelo Recorrência LOG por
@@ -1637,7 +1653,7 @@ function linhasAnaliticoVisitasCliente(filtro){
   data = data.slice().sort((a,b) => new Date(a.data_encerramento) - new Date(b.data_encerramento));
   return data.map((r,i) => [
     i + 1, r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.descricao || '',
-    r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '', r.area || '',
+    r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '', r.area || '',
   ]);
 }
 
@@ -3032,8 +3048,8 @@ function linhasAnaliticoPremiacao(filtro){
     return [
       r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.area || '', r.localidade || '',
       isProdutivo(r) ? 'Sim' : 'Não',
-      r.data_criacao ? OPS.formatDateTimeBR(r.data_criacao) : '',
-      r.data_encerramento ? OPS.formatDateTimeBR(r.data_encerramento) : '',
+      r.data_criacao ? formatDateTimeBRProdutividade(r.data_criacao) : '',
+      r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '',
       dp == null ? '—' : (dp ? 'Sim' : 'Não'),
     ];
   });
