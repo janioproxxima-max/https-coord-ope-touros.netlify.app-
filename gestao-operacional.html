@@ -363,9 +363,12 @@
     <div class="card">
       <div class="card-head">
         <h3>🧑‍⚕️ Ausências, atestados e férias por colaborador (registro manual)</h3><span class="cnt-badge" id="go-abs-badge">—</span>
-        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abs-tbody" data-arquivo="absenteismo" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+        <div class="field" style="min-width:160px;margin-left:auto">
+          <select id="go-abs-mes"><option value="">Todos os meses</option></select>
+        </div>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abs-tbody" data-arquivo="absenteismo" data-sheet="Absenteísmo" style="font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Fonte diferente da tabela acima — vem do registro manual em Gestão de Pessoas, não da planilha de ponto.</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Fonte diferente da tabela acima — vem do registro manual em Gestão de Pessoas, não da planilha de ponto. Filtro de mês próprio, independente do período lá em cima.</p>
       <div class="stat-row" id="go-abs-cards" style="padding:0 16px 10px"></div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
@@ -1716,6 +1719,34 @@ async function renderAbaTickets(){
 }
 
 // ================= ABA ABSENTEÍSMO =================
+// devolve todas as chaves "AAAA-MM" cobertas por um intervalo de datas
+// (inclusive nas duas pontas) - usado tanto pra popular o filtro de mês
+// quanto pra saber se um atestado/férias "toca" o mês escolhido
+function mesesEntreDatas(inicioStr, fimStr){
+  const ini = OPS.toDateSafe(inicioStr), fim = OPS.toDateSafe(fimStr || inicioStr);
+  if (!ini) return [];
+  const chaves = [];
+  const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
+  const limite = fim ? new Date(fim.getFullYear(), fim.getMonth(), 1) : cursor;
+  while (cursor <= limite){
+    chaves.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return chaves;
+}
+function popularSelectMesAbs(){
+  const sel = document.getElementById('go-abs-mes');
+  const atual = sel.value;
+  const meses = new Set();
+  goAusencias.forEach(a => mesesEntreDatas(a.data, a.data).forEach(m => meses.add(m)));
+  goAtestados.forEach(a => mesesEntreDatas(a.dataInicio, a.dataFim).forEach(m => meses.add(m)));
+  const ordenados = [...meses].sort();
+  sel.innerHTML = '<option value="">Todos os meses</option>' +
+    ordenados.map(m => `<option value="${m}">${formatarMesCurto(m)}</option>`).join('');
+  if (ordenados.includes(atual)) sel.value = atual;
+}
+document.getElementById('go-abs-mes').addEventListener('change', renderAbaAbsenteismo);
+
 async function renderAbaAbsenteismo(){
   carregarERenderAbsenteismoPonto();
   const container = document.getElementById('go-abs-tbody');
@@ -1729,20 +1760,23 @@ async function renderAbaAbsenteismo(){
       container.innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
       return;
     }
+    popularSelectMesAbs();
   }
   const cidade = document.getElementById('go-f-cidade').value;
   const supervisor = document.getElementById('go-f-supervisor').value;
+  const mesFiltro = document.getElementById('go-abs-mes').value;
   const pessoasFiltradas = goPessoas.filter(p => {
     if (cidade && p.cidade !== cidade) return false;
     if (supervisor && !nomesEq(p.gestor, supervisor)) return false;
     return true;
   });
 
-  const ausenciasPeriodo = goAusencias.filter(a => dentroPeriodo(a.data));
+  const noMes = (inicio, fim) => !mesFiltro || mesesEntreDatas(inicio, fim).includes(mesFiltro);
+  const ausenciasPeriodo = goAusencias.filter(a => noMes(a.data, a.data));
   // "Férias" é só mais um tipo dentro da mesma coleção de atestados (ver
   // gestao-pessoas.html) - separa aqui pra não misturar com atestado
   // médico/INSS na tabela.
-  const atestadosPeriodoTodos = goAtestados.filter(a => dentroPeriodo(a.dataInicio) || dentroPeriodo(a.dataFim));
+  const atestadosPeriodoTodos = goAtestados.filter(a => noMes(a.dataInicio, a.dataFim));
   const atestadosPeriodo = atestadosPeriodoTodos.filter(a => a.tipo !== 'Férias');
   const feriasPeriodo = atestadosPeriodoTodos.filter(a => a.tipo === 'Férias');
 
