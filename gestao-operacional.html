@@ -31,7 +31,6 @@
     <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
     <button type="button" class="qf-tile" data-aba="premiacao">🏆 Premiação</button>
     <button type="button" class="qf-tile" data-aba="produtividade-tecnica">📊 Produtividade Técnica</button>
-    <button type="button" class="qf-tile" data-aba="produtividade-tempo-real">⚡ Produtividade Tempo Real</button>
     <button type="button" class="qf-tile" data-aba="inspetor">🕵️ Área do Inspetor</button>
   </div>
 
@@ -849,6 +848,17 @@ async function initPage(){
     // inteira num iframe já nessa aba)
     const abaQuery = new URLSearchParams(location.search).get('aba');
     if (abaQuery && document.getElementById('go-aba-' + abaQuery)) irParaAba(abaQuery);
+    // ?isolar=1 esconde o cabeçalho, as qf-tiles de aba e a barra de filtro
+    // de período - usado quando essa página é embutida inteira num iframe
+    // só pra mostrar UMA aba (ex: produtividade-tempo-real.html), sem
+    // parecer que "veio a Gestão Operacional inteira" dentro da outra tela
+    if (new URLSearchParams(location.search).get('isolar') === '1'){
+      const pageHead = document.querySelector('.page-head');
+      const toolbar = document.querySelector('.panel.toolbar');
+      if (pageHead) pageHead.style.display = 'none';
+      document.getElementById('go-abas').style.display = 'none';
+      if (toolbar) toolbar.style.display = 'none';
+    }
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';
