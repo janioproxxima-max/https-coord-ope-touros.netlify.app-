@@ -3182,8 +3182,15 @@ async function renderAbaProdutividadeTempoReal(){
   if (goAbaAtiva !== 'produtividade-tempo-real') return;
   await desenharProdutividadeTempoReal();
 }
+// data_deslocamento/data_encerramento são gravados com o "truque de fuso"
+// já usado em todo o resto do app: a hora local da planilha fica disfarçada
+// de UTC (Date.UTC com os números crus), pra não deslocar a data ao
+// serializar. Por isso aqui tem que ler com getUTCHours/getUTCMinutes, não
+// getHours/getMinutes - senão o navegador aplica o fuso local (UTC-3) em
+// cima de um valor que já É a hora local, e desloca errado (ex: 08:12 vira
+// 05:12 na tela).
 function fmtHoraCurta(d){
-  return d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '—';
+  return d ? `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}` : '—';
 }
 // filtros de Supervisor/Inspetor só dessa página (não usa o filtro global
 // do topo, que fica escondido no modo isolado) - lista as opções a partir
