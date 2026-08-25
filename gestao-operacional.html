@@ -999,7 +999,9 @@ async function renderAbaCardsGeral(){
   dataRec.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id).forEach(r => {
     (visitasPorCliente[r.cliente_id] = visitasPorCliente[r.cliente_id] || []).push(r);
   });
+  const totalClientesRec = Object.keys(visitasPorCliente).length;
   const clientesComRecorrencia = Object.values(visitasPorCliente).filter(v => v.length >= 2).length;
+  const pctClientesRec = totalClientesRec ? (clientesComRecorrencia / totalClientesRec) * 100 : 0;
 
   // Improdutividade (mesma regra de ehInstaladorReparador da aba Improdutividade)
   const dataImprod = deduped.filter(r => ehInstaladorReparador(r.tecnico));
@@ -1033,8 +1035,10 @@ async function renderAbaCardsGeral(){
     cardSla('mde', 'SLA Mud. de Endereço'),
     { key: 'recorrencia', label: 'Recorrência', valor: fmtPct1(pctRec), cor: pctRec <= 3 ? 'ok' : 'crit',
       meta: `${fmtNum(paresRec.length)} par(es) detectado(s)`, onClick: () => { irParaAba('recorrencia'); } },
-    { key: 'recorrencia-log', label: 'Recorrência LOG', valor: fmtNum(clientesComRecorrencia), cor: 'neutral',
-      meta: 'Cliente(s) com 2+ visitas no período', onClick: () => { irParaAba('recorrencia'); } },
+    { key: 'recorrencia-log', label: 'Recorrência LOG', valor: fmtPct1(pctClientesRec), cor: pctClientesRec <= 3 ? 'ok' : 'crit',
+      meta: `${fmtNum(clientesComRecorrencia)} de ${fmtNum(totalClientesRec)} cliente(s) recorreram`,
+      onClick: () => { irParaAba('recorrencia'); },
+      verAnalitico: () => abrirAnalitico('recorrencia', null, 'Recorrência LOG (clientes com 2+ visitas)') },
     { key: 'improdutividade', label: 'Improdutividade', valor: fmtPct1(pctImprod), cor: pctImprod <= 10 ? 'ok' : 'crit',
       meta: `${fmtNum(improdutivos)} de ${fmtNum(dataImprod.length)}`, onClick: () => { irParaAba('improdutividade'); } },
     { key: 'lavagens', label: 'Lavagens', valor: fmtNum(lavagensPeriodo.length), cor: 'neutral',
@@ -1052,12 +1056,17 @@ async function renderAbaCardsGeral(){
       meta: 'No período selecionado', onClick: () => { irParaAba('tickets'); } },
   ];
 
-  container.innerHTML = cards.map(c => `<div class="sla-card ${c.cor}" style="cursor:pointer" data-card="${c.key}" title="Clique pra ver mais">
+  container.innerHTML = cards.map(c => `<div class="sla-card ${c.cor}" style="cursor:pointer;position:relative" data-card="${c.key}" title="Clique pra ir pra aba com essa informação">
+    ${c.verAnalitico ? `<button type="button" class="icon-btn" data-analitico="${c.key}" title="Ver analítico" style="position:absolute;top:8px;right:8px;font-size:12px">📋</button>` : ''}
     <div class="sla-label">${c.label}</div>
     <div class="sla-value">${c.valor}</div>
     <div class="sla-meta">${c.meta}</div>
   </div>`).join('');
   container.querySelectorAll('[data-card]').forEach((el, i) => el.addEventListener('click', cards[i].onClick));
+  container.querySelectorAll('[data-analitico]').forEach(btn => {
+    const c = cards.find(x => x.key === btn.dataset.analitico);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); c.verAnalitico(); });
+  });
 }
 
 // ================= ABA SERVIÇOS =================
