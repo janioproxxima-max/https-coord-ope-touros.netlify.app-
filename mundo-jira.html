@@ -1675,6 +1675,14 @@ function processarLinhasProdutividade(rows){
       // é sempre o técnico da visita ANTERIOR (o serviço dele não resolveu
       // de vez, obrigando alguém - o mesmo técnico ou outro - a voltar lá),
       // mesmo que o retorno tenha sido feito por outro técnico.
+      //
+      // Mas o MÊS em que ela conta é o do RETORNO (atual), não o da visita
+      // original - a % de recorrência de um mês é sobre os produtivos DAQUELE
+      // mês (ex: 100 produtivos em agosto, 10 deles eram retorno de um
+      // atendimento improdutivo dos últimos 30 dias = 10%). Se contasse no
+      // mês da visita original, o número de um mês já fechado mudaria depois
+      // (só saberíamos se um cliente voltou quando o retorno acontecesse, às
+      // vezes só no mês seguinte).
       const paresRecorrencia = []; // { tecnico, mesKey, tipo, anterior, atual }
       Object.entries(ocorrenciasReparo).forEach(([clienteId, lista]) => {
         lista.sort((a, b) => a.data - b.data);
@@ -1682,12 +1690,12 @@ function processarLinhasProdutividade(rows){
           const anterior = lista[i - 1];
           const atual = lista[i];
           const diffDias = (atual.data - anterior.data) / 86400000;
-          if (diffDias <= 30 && agregado[anterior.tecnico] && agregado[anterior.tecnico][anterior.mesKey]){
-            const mesDoTecnico = agregado[anterior.tecnico][anterior.mesKey];
+          if (diffDias <= 30 && agregado[anterior.tecnico] && agregado[anterior.tecnico][atual.mesKey]){
+            const mesDoTecnico = agregado[anterior.tecnico][atual.mesKey];
             mesDoTecnico.recorrencias += 1;
             if (mesDoTecnico.porTipo[anterior.tipo]) mesDoTecnico.porTipo[anterior.tipo].recorrencias += 1;
             paresRecorrencia.push({
-              tecnico: anterior.tecnico, mesKey: anterior.mesKey, tipo: anterior.tipo, clienteId,
+              tecnico: anterior.tecnico, mesKey: atual.mesKey, tipo: anterior.tipo, clienteId,
               anterior, atual,
             });
           }
