@@ -3340,16 +3340,18 @@ async function desenharProdutividadeTempoReal(){
   // filtrado (unidade Touros inteira quando não tem filtro nenhum)
   const rosterNormSet = new Set(roster.map(p => OPS.normalize(p.nome)));
   const registrosHojeDoTime = registrosHoje.filter(r => r.tecnico && rosterNormSet.has(OPS.normalize(r.tecnico)));
-  const totalAtivacoes = registrosHojeDoTime.filter(ehInstalacao).length;
-  const totalReparos = registrosHojeDoTime.filter(ehReparoGeral).length;
-  const totalRecolhimentos = registrosHojeDoTime.filter(ehRecolhimento).length;
-  const totalMudancaEndereco = registrosHojeDoTime.filter(ehMudancaEndereco).length;
-  document.getElementById('go-ptr-resumo-cards').innerHTML = `
-    <div class="stat-card brand"><div class="label">Ativações hoje</div><div class="value">${fmtNum(totalAtivacoes)}</div></div>
-    <div class="stat-card brand"><div class="label">Reparos hoje (geral)</div><div class="value">${fmtNum(totalReparos)}</div></div>
-    <div class="stat-card brand"><div class="label">Recolhimentos hoje</div><div class="value">${fmtNum(totalRecolhimentos)}</div></div>
-    <div class="stat-card brand"><div class="label">Mudança de Endereço hoje</div><div class="value">${fmtNum(totalMudancaEndereco)}</div></div>
-  `;
+  const registrosHojeDoTimeTouros = registrosHojeDoTime.filter(r => OPS.isTourosUnitCity(r.area));
+  const cardResumo = (label, filtro) => {
+    const total = registrosHojeDoTime.filter(filtro).length;
+    const emTouros = registrosHojeDoTimeTouros.filter(filtro).length;
+    return `<div class="stat-card brand"><div class="label">${label}</div><div class="value">${fmtNum(total)}</div>
+      <div class="sla-meta" style="margin-top:2px">${fmtNum(emTouros)} em cidades Touros</div></div>`;
+  };
+  document.getElementById('go-ptr-resumo-cards').innerHTML =
+    cardResumo('Ativações hoje', ehInstalacao) +
+    cardResumo('Reparos hoje (geral)', ehReparoGeral) +
+    cardResumo('Recolhimentos hoje', ehRecolhimento) +
+    cardResumo('Mudança de Endereço hoje', ehMudancaEndereco);
 
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
   const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
