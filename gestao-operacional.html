@@ -3345,8 +3345,12 @@ async function desenharProdutividadeTempoReal(){
   // respeita o filtro de Supervisor do topo da página (inclusive o clique
   // nos quadrados de % da meta, que escreve nesse mesmo campo)
   const supervisorFiltro = document.getElementById('go-f-supervisor').value;
+  // mesmo critério de "ativo hoje" do card de Pontuação do dia: fora folga
+  // fixa da semana e fora quem tem atestado/férias cobrindo hoje
   const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo'
-    && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro)));
+    && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro)))
+    .filter(p => !OPS.isFolgaNoDia(p, hoje))
+    .filter(p => !(goAtestados || []).some(a => a.colaboradorId === p.id && diaKey(a.dataInicio) <= hojeStr && hojeStr <= diaKey(a.dataFim)));
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
   const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
   const linhas = roster.map(p => {
