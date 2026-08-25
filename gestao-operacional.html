@@ -1000,8 +1000,11 @@ async function renderAbaCardsGeral(){
       onClick: () => abrirAnalitico('servicos', filtro, label) };
   };
 
-  // Recorrência (mesma regra de ehInstaladorReparador da aba Recorrência)
-  const dataRec = deduped.filter(r => ehInstaladorReparador(r.tecnico));
+  // Recorrência (mesma regra de ehInstaladorReparador da aba Recorrência -
+  // usa goRegistrosFiltrados() SEM dedupePorProtocolo, igual a aba real:
+  // cada técnico do duo credita produtividade, dedup é só pra contagem
+  // operacional tipo SLA)
+  const dataRec = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico));
   const paresRec = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico));
   const produtivosRec = dataRec.filter(isProdutivo).length;
   const pctRec = produtivosRec ? (paresRec.length / produtivosRec) * 100 : 0;
@@ -1018,8 +1021,10 @@ async function renderAbaCardsGeral(){
   // referência de mercado, tipo 0,5%).
   const pctClientesRec = produtivosRec ? (clientesComRecorrencia / produtivosRec) * 100 : 0;
 
-  // Improdutividade (mesma regra de ehInstaladorReparador da aba Improdutividade)
-  const dataImprod = deduped.filter(r => ehInstaladorReparador(r.tecnico));
+  // Improdutividade (mesma regra de ehInstaladorReparador da aba
+  // Improdutividade - usa goRegistrosFiltrados() SEM dedupePorProtocolo,
+  // igual a aba real, senão o % sai diferente do que aparece lá)
+  const dataImprod = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico));
   const improdutivos = dataImprod.length - dataImprod.filter(isProdutivo).length;
   const pctImprod = dataImprod.length ? (improdutivos / dataImprod.length) * 100 : 0;
 
@@ -1116,7 +1121,11 @@ function mesesDoAnoAteAgora(){
 const CARDS_GERAL_EH_PCT = new Set(['sla-geral','sla-reparo','sla-sa','sla-ativacao','sla-mde','recorrencia','recorrencia-log','improdutividade','absenteismo']);
 function serieHistoricoCard(key){
   const meses = mesesDoAnoAteAgora();
+  // dedup só serve pra SLA (contagem operacional por ticket) - Recorrência/
+  // Improdutividade/Recorrência LOG usam os dados crus, igual as abas reais
+  // (cada técnico do duo credita produtividade/improdutividade separado)
   const regsAno = dedupePorProtocolo(goHistoricoAnoRegistros || []);
+  const regsAnoRaw = goHistoricoAnoRegistros || [];
   const paresAno = goHistoricoAnoPares || [];
   if (key.startsWith('sla-')){
     const grupo = key.replace('sla-', '');
@@ -1129,7 +1138,7 @@ function serieHistoricoCard(key){
   }
   if (key === 'recorrencia'){
     return meses.map(mes => {
-      const produtivosMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
+      const produtivosMes = regsAnoRaw.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
       const paresMes = paresAno.filter(p => ehInstaladorReparador(p.tecnico) && diaKey(p.data_atual).slice(0,7) === mes).length;
       return { mes, valor: produtivosMes ? (paresMes/produtivosMes)*100 : 0 };
     });
@@ -1138,8 +1147,8 @@ function serieHistoricoCard(key){
     // % baseada em reparos produtivos do mês (mesma base do card
     // "Recorrência"), não na quantidade de clientes atendidos
     return meses.map(mes => {
-      const produtivosMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
-      const doMesReparo = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id && diaKey(r.data_encerramento).slice(0,7) === mes);
+      const produtivosMes = regsAnoRaw.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
+      const doMesReparo = regsAnoRaw.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id && diaKey(r.data_encerramento).slice(0,7) === mes);
       const porCliente = {};
       doMesReparo.forEach(r => { porCliente[r.cliente_id] = (porCliente[r.cliente_id]||0) + 1; });
       const recorrentes = Object.values(porCliente).filter(q => q >= 2).length;
@@ -1148,7 +1157,7 @@ function serieHistoricoCard(key){
   }
   if (key === 'improdutividade'){
     return meses.map(mes => {
-      const doMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && diaKey(r.data_encerramento).slice(0,7) === mes);
+      const doMes = regsAnoRaw.filter(r => ehInstaladorReparador(r.tecnico) && diaKey(r.data_encerramento).slice(0,7) === mes);
       const improd = doMes.length - doMes.filter(isProdutivo).length;
       return { mes, valor: doMes.length ? (improd/doMes.length)*100 : 0 };
     });
