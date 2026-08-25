@@ -20,6 +20,7 @@
   </div>
 
   <div class="qf-tiles" id="go-abas" style="margin-bottom:14px">
+    <button type="button" class="qf-tile" data-aba="cards-geral">🗂️ Cards Geral</button>
     <button type="button" class="qf-tile active" data-aba="servicos">🔧 Serviços</button>
     <button type="button" class="qf-tile" data-aba="sla-fila">⏱️ SLA</button>
     <button type="button" class="qf-tile" data-aba="recorrencia">🔁 Recorrência</button>
@@ -52,6 +53,12 @@
     </div>
     <div style="flex:1"></div>
     <span class="page-sub" id="go-status-info" style="margin:0"></span>
+  </div>
+
+  <!-- ================= ABA: CARDS GERAL ================= -->
+  <div id="go-aba-cards-geral" style="display:none">
+    <p class="page-sub" style="margin:0 0 14px">Visão geral de todos os indicadores no período/filtro selecionado acima - clique num card pra ver o analítico (ou a aba de origem daquele indicador).</p>
+    <div class="sla-grid" id="go-geral-cards"></div>
   </div>
 
   <!-- ================= ABA: SERVIÇOS ================= -->
@@ -753,6 +760,7 @@ let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
 let goPessoasCache = null; // lazy-load compartilhado: filtro Instalador/Reparador do donut + aba Produtividade Técnica
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
+let goAuditoriasGeral = null; // todas as auditorias (não só a semana/inspetor da Área do Inspetor) - usado só pela aba Cards Geral
 let goTecnicoSupervisor = {};
 let goTecnicoInspetor = null; // null = ainda não buscado (ver carregarTecnicoInspetorSeNecessario)
 let goRespImprod = 'tecnico', goRespRec = 'inspetor';
@@ -868,7 +876,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
+      ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -920,7 +928,8 @@ function pctProdutivo(arr){ return arr.length ? (arr.filter(isProdutivo).length 
 
 function goRenderAbaAtiva(){
   goDestroyCharts();
-  if (goAbaAtiva === 'servicos') renderAbaServicos(goRegistrosFiltrados());
+  if (goAbaAtiva === 'cards-geral') renderAbaCardsGeral();
+  else if (goAbaAtiva === 'servicos') renderAbaServicos(goRegistrosFiltrados());
   else if (goAbaAtiva === 'sla-fila') renderAbaSlaFila();
   else if (goAbaAtiva === 'recorrencia') renderAbaRecorrencia(goRegistrosFiltrados(), goParesFiltrados());
   else if (goAbaAtiva === 'improdutividade') renderImprodutividade(goRegistrosFiltrados());
@@ -931,6 +940,124 @@ function goRenderAbaAtiva(){
   else if (goAbaAtiva === 'premiacao') renderAbaPremiacao();
   else if (goAbaAtiva === 'produtividade-tecnica') renderAbaProdutividadeTecnica();
   else if (goAbaAtiva === 'inspetor') renderAbaInspetor();
+}
+
+// ================= ABA CARDS GERAL =================
+// muda de aba programaticamente (mesma lógica do clique nas qf-tiles do
+// topo) - usado pelos cards que não têm um "analítico" próprio (Lavagens,
+// Manutenção, Absenteísmo, Auditorias, Tickets), que só levam pra aba de
+// origem daquele indicador em vez de abrir o modal de analítico genérico.
+function irParaAba(chave){
+  document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.aba === chave));
+  goAbaAtiva = chave;
+  ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
+    document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
+  });
+  goRenderAbaAtiva();
+}
+async function renderAbaCardsGeral(){
+  const container = document.getElementById('go-geral-cards');
+  container.innerHTML = `<div class="sla-card neutral"><div class="sla-label">Carregando indicadores...</div></div>`;
+  await carregarPessoasCacheSeNecessario();
+  try{
+    if (goVeiculos === null){
+      const [v, l, m] = await Promise.all([OPS.syncPull('FrotasData'), OPS.syncPull('LavagensData'), OPS.syncPull('ManutencoesData')]);
+      goVeiculos = v || []; goLavagens = l || []; goManutencoes = m || [];
+    }
+    if (goAbsenteismoPonto === null) goAbsenteismoPonto = (await OPS_SUPABASE.select('absenteismo_registros')) || [];
+    if (goAuditoriasGeral === null) goAuditoriasGeral = (await OPS_SUPABASE.select('auditorias_registros')) || [];
+    if (!goTickets.length) goTickets = (await OPS_SUPABASE.select('mundo_jira_tickets')) || [];
+  }catch(err){
+    console.error('Falha ao buscar dados pra Cards Geral', err);
+    container.innerHTML = `<div class="sla-card crit" style="grid-column:1/-1"><div class="sla-label">⚠️ Não consegui buscar todos os dados. ${err.message}</div></div>`;
+    return;
+  }
+  if (goAbaAtiva !== 'cards-geral') return; // trocou de aba enquanto buscava
+
+  const supervisor = document.getElementById('go-f-supervisor').value;
+  const cidade = document.getElementById('go-f-cidade').value;
+  const deduped = dedupePorProtocolo(goRegistrosFiltrados());
+  const elegiveisSla = deduped.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+
+  const cardSla = (grupo, label) => {
+    const arr = grupo === 'geral' ? elegiveisSla : elegiveisSla.filter(r => grupoSlaDoTipo(r.tipo) === grupo);
+    const dentro = arr.filter(r => dentroDoPrazo(r) === true).length;
+    const pct = arr.length ? (dentro / arr.length) * 100 : 0;
+    const meta = grupo === 'geral' ? META_SLA_GERAL : SLA_GROUPS[grupo].meta;
+    const cor = pct >= meta ? 'ok' : (pct >= meta - 10 ? 'warn' : 'crit');
+    const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
+    return { key: `sla-${grupo}`, label, valor: fmtPct1(pct), cor, meta: `Meta: ≥${meta}% · ${fmtNum(arr.length)} elegível(is)`,
+      onClick: () => abrirAnalitico('servicos', filtro, label) };
+  };
+
+  // Recorrência (mesma regra de ehInstaladorReparador da aba Recorrência)
+  const dataRec = deduped.filter(r => ehInstaladorReparador(r.tecnico));
+  const paresRec = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico));
+  const produtivosRec = dataRec.filter(isProdutivo).length;
+  const pctRec = produtivosRec ? (paresRec.length / produtivosRec) * 100 : 0;
+  const visitasPorCliente = {};
+  dataRec.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id).forEach(r => {
+    (visitasPorCliente[r.cliente_id] = visitasPorCliente[r.cliente_id] || []).push(r);
+  });
+  const clientesComRecorrencia = Object.values(visitasPorCliente).filter(v => v.length >= 2).length;
+
+  // Improdutividade (mesma regra de ehInstaladorReparador da aba Improdutividade)
+  const dataImprod = deduped.filter(r => ehInstaladorReparador(r.tecnico));
+  const improdutivos = dataImprod.length - dataImprod.filter(isProdutivo).length;
+  const pctImprod = dataImprod.length ? (improdutivos / dataImprod.length) * 100 : 0;
+
+  // Lavagens/Manutenção (Frotas) - não tem filtro de período próprio na
+  // Frotas pra manutenção "em aberto agora" (é sempre o estado atual)
+  const lavagensPeriodo = goLavagens.filter(l => dentroPeriodo(l.data));
+  const manutencoesAbertasAgora = goManutencoes.filter(m => m.status === 'aberta');
+
+  // Absenteísmo - mesma regra da aba Absenteísmo (só Falta + Atestado
+  // Médico), mês atual por padrão como todo card de mês nessa página
+  const dadosAbs = goAbsenteismoPonto.filter(r => r.mes_key === mesAtualKey());
+  const somaPrevistas = dadosAbs.reduce((acc, r) => acc + (r.horas_previstas || 0), 0);
+  const somaAusencia = dadosAbs.reduce((acc, r) => acc + ausenciaRelevante(r), 0);
+  const taxaAbsenteismo = somaPrevistas ? (somaAusencia / somaPrevistas) * 100 : 0;
+
+  // Auditorias por tipo - todas (sem recorte de inspetor/semana), respeitando
+  // o período do filtro geral da página
+  const auditoriasPeriodo = goAuditoriasGeral.filter(a => dentroPeriodo(a.data));
+
+  // Tickets - mesmo filtro da aba Tickets
+  const ticketsPeriodo = goTickets.filter(t => dentroPeriodo(t.criado_em) && (!supervisor || t.supervisor === supervisor));
+
+  const cards = [
+    cardSla('geral', 'SLA Geral'),
+    cardSla('reparo', 'SLA Reparo'),
+    cardSla('sa', 'SLA Serviço Adicional'),
+    cardSla('ativacao', 'SLA Ativação'),
+    cardSla('mde', 'SLA Mud. de Endereço'),
+    { key: 'recorrencia', label: 'Recorrência', valor: fmtPct1(pctRec), cor: pctRec <= 3 ? 'ok' : 'crit',
+      meta: `${fmtNum(paresRec.length)} par(es) detectado(s)`, onClick: () => { irParaAba('recorrencia'); } },
+    { key: 'recorrencia-log', label: 'Recorrência LOG', valor: fmtNum(clientesComRecorrencia), cor: 'neutral',
+      meta: 'Cliente(s) com 2+ visitas no período', onClick: () => { irParaAba('recorrencia'); } },
+    { key: 'improdutividade', label: 'Improdutividade', valor: fmtPct1(pctImprod), cor: pctImprod <= 10 ? 'ok' : 'crit',
+      meta: `${fmtNum(improdutivos)} de ${fmtNum(dataImprod.length)}`, onClick: () => { irParaAba('improdutividade'); } },
+    { key: 'lavagens', label: 'Lavagens', valor: fmtNum(lavagensPeriodo.length), cor: 'neutral',
+      meta: 'No período selecionado', onClick: () => { irParaAba('frotas'); } },
+    { key: 'manutencao', label: 'Manutenção', valor: fmtNum(manutencoesAbertasAgora.length), cor: manutencoesAbertasAgora.length ? 'crit' : 'ok',
+      meta: 'Em manutenção agora', onClick: () => { irParaAba('frotas'); } },
+    { key: 'absenteismo', label: 'Absenteísmo', valor: fmtPct1(taxaAbsenteismo), cor: faixaAbsenteismo(taxaAbsenteismo),
+      meta: `Mês atual (${formatarMesCurto(mesAtualKey())})`, onClick: () => { irParaAba('absenteismo'); } },
+    ...INSP_TAREFAS.filter(t => t.tipo === 'log').map(t => ({
+      key: `auditoria-${t.chave}`, label: `Auditoria: ${t.label}`,
+      valor: fmtNum(auditoriasPeriodo.filter(a => a.tipo === t.chave).length), cor: 'neutral',
+      meta: 'No período selecionado', onClick: () => { irParaAba('inspetor'); },
+    })),
+    { key: 'tickets', label: 'Tickets', valor: fmtNum(ticketsPeriodo.length), cor: 'neutral',
+      meta: 'No período selecionado', onClick: () => { irParaAba('tickets'); } },
+  ];
+
+  container.innerHTML = cards.map(c => `<div class="sla-card ${c.cor}" style="cursor:pointer" data-card="${c.key}" title="Clique pra ver mais">
+    <div class="sla-label">${c.label}</div>
+    <div class="sla-value">${c.valor}</div>
+    <div class="sla-meta">${c.meta}</div>
+  </div>`).join('');
+  container.querySelectorAll('[data-card]').forEach((el, i) => el.addEventListener('click', cards[i].onClick));
 }
 
 // ================= ABA SERVIÇOS =================
