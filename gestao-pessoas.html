@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="supabase-client.js"></script>
 </head>
 <body>
 
@@ -262,6 +263,10 @@
       <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary">＋ Registrar</button></div>
     </form>
     <div id="atestado-list" style="max-height:140px;overflow-y:auto"></div>
+
+    <div class="sec-hdr">Absenteísmo (ponto)</div>
+    <p class="modal-sub" style="margin-top:-8px">Horas previstas × trabalhadas por mês, importadas da planilha de ponto — não é editável aqui, é a mesma base da aba Absenteísmo em Gestão Operacional.</p>
+    <div id="absenteismo-ponto-list" style="max-height:160px;overflow-y:auto"></div>
 
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="btn-feedback-close">Fechar</button>
@@ -531,7 +536,56 @@ function openFeedbackModal(rec){
   renderFeedbackList();
   renderAusenciaList();
   renderAtestadoList();
+  renderAbsenteismoPontoList(rec.nome);
   modalFeedback.style.display = 'flex';
+}
+
+// ---------- absenteísmo (ponto) - mesma base importada da aba Absenteísmo
+// em Gestão Operacional, só leitura aqui (o import fica lá) ----------
+let goAbsenteismoPontoCache = null;
+function fmtHorasPessoas(h){
+  if (!isFinite(h)) return '—';
+  const totalMin = Math.round(h * 60);
+  return `${Math.floor(totalMin/60)}h${String(totalMin%60).padStart(2,'0')}m`;
+}
+function fmtPctPessoas(n){ return isFinite(n) ? n.toFixed(1).replace('.', ',') + '%' : '—'; }
+function faixaAbsenteismoPessoas(pct){
+  if (pct <= 5) return 'ok';
+  if (pct <= 15) return 'warn';
+  return 'crit';
+}
+async function renderAbsenteismoPontoList(nomeColaborador){
+  const el = document.getElementById('absenteismo-ponto-list');
+  el.innerHTML = '<p style="color:var(--ink-dim);font-size:13px">Carregando...</p>';
+  if (goAbsenteismoPontoCache === null){
+    try{
+      goAbsenteismoPontoCache = (await OPS_SUPABASE.select('absenteismo_registros')) || [];
+    }catch(err){
+      console.error('Falha ao buscar absenteísmo', err);
+      el.innerHTML = '<p style="color:var(--crit);font-size:13px">⚠️ Não consegui buscar os dados de absenteísmo.</p>';
+      return;
+    }
+  }
+  const historico = goAbsenteismoPontoCache
+    .filter(r => OPS.normalize(r.nome) === OPS.normalize(nomeColaborador))
+    .sort((a,b) => b.mes_key.localeCompare(a.mes_key));
+  if (!historico.length){
+    el.innerHTML = '<p style="color:var(--ink-dim);font-size:13px">Nenhum dado de ponto importado pra esse colaborador ainda.</p>';
+    return;
+  }
+  el.innerHTML = historico.map(r => {
+    const pct = r.horas_previstas ? (r.total_ausencia / r.horas_previstas) * 100 : 0;
+    return `
+    <div class="status-row" style="display:block;padding:8px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600;font-size:13px">${r.mes_label || r.mes_key}</span>
+        <span class="badge ${faixaAbsenteismoPessoas(pct)}"><span class="dot"></span>${fmtPctPessoas(pct)}</span>
+      </div>
+      <div style="color:var(--ink-dim);font-size:12px;margin-top:2px">
+        Previstas ${fmtHorasPessoas(r.horas_previstas)} · Trabalhadas ${fmtHorasPessoas(r.horas_trabalhadas)} · Ausência ${fmtHorasPessoas(r.total_ausencia)}
+      </div>
+    </div>`;
+  }).join('');
 }
 function renderFeedbackList(){
   const list = feedbacks.filter(f => f.colaboradorId === feedbackColabId).sort((a,b) => (OPS.toDateSafe(b.data)||0) - (OPS.toDateSafe(a.data)||0));

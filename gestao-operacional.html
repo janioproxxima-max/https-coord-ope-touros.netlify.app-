@@ -314,12 +314,47 @@
 
   <!-- ================= ABA: ABSENTEÍSMO ================= -->
   <div id="go-aba-absenteismo" style="display:none">
-    <div class="stat-row" id="go-abs-cards"></div>
+    <div class="panel toolbar" style="margin-bottom:14px">
+      <div>
+        <p class="page-sub" id="go-abp-status" style="margin:0">Nenhuma planilha de ponto importada ainda.</p>
+      </div>
+      <div style="flex:1"></div>
+      <div class="field" style="min-width:160px">
+        <label for="go-abp-mes">Mês</label>
+        <select id="go-abp-mes"><option value="">Todos os meses importados</option></select>
+      </div>
+      <input type="file" id="go-abp-file" accept=".xlsx,.xls,.csv" style="display:none">
+      <button type="button" class="btn primary" id="go-abp-btn-importar">📥 Importar planilha de Absenteísmo (ponto)</button>
+    </div>
+
+    <div class="stat-row" id="go-abp-cards"></div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>📈 Taxa de absenteísmo por mês</h3></div>
+      <div class="chart-box"><canvas id="go-abp-chart-mes"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head">
+        <h3>📋 Absenteísmo por colaborador</h3><span class="cnt-badge" id="go-abp-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abp-tbody" data-arquivo="absenteismo-ponto" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Clique numa linha pra ver o histórico mensal completo do colaborador.</p>
+      <div class="table-wrap" style="max-height:420px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Cargo</th><th>Horas Previstas</th><th>Horas Trabalhadas</th><th>Total Ausência</th><th>% Ausência</th></tr></thead>
+          <tbody id="go-abp-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head">
-        <h3>🧑‍⚕️ Ausências, atestados e férias por colaborador</h3><span class="cnt-badge" id="go-abs-badge">—</span>
+        <h3>🧑‍⚕️ Ausências, atestados e férias por colaborador (registro manual)</h3><span class="cnt-badge" id="go-abs-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-abs-tbody" data-arquivo="absenteismo" data-sheet="Absenteísmo" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Fonte diferente da tabela acima — vem do registro manual em Gestão de Pessoas, não da planilha de ponto.</p>
+      <div class="stat-row" id="go-abs-cards" style="padding:0 16px 10px"></div>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
           <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Ausências</th><th>Dias de atestado</th><th>Dias de férias</th><th>Total dias fora</th></tr></thead>
@@ -1675,6 +1710,7 @@ async function renderAbaTickets(){
 
 // ================= ABA ABSENTEÍSMO =================
 async function renderAbaAbsenteismo(){
+  carregarERenderAbsenteismoPonto();
   const container = document.getElementById('go-abs-tbody');
   if (goPessoas === null){
     container.innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando dados de pessoas...</td></tr>`;
@@ -1725,6 +1761,248 @@ async function renderAbaAbsenteismo(){
 }
 function nomesEq(a, b){ return a && b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase(); }
 
+// ================= ABSENTEÍSMO (PONTO) =================
+// Importa o export mensal de ponto (Horas Previstas/Trabalhadas já vêm
+// calculadas pelo sistema de ponto considerando a jornada individual de cada
+// colaborador - banco de horas de sábado, folga compensada de domingo etc.
+// Não recalculamos jornada esperada do zero, só confiamos nesse valor já
+// pronto). Cada import substitui toda a base (mesmo padrão do Férias).
+//
+// Limitação da planilha de origem (não é bug nosso): a coluna "Mês" só traz
+// o nome em português, sem ano. mes_key assume o ano corrente no momento do
+// import. Se um dia precisar de histórico multi-ano, essa planilha sozinha
+// não resolve.
+let goAbsenteismoPonto = null;
+const ABSENTEISMO_META_KEY = 'ops_touros_absenteismo_ponto_import_meta_v1';
+const MES_LABEL_PARA_NUMERO = {
+  janeiro: 1, fevereiro: 2, 'marco': 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+};
+
+function horaParaDecimal(str){
+  const s = (str || '').toString().trim();
+  const m = s.match(/^(-?\d+):(\d{2})$/);
+  if (!m) return 0;
+  const horas = Number(m[1]), minutos = Number(m[2]);
+  const sinal = horas < 0 ? -1 : 1;
+  return sinal * (Math.abs(horas) + minutos / 60);
+}
+
+document.getElementById('go-abp-btn-importar').addEventListener('click', () => document.getElementById('go-abp-file').click());
+document.getElementById('go-abp-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) importarAbsenteismoPonto(file);
+});
+
+async function importarAbsenteismoPonto(file){
+  const btn = document.getElementById('go-abp-btn-importar');
+  btn.disabled = true; btn.textContent = '📖 Lendo...';
+  try{
+    await carregarPessoasCacheSeNecessario();
+    const rows = await new Promise((resolve) => OPS.readSpreadsheetFile(file, resolve));
+    if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
+    btn.textContent = '⚙️ Processando...';
+    const headers = rows[0];
+    const idx = (nome) => headers.findIndex(h => OPS.normalize(h) === OPS.normalize(nome));
+    const idxNome = idx('Nome');
+    const idxCargo = idx('Cargo');
+    const idxCC = idx('Centro de Custo');
+    const idxMatricula = idx('Matrícula');
+    const idxMes = idx('Mês');
+    const idxPrevistas = idx('Horas Previstas');
+    const idxTrabalhadas = idx('Horas Trabalhadas');
+    const idxTotalAusencia = idx('Total de Ausência');
+    const idxPctAusencia = idx('% de Ausência');
+    if (idxNome < 0 || idxMes < 0 || idxPrevistas < 0){
+      alert('Não reconheci as colunas dessa planilha (esperava "Nome", "Mês", "Horas Previstas" etc). Confere se é a planilha certa.');
+      return;
+    }
+    // categorias de ausência: todas as colunas entre FALTA e "Total de
+    // Ausência" - lidas pelo nome, não por índice fixo, pra sobreviver se a
+    // planilha ganhar/perder alguma categoria numa próxima exportação
+    const idxFalta = idx('FALTA');
+    const idxLimiteCategorias = idxTotalAusencia >= 0 ? idxTotalAusencia : headers.length;
+    const colunasCategorias = [];
+    if (idxFalta >= 0){
+      for (let c = idxFalta; c < idxLimiteCategorias; c++){
+        if (headers[c]) colunasCategorias.push({ nome: headers[c].toString().trim(), i: c });
+      }
+    }
+
+    const nomesRoster = new Set((goPessoasCache || []).map(p => p.nome && OPS.normalize(p.nome)).filter(Boolean));
+    const anoAtual = new Date().getFullYear();
+    const registros = [];
+    rows.slice(1).forEach(row => {
+      const nome = (row[idxNome] || '').toString().trim();
+      const mesLabel = (row[idxMes] || '').toString().trim();
+      if (!nome || !mesLabel) return;
+      if (!nomesRoster.has(OPS.normalize(nome))) return; // só gente da Touros
+      const mesNum = MES_LABEL_PARA_NUMERO[OPS.normalize(mesLabel)];
+      if (!mesNum) return;
+      const categorias = {};
+      colunasCategorias.forEach(c => { categorias[c.nome] = horaParaDecimal(row[c.i]); });
+      registros.push({
+        id: OPS.uid(),
+        matricula: idxMatricula >= 0 ? (row[idxMatricula] || '').toString().trim() : '',
+        nome,
+        cargo: idxCargo >= 0 ? (row[idxCargo] || '').toString().trim() : '',
+        cc: idxCC >= 0 ? (row[idxCC] || '').toString().trim() : '',
+        mes_key: `${anoAtual}-${String(mesNum).padStart(2,'0')}`,
+        mes_label: mesLabel,
+        horas_previstas: idxPrevistas >= 0 ? horaParaDecimal(row[idxPrevistas]) : 0,
+        horas_trabalhadas: idxTrabalhadas >= 0 ? horaParaDecimal(row[idxTrabalhadas]) : 0,
+        total_ausencia: idxTotalAusencia >= 0 ? horaParaDecimal(row[idxTotalAusencia]) : 0,
+        percentual_ausencia: idxPctAusencia >= 0 ? feriasNum(row[idxPctAusencia]) : 0,
+        categorias,
+      });
+    });
+    if (!registros.length){ alert('Nenhum colaborador da Touros encontrado nessa planilha.'); return; }
+
+    btn.textContent = '☁️ Enviando...';
+    await OPS_SUPABASE.del('absenteismo_registros', 'id=not.is.null');
+    const TAMANHO_LOTE = 500;
+    for (let i = 0; i < registros.length; i += TAMANHO_LOTE){
+      await OPS_SUPABASE.upsert('absenteismo_registros', registros.slice(i, i + TAMANHO_LOTE), 'id');
+    }
+    const meta = { data: new Date().toISOString(), usuario: nomeDoLogin(), total: registros.length };
+    OPS.saveData(ABSENTEISMO_META_KEY, meta);
+    goAbsenteismoPonto = registros;
+    popularSelectMesAbsenteismo();
+    desenharAbaAbsenteismoPonto();
+  }catch(err){
+    console.error('Falha ao importar absenteísmo', err);
+    alert('Não consegui importar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '📥 Importar planilha de Absenteísmo (ponto)';
+  }
+}
+
+async function carregarERenderAbsenteismoPonto(){
+  const meta = OPS.loadData(ABSENTEISMO_META_KEY);
+  document.getElementById('go-abp-status').textContent = meta
+    ? `📥 Última importação: ${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario} · ${fmtNum(meta.total)} registro(s) da Touros`
+    : 'Nenhuma planilha de ponto importada ainda.';
+  if (goAbsenteismoPonto === null){
+    document.getElementById('go-abp-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+    try{
+      goAbsenteismoPonto = (await OPS_SUPABASE.select('absenteismo_registros')) || [];
+    }catch(err){
+      console.error('Falha ao buscar absenteísmo', err);
+      document.getElementById('go-abp-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      return;
+    }
+    popularSelectMesAbsenteismo();
+  }
+  if (goAbaAtiva !== 'absenteismo') return;
+  desenharAbaAbsenteismoPonto();
+}
+
+function popularSelectMesAbsenteismo(){
+  const sel = document.getElementById('go-abp-mes');
+  const atual = sel.value;
+  const meses = [...new Set((goAbsenteismoPonto || []).map(r => r.mes_key))].sort();
+  sel.innerHTML = '<option value="">Todos os meses importados</option>' +
+    meses.map(m => `<option value="${m}">${formatarMesCurto(m)}</option>`).join('');
+  if (meses.includes(atual)) sel.value = atual;
+}
+document.getElementById('go-abp-mes').addEventListener('change', desenharAbaAbsenteismoPonto);
+
+function faixaAbsenteismo(pct){
+  if (pct <= 5) return 'ok';
+  if (pct <= 15) return 'warn';
+  return 'crit';
+}
+
+function desenharAbaAbsenteismoPonto(){
+  const mesFiltro = document.getElementById('go-abp-mes').value;
+  const dados = (goAbsenteismoPonto || []).filter(r => !mesFiltro || r.mes_key === mesFiltro);
+
+  const somaPrevistas = dados.reduce((acc, r) => acc + (r.horas_previstas || 0), 0);
+  const somaAusencia = dados.reduce((acc, r) => acc + (r.total_ausencia || 0), 0);
+  const taxaUnidade = somaPrevistas ? (somaAusencia / somaPrevistas) * 100 : 0;
+  const colaboradoresUnicos = new Set(dados.map(r => r.nome)).size;
+
+  document.getElementById('go-abp-cards').innerHTML = `
+    <div class="stat-card ${faixaAbsenteismo(taxaUnidade)}"><div class="label">Taxa de absenteísmo da unidade</div><div class="value">${fmtPct1(taxaUnidade)}</div></div>
+    <div class="stat-card"><div class="label">Horas previstas (soma)</div><div class="value">${fmtHoras(somaPrevistas)}</div></div>
+    <div class="stat-card"><div class="label">Horas de ausência (soma)</div><div class="value">${fmtHoras(somaAusencia)}</div></div>
+    <div class="stat-card brand"><div class="label">Colaboradores no período</div><div class="value">${fmtNum(colaboradoresUnicos)}</div></div>
+  `;
+
+  // uma linha por colaborador no mês filtrado; sem filtro de mês, soma tudo
+  // pra cada colaborador (visão do período inteiro importado)
+  const porColaborador = {};
+  dados.forEach(r => {
+    if (!porColaborador[r.nome]) porColaborador[r.nome] = { nome: r.nome, cargo: r.cargo, previstas: 0, trabalhadas: 0, ausencia: 0 };
+    porColaborador[r.nome].previstas += r.horas_previstas || 0;
+    porColaborador[r.nome].trabalhadas += r.horas_trabalhadas || 0;
+    porColaborador[r.nome].ausencia += r.total_ausencia || 0;
+  });
+  const linhas = Object.values(porColaborador).map(c => ({
+    ...c, pct: c.previstas ? (c.ausencia / c.previstas) * 100 : 0,
+  })).sort((a, b) => b.pct - a.pct);
+
+  document.getElementById('go-abp-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
+  document.getElementById('go-abp-tbody').innerHTML = linhas.map(c => `
+    <tr class="mj-row" data-nome="${c.nome}" style="cursor:pointer">
+      <td>${tituloCase(c.nome)}</td><td>${tituloCase(c.cargo || '—')}</td>
+      <td>${fmtHoras(c.previstas)}</td><td>${fmtHoras(c.trabalhadas)}</td>
+      <td>${fmtHoras(c.ausencia)}</td>
+      <td><span class="badge ${faixaAbsenteismo(c.pct)}"><span class="dot"></span>${fmtPct1(c.pct)}</span></td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Nenhum dado importado ainda.</td></tr>`;
+  document.querySelectorAll('#go-abp-tbody tr[data-nome]').forEach(tr => {
+    tr.addEventListener('click', () => detalheAbsenteismoColaborador(tr.dataset.nome));
+  });
+
+  // gráfico: taxa de absenteísmo por mês (todos os meses importados, não só
+  // o mês filtrado - senão o gráfico fica sem sentido com um mês só)
+  const porMes = {};
+  (goAbsenteismoPonto || []).forEach(r => {
+    if (!porMes[r.mes_key]) porMes[r.mes_key] = { previstas: 0, ausencia: 0 };
+    porMes[r.mes_key].previstas += r.horas_previstas || 0;
+    porMes[r.mes_key].ausencia += r.total_ausencia || 0;
+  });
+  const mesesOrdenados = Object.keys(porMes).sort();
+  if (goCharts.absMes) goCharts.absMes.destroy();
+  goCharts.absMes = new Chart(document.getElementById('go-abp-chart-mes'), {
+    type: 'line',
+    data: {
+      labels: mesesOrdenados.map(formatarMesCurto),
+      datasets: [{
+        label: 'Taxa de absenteísmo (%)',
+        data: mesesOrdenados.map(m => porMes[m].previstas ? (porMes[m].ausencia / porMes[m].previstas) * 100 : 0),
+        borderColor: '#ff4d6d', backgroundColor: 'rgba(255,77,109,.15)', fill: true, tension: .3,
+      }],
+    },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts,
+      scales: {
+        y: { beginAtZero: true, ticks: { color: '#8a97ab', callback: v => v + '%' }, grid: { color: '#1e2d47' } },
+        x: { ticks: { color: '#e2eaf5' }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false },
+        datalabels: { color: '#e2eaf5', anchor: 'end', align: 'top', font: { weight: '700', size: 10 }, formatter: v => v.toFixed(1) + '%' } },
+    },
+  });
+}
+
+function detalheAbsenteismoColaborador(nome){
+  const historico = (goAbsenteismoPonto || []).filter(r => r.nome === nome).sort((a,b) => a.mes_key.localeCompare(b.mes_key));
+  const html = historico.map(r => {
+    const pct = r.horas_previstas ? (r.total_ausencia / r.horas_previstas) * 100 : 0;
+    return `<tr>
+      <td>${formatarMesCurto(r.mes_key)}</td>
+      <td>${fmtHoras(r.horas_previstas)}</td>
+      <td>${fmtHoras(r.horas_trabalhadas)}</td>
+      <td>${fmtHoras(r.total_ausencia)}</td>
+      <td><span class="badge ${faixaAbsenteismo(pct)}"><span class="dot"></span>${fmtPct1(pct)}</span></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Sem histórico.</td></tr>`;
+  abrirInspetorDetalhe(`🧑‍⚕️ Histórico de absenteísmo — ${tituloCase(nome)}`, ['Mês', 'Horas Previstas', 'Horas Trabalhadas', 'Total Ausência', '% Ausência'], html);
+}
+
 // ================= ABA FÉRIAS =================
 // Importa a planilha "Diretoria de Operações" (RH, todas as unidades) e
 // guarda só quem é da Touros - por CC (411092) OU por bater o nome com
@@ -1769,7 +2047,18 @@ async function importarFerias(file){
     const rows = await new Promise((resolve) => OPS.readSpreadsheetFile(file, resolve));
     if (!rows || rows.length < 2){ alert('Planilha vazia ou sem dados.'); return; }
     btn.textContent = '⚙️ Processando...';
-    const headers = rows[0];
+    // a exportação da Diretoria de Operações vem com ~8 linhas de "Applied
+    // filters" antes do cabeçalho de verdade - acha a linha certa procurando
+    // "Nome" nas primeiras linhas, em vez de assumir que é sempre a linha 0
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(rows.length, 15); i++){
+      if (rows[i].some(c => OPS.normalize(c) === 'nome')) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1){
+      alert('Não achei a coluna "Nome" nas primeiras linhas. Confere se é a planilha certa (o mesmo modelo da Diretoria de Operações).');
+      return;
+    }
+    const headers = rows[headerRowIdx];
     const idx = (nome) => headers.findIndex(h => OPS.normalize(h) === OPS.normalize(nome));
     const idxCC = idx('CC | Descrição');
     const idxMatricula = idx('Matrícula');
@@ -1796,7 +2085,7 @@ async function importarFerias(file){
 
     const nomesRoster = new Set((goPessoasCache || []).map(p => p.nome && OPS.normalize(p.nome)).filter(Boolean));
     const registros = [];
-    rows.slice(1).forEach(row => {
+    rows.slice(headerRowIdx + 1).forEach(row => {
       const nome = (row[idxNome] || '').toString().trim();
       if (!nome) return;
       const cc = idxCC >= 0 ? (row[idxCC] || '').toString().trim() : '';
