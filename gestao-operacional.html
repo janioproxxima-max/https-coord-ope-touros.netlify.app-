@@ -31,6 +31,7 @@
     <button type="button" class="qf-tile" data-aba="frotas">🚚 Frotas</button>
     <button type="button" class="qf-tile" data-aba="premiacao">🏆 Premiação</button>
     <button type="button" class="qf-tile" data-aba="produtividade-tecnica">📊 Produtividade Técnica</button>
+    <button type="button" class="qf-tile" data-aba="produtividade-tempo-real">⚡ Produtividade Tempo Real</button>
     <button type="button" class="qf-tile" data-aba="inspetor">🕵️ Área do Inspetor</button>
   </div>
 
@@ -475,18 +476,6 @@
   <!-- ================= ABA: PRODUTIVIDADE TÉCNICA ================= -->
   <div id="go-aba-produtividade-tecnica" style="display:none">
     <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3><span class="cnt-badge" id="go-pt-hoje-badge">—</span></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado). O filtro de Supervisor lá em cima também filtra a tabela — clique num quadrado pra aplicar.</p>
-      <div class="sla-grid" id="go-pt-hoje-supervisor-cards" style="margin:0 16px 14px"></div>
-      <div class="table-wrap" style="max-height:520px">
-        <table class="services">
-          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Pontos hoje</th><th>Faltam pra meta</th></tr></thead>
-          <tbody id="go-pt-hoje-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:18px">
       <div class="card-head">
         <h3>👥 Média por Supervisão</h3>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-pt-supervisao-tbody" data-arquivo="produtividade-supervisao" data-sheet="Por Supervisão" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
@@ -514,6 +503,43 @@
         <table class="services">
           <thead><tr><th>#</th><th>Colaborador</th><th>Supervisor</th><th>Pontos</th><th>Dias trabalhados</th><th>Pontos/dia</th><th>Quartil</th></tr></thead>
           <tbody id="go-pt-ranking-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ABA: PRODUTIVIDADE TEMPO REAL ================= -->
+  <div id="go-aba-produtividade-tempo-real" style="display:none">
+    <p class="page-sub" style="margin:0 0 14px">Dados de hoje/mês atual direto do Supabase, sem depender do período selecionado no topo - sempre em tempo real.</p>
+    <div class="stat-row" id="go-ptr-resumo-cards" style="margin-bottom:18px"></div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3><span class="cnt-badge" id="go-pt-hoje-badge">—</span></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado). O filtro de Supervisor lá em cima também filtra a tabela — clique num quadrado pra aplicar.</p>
+      <div class="sla-grid" id="go-pt-hoje-supervisor-cards" style="margin:0 16px 14px"></div>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="services">
+          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Pontos hoje</th><th>Faltam pra meta</th></tr></thead>
+          <tbody id="go-pt-hoje-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>⚡ Painel por colaborador (tempo real)</h3><span class="cnt-badge" id="go-ptr-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-ptr-tbody" data-arquivo="produtividade-tempo-real" data-sheet="Tempo Real" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
+      </div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Placa/Cidade/Supervisor vêm da Gestão de Pessoas. Pontos de Instalação/Reparo/Recolhimento e horários são de hoje; Pontos Mês e PPC são do mês atual.</p>
+      <div class="table-wrap" style="max-height:600px">
+        <table class="services">
+          <thead><tr>
+            <th>Equipe</th><th>Placa</th><th>Cidade</th><th>Supervisor</th><th>Quartil (mês)</th>
+            <th>Pts. Instalação</th><th>Pts. Reparo</th><th>Pts. Recolhimento</th><th>Pontos Dia</th>
+            <th>Pontos Dia Anterior</th><th>Pontos Mês</th><th>PPC</th><th>Improd. Hoje</th>
+            <th>1º Deslocamento</th><th>Último Concluído</th>
+          </tr></thead>
+          <tbody id="go-ptr-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -886,7 +912,7 @@ function popularFiltros(){
       document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       goAbaAtiva = btn.dataset.aba;
-      ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
+      ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','produtividade-tempo-real','inspetor'].forEach(k => {
         document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
       });
       goRenderAbaAtiva();
@@ -949,6 +975,7 @@ function goRenderAbaAtiva(){
   else if (goAbaAtiva === 'frotas') renderAbaFrotas();
   else if (goAbaAtiva === 'premiacao') renderAbaPremiacao();
   else if (goAbaAtiva === 'produtividade-tecnica') renderAbaProdutividadeTecnica();
+  else if (goAbaAtiva === 'produtividade-tempo-real') renderAbaProdutividadeTempoReal();
   else if (goAbaAtiva === 'inspetor') renderAbaInspetor();
 }
 
@@ -960,7 +987,7 @@ function goRenderAbaAtiva(){
 function irParaAba(chave){
   document.querySelectorAll('#go-abas .qf-tile').forEach(b => b.classList.toggle('active', b.dataset.aba === chave));
   goAbaAtiva = chave;
-  ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','inspetor'].forEach(k => {
+  ['cards-geral','servicos','sla-fila','recorrencia','improdutividade','tickets','absenteismo','ferias','frotas','premiacao','produtividade-tecnica','produtividade-tempo-real','inspetor'].forEach(k => {
     document.getElementById('go-aba-' + k).style.display = k === goAbaAtiva ? 'block' : 'none';
   });
   goRenderAbaAtiva();
@@ -3016,7 +3043,6 @@ const META_PONTOS_DIA = 8;
 
 function desenharProdutividadeTecnica(){
   const data = goRegistrosFiltrados();
-  renderPontosHoje();
 
   // dias trabalhados = dias distintos em que o colaborador fechou algum
   // atendimento no período, produtivo OU improdutivo, como responsável
@@ -3132,7 +3158,7 @@ async function renderPontosHoje(){
     console.error('Falha ao buscar produtividade de hoje', err);
   }
   await carregarAtestadosCacheSeNecessario();
-  if (goAbaAtiva !== 'produtividade-tecnica') return;
+  if (goAbaAtiva !== 'produtividade-tempo-real') return;
 
   const pontosHojePorTecnicoNorm = {};
   registrosHoje.forEach(r => {
@@ -3203,6 +3229,164 @@ async function renderPontosHoje(){
     <td>${tituloCase(l.tecnico)}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
     <td>${l.pontos.toFixed(2)}</td><td>${Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2)}</td>
   </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum colaborador ativo agora.</td></tr>`;
+}
+
+// ================= ABA PRODUTIVIDADE TEMPO REAL =================
+async function renderAbaProdutividadeTempoReal(){
+  try{
+    await carregarPessoasCacheSeNecessario();
+  }catch(err){
+    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    return;
+  }
+  if (goAbaAtiva !== 'produtividade-tempo-real') return;
+  await renderPontosHoje();
+  if (goAbaAtiva !== 'produtividade-tempo-real') return;
+  await desenharProdutividadeTempoReal();
+}
+function fmtHoraCurta(d){
+  return d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '—';
+}
+async function desenharProdutividadeTempoReal(){
+  document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  const hoje = new Date();
+  const hojeStr = hoje.toISOString().slice(0,10);
+  const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+  const amanhaStr = amanha.toISOString().slice(0,10);
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const inicioMesStr = inicioMes.toISOString().slice(0,10);
+  // busca também uns dias antes do mês, só pra achar "pontos do dia
+  // anterior trabalhado" mesmo se hoje for dia 1/2 do mês (sem isso, quem
+  // só trabalhou no fim do mês passado ficaria sem essa coluna)
+  const buscaDesde = new Date(inicioMes); buscaDesde.setDate(buscaDesde.getDate() - 10);
+  const buscaDesdeStr = buscaDesde.toISOString().slice(0,10);
+
+  let registros = [];
+  try{
+    registros = await OPS_SUPABASE.select('produtividade_registros',
+      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`);
+  }catch(err){
+    console.error('Falha ao buscar produtividade tempo real', err);
+    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="14" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+    return;
+  }
+  if (goAbaAtiva !== 'produtividade-tempo-real') return;
+
+  const registrosMes = registros.filter(r => diaKey(r.data_encerramento) >= inicioMesStr);
+  const registrosHoje = registros.filter(r => diaKey(r.data_encerramento) === hojeStr);
+
+  // "reparo" aqui junta VT + Serviços Adicionais, a pedido - só pra essa
+  // visão de pontos do dia (não mexe no SLA, que continua com os grupos
+  // separados)
+  const TIPOS_REPARO_GERAL = new Set([...SLA_GROUPS.reparo.tipos, ...SLA_GROUPS.sa.tipos]);
+  const ehInstalacao = r => grupoSlaDoTipo(r.tipo) === 'ativacao';
+  const ehRecolhimento = r => (r.tipo || '').toUpperCase() === 'RECOLHIMENTO';
+  const ehReparoGeral = r => TIPOS_REPARO_GERAL.has((r.tipo || '').toUpperCase());
+
+  const porTecnico = {};
+  function pegaTecnico(nome){
+    const key = OPS.normalize(nome);
+    if (!porTecnico[key]) porTecnico[key] = {
+      pontosInstalacao: 0, pontosReparo: 0, pontosRecolhimento: 0, pontosDia: 0,
+      pontosMes: 0, diasMes: new Set(), improdHoje: 0, primeiroDeslocamento: null, ultimoConcluido: null,
+    };
+    return porTecnico[key];
+  }
+  registrosMes.forEach(r => {
+    if (!r.tecnico) return;
+    const t = pegaTecnico(r.tecnico);
+    t.pontosMes += parseFloat(r.pontos) || 0;
+    const dia = diaKey(r.data_encerramento);
+    if (dia) t.diasMes.add(dia);
+  });
+  registrosHoje.forEach(r => {
+    if (!r.tecnico) return;
+    const t = pegaTecnico(r.tecnico);
+    const pts = parseFloat(r.pontos) || 0;
+    t.pontosDia += pts;
+    if (ehInstalacao(r)) t.pontosInstalacao += pts;
+    else if (ehReparoGeral(r)) t.pontosReparo += pts;
+    else if (ehRecolhimento(r)) t.pontosRecolhimento += pts;
+    if (!isProdutivo(r)) t.improdHoje++;
+    if (r.data_criacao){
+      const h = new Date(r.data_criacao);
+      if (!t.primeiroDeslocamento || h < t.primeiroDeslocamento) t.primeiroDeslocamento = h;
+    }
+    if (r.data_encerramento){
+      const h = new Date(r.data_encerramento);
+      if (!t.ultimoConcluido || h > t.ultimoConcluido) t.ultimoConcluido = h;
+    }
+  });
+
+  // pontos do último dia trabalhado ANTES de hoje (pode ser do mês passado)
+  const diaAnteriorPorTecnico = {};
+  registros.forEach(r => {
+    if (!r.tecnico) return;
+    const dia = diaKey(r.data_encerramento);
+    if (!dia || dia >= hojeStr) return;
+    const key = OPS.normalize(r.tecnico);
+    const pts = parseFloat(r.pontos) || 0;
+    const atual = diaAnteriorPorTecnico[key];
+    if (!atual || dia > atual.dia) diaAnteriorPorTecnico[key] = { dia, pontos: pts };
+    else if (dia === atual.dia) atual.pontos += pts;
+  });
+
+  // quartil do mês atual: mesmo critério (ranking por pontos/dia) já usado
+  // no Ranking de colaboradores da Produtividade Técnica
+  const rankingMes = Object.entries(porTecnico).map(([key, t]) => ({
+    key, pontosDia: t.diasMes.size ? t.pontosMes / t.diasMes.size : 0,
+  })).sort((a,b) => b.pontosDia - a.pontosDia);
+  const nq = rankingMes.length;
+  const quartilPorKey = {};
+  rankingMes.forEach((l,i) => {
+    const posicao = nq > 1 ? i / (nq - 1) : 0;
+    quartilPorKey[l.key] = posicao <= 0.25 ? 1 : posicao <= 0.5 ? 2 : posicao <= 0.75 ? 3 : 4;
+  });
+
+  // cards resumo: quantidade de serviços concluídos hoje, unidade inteira
+  const totalAtivacoes = registrosHoje.filter(ehInstalacao).length;
+  const totalReparos = registrosHoje.filter(ehReparoGeral).length;
+  const totalRecolhimentos = registrosHoje.filter(ehRecolhimento).length;
+  document.getElementById('go-ptr-resumo-cards').innerHTML = `
+    <div class="stat-card brand"><div class="label">Ativações hoje</div><div class="value">${fmtNum(totalAtivacoes)}</div></div>
+    <div class="stat-card brand"><div class="label">Reparos hoje (geral)</div><div class="value">${fmtNum(totalReparos)}</div></div>
+    <div class="stat-card brand"><div class="label">Recolhimentos hoje</div><div class="value">${fmtNum(totalRecolhimentos)}</div></div>
+  `;
+
+  // monta a partir do roster de Gestão de Pessoas, pra trazer todo mundo
+  // ativo (com Placa/Cidade/Supervisor) mesmo quem não teve nenhum
+  // atendimento hoje ainda
+  const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo');
+  const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
+  const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
+  const linhas = roster.map(p => {
+    const key = OPS.normalize(p.nome);
+    const t = porTecnico[key];
+    const diaAnterior = diaAnteriorPorTecnico[key];
+    const diasMesQtd = t ? t.diasMes.size : 0;
+    return {
+      nome: p.nome, placa: p.veiculo || '—', cidade: p.cidade || '—', supervisor: p.gestor || '—',
+      quartil: quartilPorKey[key] || null,
+      pontosInstalacao: t ? t.pontosInstalacao : 0, pontosReparo: t ? t.pontosReparo : 0,
+      pontosRecolhimento: t ? t.pontosRecolhimento : 0, pontosDia: t ? t.pontosDia : 0,
+      pontosDiaAnterior: diaAnterior ? diaAnterior.pontos : null,
+      pontosMes: t ? t.pontosMes : 0, ppc: diasMesQtd ? t.pontosMes / diasMesQtd : null,
+      improdHoje: t ? t.improdHoje : 0,
+      primeiroDeslocamento: t ? t.primeiroDeslocamento : null, ultimoConcluido: t ? t.ultimoConcluido : null,
+    };
+  }).sort((a,b) => b.pontosDia - a.pontosDia);
+
+  document.getElementById('go-ptr-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
+  document.getElementById('go-ptr-tbody').innerHTML = linhas.map(l => `<tr>
+    <td>${tituloCase(l.nome)}</td><td>${l.placa}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
+    <td>${l.quartil ? `<span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º</span>` : '—'}</td>
+    <td>${l.pontosInstalacao.toFixed(2)}</td><td>${l.pontosReparo.toFixed(2)}</td><td>${l.pontosRecolhimento.toFixed(2)}</td>
+    <td><span class="badge ${corPontosDia(l.pontosDia)}"><span class="dot"></span>${l.pontosDia.toFixed(2)}</span></td>
+    <td>${l.pontosDiaAnterior == null ? '—' : l.pontosDiaAnterior.toFixed(2)}</td>
+    <td>${l.pontosMes.toFixed(2)}</td><td>${l.ppc == null ? '—' : l.ppc.toFixed(2)}</td>
+    <td>${fmtNum(l.improdHoje)}</td>
+    <td>${fmtHoraCurta(l.primeiroDeslocamento)}</td><td>${fmtHoraCurta(l.ultimoConcluido)}</td>
+  </tr>`).join('') || `<tr><td colspan="14" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
 }
 
 // ================= ABA SLA (fila de protocolos em aberto) =================
