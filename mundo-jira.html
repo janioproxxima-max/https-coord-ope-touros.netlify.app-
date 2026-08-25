@@ -1995,6 +1995,14 @@ function formatarHoras(h){
   return `${horas}h${String(minutos).padStart(2, '0')}`;
 }
 
+// faixa de cor pros indicadores percentuais do histórico (improdutividade,
+// recorrência): verde 0 a 7,99 | amarelo 8 a 9,99 | vermelho 10 ou mais
+function corFaixaPct(pct){
+  if (pct == null) return 'var(--ink)';
+  if (pct >= 10) return 'var(--crit)';
+  if (pct >= 8) return 'var(--warn)';
+  return 'var(--ok)';
+}
 function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia, tecnicoKey){
   const meses = (historicoMensal || []).filter(h => /^\d{4}-\d{2}$/.test(h.mesKey)).sort((a, b) => a.mesKey.localeCompare(b.mesKey));
   return `
@@ -2011,8 +2019,8 @@ function linhaHistoricoHTML(nome, historicoMensal, ppcMedio, tendencia, tecnicoK
             ${h.quartil ? `<span class="badge ${quartilBadgeClasse(h.quartil)}" style="font-size:10px"><span class="dot"></span>${h.quartil}</span>` : ''}
             <div style="font-size:10px;color:var(--ink-faint);margin-top:3px">${h.diasTrabalhados || 0}d trabalhados</div>
             <div style="border-top:1px solid var(--line-soft);margin-top:6px;padding-top:6px;font-size:10px;text-align:left;color:var(--ink-dim)">
-              <div>📉 Improdutividade: <b style="color:${h.improdutividadePct > 5 ? 'var(--crit)' : 'var(--ink)'}">${h.improdutividadePct != null ? h.improdutividadePct.toFixed(1) + '%' : '—'}</b></div>
-              <div>🔁 Recorrência: <b style="color:${h.recorrenciaPct > 5 ? 'var(--crit)' : 'var(--ink)'}">${h.recorrenciaPct != null ? h.recorrenciaPct.toFixed(1) + '%' : '—'}</b>${h.recorrencias ? ` (${h.recorrencias})` : ''}</div>
+              <div>📉 Improdutividade: <b style="color:${corFaixaPct(h.improdutividadePct)}">${h.improdutividadePct != null ? h.improdutividadePct.toFixed(1) + '%' : '—'}</b></div>
+              <div>🔁 Recorrência: <b style="color:${corFaixaPct(h.recorrenciaPct)}">${h.recorrenciaPct != null ? h.recorrenciaPct.toFixed(1) + '%' : '—'}</b>${h.recorrencias ? ` (${h.recorrencias})` : ''}</div>
               <div>⏱ Tempo médio: <b>${formatarHoras(h.tempoMedioAtendimento)}</b></div>
             </div>
           </div>
