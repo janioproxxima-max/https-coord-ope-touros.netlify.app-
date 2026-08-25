@@ -844,6 +844,11 @@ async function initPage(){
     // de gastar essa chamada em toda carga da página.
     await carregarPeriodo();
     popularFiltros();
+    // ?aba=<chave> abre direto numa aba específica (usado pelo atalho de
+    // Produtividade Tempo Real no menu lateral, que embute essa página
+    // inteira num iframe já nessa aba)
+    const abaQuery = new URLSearchParams(location.search).get('aba');
+    if (abaQuery && document.getElementById('go-aba-' + abaQuery)) irParaAba(abaQuery);
   }catch(err){
     console.error('Falha ao buscar dados da Gestão Operacional', err);
     document.getElementById('go-status-info').textContent = '';

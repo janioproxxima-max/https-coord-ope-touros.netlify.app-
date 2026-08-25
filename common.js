@@ -1494,6 +1494,7 @@ async function fetchSheetUsers(){
 const OPS_NAV_LINKS = [
   { href: 'index.html',           label: 'Início',            icon: '📊' },
   { href: 'mapa-servicos.html',    label: 'Mapa de Serviços',   icon: '📍' },
+  { href: 'produtividade-tempo-real.html', label: 'Produtividade Tempo Real', icon: '⚡' },
   { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
   { href: 'gestao-operacional.html', label: 'Gestão Operacional', icon: '🧭' },
   { href: 'alerta.html',           label: 'Alerta',             icon: '🚨' },
@@ -1570,6 +1571,10 @@ function getCurrentAccess(){
 function hasAccess(moduleKey, access){
   if (access === 'TOTAL') return true;
   if (moduleKey === 'index') return true; // sempre pode voltar pro início
+  // Produtividade Tempo Real é uma aba de dentro de Gestão Operacional
+  // promovida pro menu lateral - usa a mesma permissão de lá, sem precisar
+  // cadastrar um acesso novo pra quem já enxerga Gestão Operacional
+  if (moduleKey === 'produtividade-tempo-real') moduleKey = 'gestao-operacional';
   return Array.isArray(access) && access.includes(moduleKey);
 }
 

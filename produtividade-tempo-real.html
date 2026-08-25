@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Produtividade Tempo Real · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="page mapa-full">
+  <div class="page-head">
+    <p class="eyebrow">Gestão operacional</p>
+    <h1 class="page-title">⚡ Produtividade Tempo Real</h1>
+    <p class="page-sub">Mesmo painel da aba "Produtividade Tempo Real" de Gestão Operacional, com atalho direto aqui no menu.</p>
+  </div>
+  <!-- reaproveita a aba de verdade (gestao-operacional.html), num iframe sem
+       sidebar/topbar próprios (?embed=1) - evita duplicar toda a lógica de
+       cálculo (pontos, quartil, PPC etc) numa segunda cópia que ia
+       desatualizar sozinha com o tempo -->
+  <iframe id="ptr-iframe" title="Produtividade Tempo Real"
+    style="flex:1;width:100%;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--bg-raised)"
+    src="gestao-operacional.html?aba=produtividade-tempo-real&embed=1"></iframe>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('produtividade-tempo-real.html', 'Produtividade Tempo Real');
+</script>
+</body>
+</html>
