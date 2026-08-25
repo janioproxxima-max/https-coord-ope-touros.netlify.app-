@@ -1734,16 +1734,22 @@ function mesesEntreDatas(inicioStr, fimStr){
   }
   return chaves;
 }
+// chave "AAAA-MM" do mês corrente - usada como padrão inicial dos filtros
+// de mês (a página sempre abre mostrando o mês atual; "Geral" é uma
+// escolha explícita do usuário pra ver o histórico todo)
+function mesAtualKey(){
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
 function popularSelectMesAbs(){
   const sel = document.getElementById('go-abs-mes');
-  const atual = sel.value;
   const meses = new Set();
   goAusencias.forEach(a => mesesEntreDatas(a.data, a.data).forEach(m => meses.add(m)));
   goAtestados.forEach(a => mesesEntreDatas(a.dataInicio, a.dataFim).forEach(m => meses.add(m)));
   const ordenados = [...meses].sort();
-  sel.innerHTML = '<option value="">Todos os meses</option>' +
+  sel.innerHTML = '<option value="">Geral (todo o histórico)</option>' +
     ordenados.map(m => `<option value="${m}">${formatarMesCurto(m)}</option>`).join('');
-  if (ordenados.includes(atual)) sel.value = atual;
+  if (ordenados.includes(mesAtualKey())) sel.value = mesAtualKey();
 }
 document.getElementById('go-abs-mes').addEventListener('change', renderAbaAbsenteismo);
 
@@ -1828,11 +1834,10 @@ async function carregarERenderAbsenteismoPonto(){
 
 function popularSelectMesAbsenteismo(){
   const sel = document.getElementById('go-abp-mes');
-  const atual = sel.value;
   const meses = [...new Set((goAbsenteismoPonto || []).map(r => r.mes_key))].sort();
-  sel.innerHTML = '<option value="">Todos os meses importados</option>' +
+  sel.innerHTML = '<option value="">Geral (todo o histórico)</option>' +
     meses.map(m => `<option value="${m}">${formatarMesCurto(m)}</option>`).join('');
-  if (meses.includes(atual)) sel.value = atual;
+  if (meses.includes(mesAtualKey())) sel.value = mesAtualKey();
 }
 document.getElementById('go-abp-mes').addEventListener('change', desenharAbaAbsenteismoPonto);
 
