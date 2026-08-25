@@ -3184,7 +3184,7 @@ const INSP_TAREFAS = [
   { chave: 'ferramental', label: 'Ferramental', icon: '🧰', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
   { chave: 'sesmt', label: 'Medidas SESMT', icon: '🦺', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'log' },
   { chave: 'recorrencia', label: 'Recorrência', icon: '🔁', meta: 7, sufixo: 'meta relativa', tipo: 'existente' },
-  { chave: 'lavagens', label: 'Levagens', icon: '💧', meta: 1, sufixo: 'por equipe/semana', tipo: 'existente', escalaPorEquipe: true },
+  { chave: 'lavagens', label: 'Lavagens', icon: '💧', meta: null, sufixo: 'veículos lavados no mês', tipo: 'existente', coberturaMensal: true },
   { chave: 'manutencao', label: 'Manutenção', icon: '🔧', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'existente' },
 ];
 // Checklist inicial (proposta) pra cada tipo - dá pra ajustar os itens
@@ -3214,23 +3214,38 @@ function desenharTarefasInspetor(){
 
   const veiculosMeu = (goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === goInspSelecionado);
   const placasMeu = new Set(veiculosMeu.map(v => v.placa));
-  const lavagensSemana = (goLavagens||[]).filter(l => placasMeu.has(l.placa) && diaKey(l.data) >= goInspSemanaInicioStr && diaKey(l.data) <= goInspSemanaFimStr).length;
+  // meta de lavagem é mensal: cada veículo da equipe precisa ser lavado ao
+  // menos 1x no mês corrente (não é uma cota semanal por equipe)
+  const mesAtualLavagem = mesAtualKey();
+  const placasLavadasMes = new Set((goLavagens||[])
+    .filter(l => placasMeu.has(l.placa) && diaKey(l.data).slice(0,7) === mesAtualLavagem)
+    .map(l => l.placa));
+  const lavagensCobertura = { cobertos: placasLavadasMes.size, total: placasMeu.size };
   const manutMeu = (goManutencoes||[]).filter(m => m.status === 'aberta' && placasMeu.has(m.placa)).length;
 
   const contarAuditorias = tipo => goInspAuditorias.filter(a => a.tipo === tipo && a.inspetor === goInspSelecionado).length;
   const valores = {
     interna: contarAuditorias('interna'), pos_atendimento: contarAuditorias('pos_atendimento'),
     durante_atendimento: contarAuditorias('durante_atendimento'), ferramental: contarAuditorias('ferramental'),
-    sesmt: contarAuditorias('sesmt'), recorrencia: pctRecorrencia, lavagens: lavagensSemana, manutencao: manutMeu,
+    sesmt: contarAuditorias('sesmt'), recorrencia: pctRecorrencia, lavagens: lavagensCobertura, manutencao: manutMeu,
   };
 
   const equipes = numEquipesInspetor(goInspSelecionado);
   container.innerHTML = INSP_TAREFAS.map(t => {
     const valor = valores[t.chave];
     const ehPct = t.chave === 'recorrencia';
-    const valorTexto = ehPct ? fmtPct1(valor) : fmtNum(valor);
+    let valorTexto = ehPct ? fmtPct1(valor) : fmtNum(valor);
     let cor, metaTexto;
-    if (t.meta == null){
+    if (t.coberturaMensal){
+      const { cobertos, total } = valor;
+      valorTexto = `${fmtNum(cobertos)}/${fmtNum(total)}`;
+      if (!total){ cor = 'neutral'; metaTexto = 'Sem veículo cadastrado na equipe'; }
+      else {
+        const minimo = Math.ceil(total * 0.7);
+        cor = cobertos >= total ? 'ok' : (cobertos >= minimo ? 'warn' : 'crit');
+        metaTexto = `Meta: ${total}/${total} veículo(s) · mín. 70% = ${minimo}`;
+      }
+    } else if (t.meta == null){
       cor = 'neutral'; metaTexto = 'Sem meta';
     } else if (ehPct){
       cor = valor <= t.meta ? 'ok' : 'crit';
