@@ -303,6 +303,7 @@
             <option value="folga">Folga</option>
             <option value="escala">Alteração de Escala</option>
             <option value="reuniao">Reunião 1:1</option>
+            <option value="atestado">Registro de Atestado</option>
           </select>
         </div>
 
@@ -354,6 +355,26 @@
               <option value="Supervisão e Coordenação">Supervisão e Coordenação</option>
               <option value="Apenas Coordenação">Apenas Coordenação</option>
             </select>
+          </div>
+        </div>
+
+        <div id="mj-n-bloco-gestao-atestado" style="display:none">
+          <div class="grid2">
+            <div class="field">
+              <label>Possui CID?</label>
+              <select id="mj-n-gestao-atestado-cid-tem">
+                <option value="nao">Não</option>
+                <option value="sim">Sim</option>
+              </select>
+            </div>
+            <div class="field" id="mj-n-bloco-gestao-atestado-cid" style="display:none">
+              <label>Código CID</label>
+              <input class="input" id="mj-n-gestao-atestado-cid" placeholder="Ex: M54.5">
+            </div>
+          </div>
+          <div class="field">
+            <label>Quantidade de dias</label>
+            <input class="input" type="number" min="1" id="mj-n-gestao-atestado-dias">
           </div>
         </div>
       </div>
@@ -512,7 +533,7 @@ const MJ_TRANSICOES = {
 const MJ_MODULO_LABEL = { material: 'Problema de Campo', frotas: 'Frotas', acesso: 'Problema com Acesso', reclamacao: 'Reclamação', gestao: 'Gestão', pagamento: 'Pagamento' };
 const MJ_MODULOS_TECNICO = ['material', 'frotas', 'acesso', 'reclamacao'];
 const MJ_MODULOS_SUPERVISAO = [...MJ_MODULOS_TECNICO, 'gestao', 'pagamento'];
-const MJ_GESTAO_TIPO_LABEL = { ferias: 'Férias', folga: 'Folga', escala: 'Alteração de Escala', reuniao: 'Reunião 1:1' };
+const MJ_GESTAO_TIPO_LABEL = { ferias: 'Férias', folga: 'Folga', escala: 'Alteração de Escala', reuniao: 'Reunião 1:1', atestado: 'Registro de Atestado' };
 const MJ_GESTAO_MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MJ_GESTAO_QUINZENA_LABEL = { q1: '1ª quinzena', q2: '2ª quinzena', inteiro: 'Mês inteiro' };
 const MJ_PAGAMENTO_TIPO_LABEL = { frotas: 'Frotas', campo: 'Campo' };
@@ -527,6 +548,7 @@ function detalheGestao(t){
   if (t.tipoGestao === 'folga') return `${t.folgaDia || '—'} de ${MJ_GESTAO_MESES[Number(t.folgaMes)] || '—'}`;
   if (t.tipoGestao === 'escala') return t.escalaMotivo || '—';
   if (t.tipoGestao === 'reuniao') return `${t.reuniaoTema || '—'} — ${t.reuniaoParticipantes || '—'}`;
+  if (t.tipoGestao === 'atestado') return `${t.atestadoDias || '—'} dia(s)${t.atestadoPossuiCid ? ` — CID ${t.atestadoCid || '—'}` : ' — sem CID'}`;
   return '—';
 }
 const MJ_CATEGORIA_LABEL = {
@@ -563,6 +585,7 @@ function ticketParaSupabase(t){
     tipo_gestao: t.tipoGestao, ferias_mes: t.feriasMes, ferias_quinzena: t.feriasQuinzena,
     folga_dia: t.folgaDia, folga_mes: t.folgaMes, escala_motivo: t.escalaMotivo,
     reuniao_tema: t.reuniaoTema, reuniao_participantes: t.reuniaoParticipantes,
+    atestado_possui_cid: t.atestadoPossuiCid, atestado_cid: t.atestadoCid, atestado_dias: t.atestadoDias,
     tipo_pagamento: t.tipoPagamento, pagamento_quem_pediu: t.pagamentoQuemPediu,
   };
 }
@@ -579,6 +602,7 @@ function ticketDeSupabase(r){
     tipoGestao: r.tipo_gestao, feriasMes: r.ferias_mes, feriasQuinzena: r.ferias_quinzena,
     folgaDia: r.folga_dia, folgaMes: r.folga_mes, escalaMotivo: r.escala_motivo,
     reuniaoTema: r.reuniao_tema, reuniaoParticipantes: r.reuniao_participantes,
+    atestadoPossuiCid: r.atestado_possui_cid, atestadoCid: r.atestado_cid, atestadoDias: r.atestado_dias,
     tipoPagamento: r.tipo_pagamento, pagamentoQuemPediu: r.pagamento_quem_pediu,
   };
 }
@@ -925,15 +949,24 @@ function atualizarCamposPcEstoqueProblema(){
 document.getElementById('mj-n-pc-tipo').addEventListener('change', atualizarCamposPcTipo);
 document.getElementById('mj-n-pc-estoque-problema').addEventListener('change', atualizarCamposPcEstoqueProblema);
 
-// ---------- Gestão: Férias × Folga × Alteração de Escala × Reunião 1:1 ----------
+// ---------- Gestão: Férias × Folga × Alteração de Escala × Reunião 1:1 × Registro de Atestado ----------
 function atualizarCamposGestaoTipo(){
   const tipo = document.getElementById('mj-n-gestao-tipo').value;
   document.getElementById('mj-n-bloco-gestao-ferias').style.display = tipo === 'ferias' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-gestao-folga').style.display = tipo === 'folga' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-gestao-escala').style.display = tipo === 'escala' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-gestao-reuniao').style.display = tipo === 'reuniao' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-gestao-atestado').style.display = tipo === 'atestado' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-evidencia').style.display = (document.getElementById('mj-n-modulo').value === 'material' || document.getElementById('mj-n-modulo').value === 'pagamento' || tipo === 'atestado') ? 'block' : 'none';
+  atualizarCamposGestaoAtestadoCid();
 }
 document.getElementById('mj-n-gestao-tipo').addEventListener('change', atualizarCamposGestaoTipo);
+
+function atualizarCamposGestaoAtestadoCid(){
+  const temCid = document.getElementById('mj-n-gestao-atestado-cid-tem').value === 'sim';
+  document.getElementById('mj-n-bloco-gestao-atestado-cid').style.display = temCid ? 'block' : 'none';
+}
+document.getElementById('mj-n-gestao-atestado-cid-tem').addEventListener('change', atualizarCamposGestaoAtestadoCid);
 
 // ---------- Pagamento: Frotas × Campo ----------
 function atualizarCamposPagamentoTipo(){
@@ -1020,6 +1053,13 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
       const tema = document.getElementById('mj-n-gestao-reuniao-tema').value.trim();
       if (!tema){ alert('Descreva o tema da reunião.'); return; }
       gestaoCampos = { reuniaoTema: tema, reuniaoParticipantes: document.getElementById('mj-n-gestao-reuniao-participantes').value };
+    } else if (gestaoTipo === 'atestado'){
+      const temCid = document.getElementById('mj-n-gestao-atestado-cid-tem').value === 'sim';
+      const cid = temCid ? document.getElementById('mj-n-gestao-atestado-cid').value.trim() : '';
+      const dias = document.getElementById('mj-n-gestao-atestado-dias').value;
+      if (temCid && !cid){ alert('Preencha o código CID ou marque "Não" se o atestado não tem CID.'); return; }
+      if (!dias || Number(dias) < 1){ alert('Preencha a quantidade de dias do atestado.'); return; }
+      gestaoCampos = { atestadoPossuiCid: temCid, atestadoCid: cid, atestadoDias: Number(dias) };
     }
   }
 
@@ -1058,6 +1098,9 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
     escalaMotivo: gestaoCampos ? gestaoCampos.escalaMotivo || null : null,
     reuniaoTema: gestaoCampos ? gestaoCampos.reuniaoTema || null : null,
     reuniaoParticipantes: gestaoCampos ? gestaoCampos.reuniaoParticipantes || null : null,
+    atestadoPossuiCid: gestaoCampos && gestaoTipo === 'atestado' ? gestaoCampos.atestadoPossuiCid : null,
+    atestadoCid: gestaoCampos ? gestaoCampos.atestadoCid || null : null,
+    atestadoDias: gestaoCampos ? gestaoCampos.atestadoDias || null : null,
     tipoPagamento: modulo === 'pagamento' ? pagTipo : null,
     pagamentoQuemPediu: modulo === 'pagamento' && pagTipo === 'frotas' ? document.getElementById('mj-n-pag-quempediu').value : null,
     descricao: document.getElementById('mj-n-descricao').value.trim(),
