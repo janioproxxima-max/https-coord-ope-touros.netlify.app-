@@ -301,6 +301,13 @@ table.services thead th:hover{ color:var(--ink); }
 table.services tbody td{
   padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:middle;
 }
+/* tabela com muitas colunas (ex: Produtividade Tempo Real) - mais compacta
+   pra caber tudo sem precisar arrastar horizontalmente */
+table.services.compact{ font-size:11.5px; }
+table.services.compact thead th{
+  padding:7px 6px; font-size:9.5px; white-space:normal; line-height:1.25;
+}
+table.services.compact tbody td{ padding:6px 6px; white-space:nowrap; }
 table.services tbody tr:hover{ background:var(--bg-panel-2); }
 .proto{ font-family:var(--f-display); color:var(--ink-dim); font-size:12.5px; }
 table.services td.proto{ cursor:pointer; }

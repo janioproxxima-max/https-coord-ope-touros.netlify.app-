@@ -514,15 +514,9 @@
     <div class="stat-row" id="go-ptr-resumo-cards" style="margin-bottom:18px"></div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3><span class="cnt-badge" id="go-pt-hoje-badge">—</span></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado). O filtro de Supervisor lá em cima também filtra a tabela — clique num quadrado pra aplicar.</p>
+      <div class="card-head"><h3>🎯 Pontuação do dia × meta (8 pts)</h3></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só colaboradores ativos hoje (sem folga, sem atestado) - % da equipe que já bateu a meta, por supervisor. O detalhe pessoa a pessoa está no painel abaixo.</p>
       <div class="sla-grid" id="go-pt-hoje-supervisor-cards" style="margin:0 16px 14px"></div>
-      <div class="table-wrap" style="max-height:520px">
-        <table class="services">
-          <thead><tr><th>Colaborador</th><th>Cidade</th><th>Supervisor</th><th>Pontos hoje</th><th>Faltam pra meta</th></tr></thead>
-          <tbody id="go-pt-hoje-tbody"></tbody>
-        </table>
-      </div>
     </div>
 
     <div class="card">
@@ -530,14 +524,14 @@
         <h3>⚡ Painel por colaborador (tempo real)</h3><span class="cnt-badge" id="go-ptr-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-ptr-tbody" data-arquivo="produtividade-tempo-real" data-sheet="Tempo Real" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Placa/Cidade/Supervisor vêm da Gestão de Pessoas. Pontos de Instalação/Reparo/Recolhimento e horários são de hoje; Pontos Mês e PPC são do mês atual.</p>
-      <div class="table-wrap" style="max-height:600px">
-        <table class="services">
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Placa/Cidade/Supervisor vêm da Gestão de Pessoas. Pts. Instalação/Reparo/Recolhimento e horários são de hoje; Pontos Mês (soma do mês atual) e PPC são do mês atual.</p>
+      <div class="table-wrap" style="max-height:600px;overflow-x:hidden">
+        <table class="services compact">
           <thead><tr>
-            <th>Equipe</th><th>Placa</th><th>Cidade</th><th>Supervisor</th><th>Quartil (mês)</th>
-            <th>Pts. Instalação</th><th>Pts. Reparo</th><th>Pts. Recolhimento</th><th>Pontos Dia</th>
-            <th>Pontos Dia Anterior</th><th>Pontos Mês</th><th>PPC</th><th>Improd. Hoje</th>
-            <th>1º Deslocamento</th><th>Último Concluído</th>
+            <th>Equipe</th><th>Placa</th><th>Cidade</th><th>Supervisor</th><th>Quartil mês</th>
+            <th>Instal.</th><th>Reparo</th><th>Recol.</th><th>Pts. Dia</th>
+            <th>Pts. Dia Ant.</th><th>Pts. Mês</th><th>PPC</th><th>Improd.</th>
+            <th>1º Desloc.</th><th>Últ. Concl.</th>
           </tr></thead>
           <tbody id="go-ptr-tbody"></tbody>
         </table>
@@ -3217,18 +3211,6 @@ async function renderPontosHoje(){
     });
   });
 
-  // tabela: respeita o filtro de Supervisor do topo da página
-  const supervisorFiltro = document.getElementById('go-f-supervisor').value;
-  const linhas = (supervisorFiltro
-    ? linhasTodas.filter(l => OPS.normalize(l.supervisor) === OPS.normalize(supervisorFiltro))
-    : linhasTodas
-  ).sort((a,b) => a.pontos - b.pontos);
-
-  document.getElementById('go-pt-hoje-badge').textContent = `${fmtNum(linhas.length)} ativo(s) hoje`;
-  document.getElementById('go-pt-hoje-tbody').innerHTML = linhas.map(l => `<tr>
-    <td>${tituloCase(l.tecnico)}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
-    <td>${l.pontos.toFixed(2)}</td><td>${Math.max(0, META_PONTOS_DIA - l.pontos).toFixed(2)}</td>
-  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Nenhum colaborador ativo agora.</td></tr>`;
 }
 
 // ================= ABA PRODUTIVIDADE TEMPO REAL =================
@@ -3360,7 +3342,11 @@ async function desenharProdutividadeTempoReal(){
   // monta a partir do roster de Gestão de Pessoas, pra trazer todo mundo
   // ativo (com Placa/Cidade/Supervisor) mesmo quem não teve nenhum
   // atendimento hoje ainda
-  const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo');
+  // respeita o filtro de Supervisor do topo da página (inclusive o clique
+  // nos quadrados de % da meta, que escreve nesse mesmo campo)
+  const supervisorFiltro = document.getElementById('go-f-supervisor').value;
+  const roster = (goPessoasCache || []).filter(p => p.nome && ehInstaladorReparador(p.nome) && p.status === 'ativo'
+    && (!supervisorFiltro || OPS.normalize(p.gestor || '') === OPS.normalize(supervisorFiltro)));
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
   const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
   const linhas = roster.map(p => {
@@ -3382,7 +3368,7 @@ async function desenharProdutividadeTempoReal(){
 
   document.getElementById('go-ptr-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   document.getElementById('go-ptr-tbody').innerHTML = linhas.map(l => `<tr>
-    <td>${tituloCase(l.nome)}</td><td>${l.placa}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
+    <td>${nomeCurto2(l.nome)}</td><td>${l.placa}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
     <td>${l.quartil ? `<span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º</span>` : '—'}</td>
     <td>${l.pontosInstalacao.toFixed(2)}</td><td>${l.pontosReparo.toFixed(2)}</td><td>${l.pontosRecolhimento.toFixed(2)}</td>
     <td><span class="badge ${corPontosDia(l.pontosDia)}"><span class="dot"></span>${l.pontosDia.toFixed(2)}</span></td>
