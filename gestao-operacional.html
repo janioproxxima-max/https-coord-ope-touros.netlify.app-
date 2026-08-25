@@ -657,6 +657,17 @@
   </div>
 </div>
 
+<!-- Modal: histórico mensal de um card da aba Cards Geral (janeiro até o mês
+     atual, independente do período selecionado no topo da página) -->
+<div class="modal-backdrop" id="go-modal-historico-card" style="display:none">
+  <div class="modal" style="max-width:min(720px,92vw)">
+    <h3 id="go-historico-card-titulo">🕐 Histórico</h3>
+    <p class="modal-sub" id="go-historico-card-sub">Janeiro até o mês atual, mês a mês.</p>
+    <div class="chart-box tall"><canvas id="go-chart-historico-card"></canvas></div>
+    <div class="modal-actions"><button type="button" class="btn ghost" id="go-btn-fechar-historico-card">Fechar</button></div>
+  </div>
+</div>
+
 <!-- Modal: tratar chamado do Mundo Jira sem sair da Gestão Operacional (embute
      mundo-jira.html num iframe, já com o ticket certo aberto) -->
 <div class="modal-backdrop" id="go-modal-ticket" style="display:none">
@@ -1057,7 +1068,10 @@ async function renderAbaCardsGeral(){
   ];
 
   container.innerHTML = cards.map(c => `<div class="sla-card ${c.cor}" style="cursor:pointer;position:relative" data-card="${c.key}" title="Clique pra ir pra aba com essa informação">
-    ${c.verAnalitico ? `<button type="button" class="icon-btn" data-analitico="${c.key}" title="Ver analítico" style="position:absolute;top:8px;right:8px;font-size:12px">📋</button>` : ''}
+    <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px">
+      ${c.verAnalitico ? `<button type="button" class="icon-btn" data-analitico="${c.key}" title="Ver analítico" style="font-size:12px">📋</button>` : ''}
+      <button type="button" class="icon-btn" data-historico="${c.key}" title="Ver histórico (jan-atual)" style="font-size:12px">🕐</button>
+    </div>
     <div class="sla-label">${c.label}</div>
     <div class="sla-value">${c.valor}</div>
     <div class="sla-meta">${c.meta}</div>
@@ -1066,6 +1080,123 @@ async function renderAbaCardsGeral(){
   container.querySelectorAll('[data-analitico]').forEach(btn => {
     const c = cards.find(x => x.key === btn.dataset.analitico);
     btn.addEventListener('click', (e) => { e.stopPropagation(); c.verAnalitico(); });
+  });
+  container.querySelectorAll('[data-historico]').forEach(btn => {
+    const c = cards.find(x => x.key === btn.dataset.historico);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); abrirHistoricoCard(c.key, c.label); });
+  });
+}
+
+// -------- Histórico mensal dos cards (janeiro até o mês atual) --------
+// Independente do período/supervisor/cidade selecionado no topo - busca uma
+// vez só (cacheada) os registros/pares do ano corrente inteiro, porque os
+// cards em si usam goRegistros/goPares já recortados pelo período escolhido
+// (carregarPeriodo busca só o intervalo selecionado direto no Supabase).
+let goHistoricoAnoRegistros = null, goHistoricoAnoPares = null;
+async function carregarHistoricoAnoSeNecessario(){
+  if (goHistoricoAnoRegistros !== null) return;
+  const inicioAno = `${new Date().getFullYear()}-01-01`;
+  const [regs, pares] = await Promise.all([
+    OPS_SUPABASE.select('produtividade_registros', `data_encerramento=gte.${inicioAno}T00:00:00.000Z`),
+    OPS_SUPABASE.select('produtividade_pares_recorrencia', `data_atual=gte.${inicioAno}T00:00:00.000Z`),
+  ]);
+  goHistoricoAnoRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
+  goHistoricoAnoPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
+}
+function mesesDoAnoAteAgora(){
+  const hoje = new Date();
+  const meses = [];
+  for (let m = 1; m <= hoje.getMonth() + 1; m++) meses.push(`${hoje.getFullYear()}-${String(m).padStart(2,'0')}`);
+  return meses;
+}
+const CARDS_GERAL_EH_PCT = new Set(['sla-geral','sla-reparo','sla-sa','sla-ativacao','sla-mde','recorrencia','recorrencia-log','improdutividade','absenteismo']);
+function serieHistoricoCard(key){
+  const meses = mesesDoAnoAteAgora();
+  const regsAno = dedupePorProtocolo(goHistoricoAnoRegistros || []);
+  const paresAno = goHistoricoAnoPares || [];
+  if (key.startsWith('sla-')){
+    const grupo = key.replace('sla-', '');
+    return meses.map(mes => {
+      const doMes = regsAno.filter(r => diaKey(r.data_encerramento).slice(0,7) === mes);
+      const elegiveis = doMes.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
+      const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true).length;
+      return { mes, valor: elegiveis.length ? (dentro/elegiveis.length)*100 : 0 };
+    });
+  }
+  if (key === 'recorrencia'){
+    return meses.map(mes => {
+      const produtivosMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && diaKey(r.data_encerramento).slice(0,7) === mes).length;
+      const paresMes = paresAno.filter(p => ehInstaladorReparador(p.tecnico) && diaKey(p.data_atual).slice(0,7) === mes).length;
+      return { mes, valor: produtivosMes ? (paresMes/produtivosMes)*100 : 0 };
+    });
+  }
+  if (key === 'recorrencia-log'){
+    return meses.map(mes => {
+      const doMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.cliente_id && diaKey(r.data_encerramento).slice(0,7) === mes);
+      const porCliente = {};
+      doMes.forEach(r => { porCliente[r.cliente_id] = (porCliente[r.cliente_id]||0) + 1; });
+      const total = Object.keys(porCliente).length;
+      const recorrentes = Object.values(porCliente).filter(q => q >= 2).length;
+      return { mes, valor: total ? (recorrentes/total)*100 : 0 };
+    });
+  }
+  if (key === 'improdutividade'){
+    return meses.map(mes => {
+      const doMes = regsAno.filter(r => ehInstaladorReparador(r.tecnico) && diaKey(r.data_encerramento).slice(0,7) === mes);
+      const improd = doMes.length - doMes.filter(isProdutivo).length;
+      return { mes, valor: doMes.length ? (improd/doMes.length)*100 : 0 };
+    });
+  }
+  if (key === 'lavagens'){
+    return meses.map(mes => ({ mes, valor: (goLavagens||[]).filter(l => diaKey(l.data).slice(0,7) === mes).length }));
+  }
+  if (key === 'manutencao'){
+    // "em manutenção agora" é um estado atual, sem histórico por mês - usa
+    // manutenções ABERTAS naquele mês como proxy do volume histórico
+    return meses.map(mes => ({ mes, valor: (goManutencoes||[]).filter(m => diaKey(m.dataAbertura).slice(0,7) === mes).length }));
+  }
+  if (key === 'absenteismo'){
+    return meses.map(mes => {
+      const doMes = (goAbsenteismoPonto||[]).filter(r => r.mes_key === mes);
+      const prev = doMes.reduce((a,r) => a+(r.horas_previstas||0), 0);
+      const aus = doMes.reduce((a,r) => a+ausenciaRelevante(r), 0);
+      return { mes, valor: prev ? (aus/prev)*100 : 0 };
+    });
+  }
+  if (key.startsWith('auditoria-')){
+    const tipo = key.replace('auditoria-', '');
+    return meses.map(mes => ({ mes, valor: (goAuditoriasGeral||[]).filter(a => a.tipo === tipo && diaKey(a.data).slice(0,7) === mes).length }));
+  }
+  if (key === 'tickets'){
+    return meses.map(mes => ({ mes, valor: (goTickets||[]).filter(t => diaKey(t.criado_em).slice(0,7) === mes).length }));
+  }
+  return meses.map(mes => ({ mes, valor: 0 }));
+}
+async function abrirHistoricoCard(key, label){
+  document.getElementById('go-historico-card-titulo').textContent = `🕐 Histórico — ${label}`;
+  const subEl = document.getElementById('go-historico-card-sub');
+  const primeiraVez = goHistoricoAnoRegistros === null;
+  subEl.textContent = primeiraVez
+    ? 'Buscando o ano inteiro (só na primeira vez) - pode levar até 1 minuto...'
+    : 'Janeiro até o mês atual, mês a mês.';
+  document.getElementById('go-modal-historico-card').style.display = 'flex';
+  await carregarHistoricoAnoSeNecessario();
+  subEl.textContent = 'Janeiro até o mês atual, mês a mês.';
+  const serie = serieHistoricoCard(key);
+  const ehPct = CARDS_GERAL_EH_PCT.has(key);
+  if (goCharts.historicoCard) goCharts.historicoCard.destroy();
+  goCharts.historicoCard = new Chart(document.getElementById('go-chart-historico-card'), {
+    type: 'bar',
+    data: { labels: serie.map(s => formatarMesCurto(s.mes)), datasets: [{ label, data: serie.map(s => s.valor), backgroundColor: '#00d4ff' }] },
+    plugins: [ChartDataLabels],
+    options: { ...commonChartOpts,
+      scales: {
+        y: { beginAtZero:true, ticks:{ color:'#8a97ab', callback: v => ehPct ? v+'%' : v }, grid:{ color:'#1e2d47' } },
+        x: { ticks:{ color:'#8a97ab' }, grid:{ display:false } },
+      },
+      plugins: { legend:{ display:false },
+        datalabels: { color:'#e2eaf5', anchor:'end', align:'top', font:{ weight:'700', size:10.5 }, formatter: v => ehPct ? v.toFixed(1)+'%' : fmtNum(v) } },
+    },
   });
 }
 
