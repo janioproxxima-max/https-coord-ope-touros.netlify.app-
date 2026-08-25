@@ -1184,8 +1184,11 @@ function renderTop5(data){
 // mais no Supabase, já que os dados já estão carregados na aba.
 function renderAberturaReparo(data){
   const badge = document.getElementById('go-reparo-badge');
-  const reparosAbertos = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && r.data_criacao);
-  const semDataCriacao = data.filter(r => grupoSlaDoTipo(r.tipo) === 'reparo' && !r.data_criacao).length;
+  // isProdutivo exclui os improdutivos que só existem por causa de uma
+  // massiva (cliente em massiva aberta/fechada etc.) - esses não são reparo
+  // de verdade, então não podem inflar a contagem de abertura nem o SLA.
+  const reparosAbertos = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && r.data_criacao);
+  const semDataCriacao = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'reparo' && !r.data_criacao).length;
 
   const porDia = {};
   reparosAbertos.forEach(r => { const d = diaKey(r.data_criacao); porDia[d] = (porDia[d] || 0) + 1; });
