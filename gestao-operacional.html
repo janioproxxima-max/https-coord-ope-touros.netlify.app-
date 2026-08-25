@@ -1206,6 +1206,12 @@ async function abrirHistoricoCard(key, label){
     },
   });
 }
+document.getElementById('go-btn-fechar-historico-card').addEventListener('click', () => {
+  document.getElementById('go-modal-historico-card').style.display = 'none';
+});
+document.getElementById('go-modal-historico-card').addEventListener('click', (e) => {
+  if (e.target.id === 'go-modal-historico-card') document.getElementById('go-modal-historico-card').style.display = 'none';
+});
 
 // ================= ABA SERVIÇOS =================
 // Cada protocolo fechado com Responsável E Técnico Auxiliar vira duas linhas
