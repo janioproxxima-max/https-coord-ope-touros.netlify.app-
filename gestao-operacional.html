@@ -3245,10 +3245,13 @@ async function desenharProdutividadeTempoReal(){
   // visão de pontos do dia (não mexe no SLA, que continua com os grupos
   // separados)
   const TIPOS_REPARO_GERAL = new Set([...SLA_GROUPS.reparo.tipos, ...SLA_GROUPS.sa.tipos]);
-  const ehInstalacao = r => grupoSlaDoTipo(r.tipo) === 'ativacao';
-  const ehRecolhimento = r => (r.tipo || '').toUpperCase() === 'RECOLHIMENTO';
-  const ehReparoGeral = r => TIPOS_REPARO_GERAL.has((r.tipo || '').toUpperCase());
-  const ehMudancaEndereco = r => grupoSlaDoTipo(r.tipo) === 'mde';
+  // só conta o que foi PRODUTIVO - reagendamento, cliente desistiu etc são
+  // improdutivos do mesmo tipo (ex: ativação) e não podem entrar como
+  // "serviço feito" nem nos pontos por categoria
+  const ehInstalacao = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'ativacao';
+  const ehRecolhimento = r => isProdutivo(r) && (r.tipo || '').toUpperCase() === 'RECOLHIMENTO';
+  const ehReparoGeral = r => isProdutivo(r) && TIPOS_REPARO_GERAL.has((r.tipo || '').toUpperCase());
+  const ehMudancaEndereco = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) === 'mde';
 
   const porTecnico = {};
   function pegaTecnico(nome){
