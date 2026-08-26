@@ -57,7 +57,12 @@
 
   <!-- ================= ABA: CARDS GERAL ================= -->
   <div id="go-aba-cards-geral" style="display:none">
-    <p class="page-sub" style="margin:0 0 14px">Visão geral de todos os indicadores no período/filtro selecionado acima - clique num card pra ver o analítico (ou a aba de origem daquele indicador).</p>
+    <div class="sec-hdr" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="page-sub" style="margin:0">Visão geral de todos os indicadores no período/filtro selecionado acima - clique num card pra ver o analítico (ou a aba de origem daquele indicador).</span>
+      <button type="button" class="btn ghost" id="go-btn-import-abertura-zaaz" style="margin-left:auto;font-size:11px;padding:5px 10px;white-space:nowrap">📥 Importar abertura real (Zaaz)</button>
+      <input type="file" id="go-input-import-abertura-zaaz" accept=".xlsx,.xls" style="display:none">
+    </div>
+    <p class="page-sub" id="go-import-abertura-zaaz-status" style="margin:6px 0 14px;font-size:11.5px"></p>
     <div class="sla-grid" id="go-geral-cards"></div>
   </div>
 
@@ -1164,6 +1169,120 @@ async function renderAbaCardsGeral(){
   });
 }
 
+// -------- Importação: abertura real dos reparos (relatório da Zaaz) --------
+// O SLA de Reparo usa data_criacao como "abertura", mas esse campo vem da
+// planilha de produtividade e reflete quando o técnico foi despachado, não
+// quando o cliente abriu o chamado de fato - um chamado pode ficar horas/dias
+// na fila antes de alguém pegar, e esse tempo não entrava na conta do SLA
+// (o site ficava sempre "melhor" que a realidade). Esse import traz a "Data
+// Hora Abertura" de verdade do relatório de reparos da Zaaz (casando por
+// protocolo) pra um campo à parte (data_abertura_real), sem mexer em
+// data_criacao (que outras contas tipo TMA/exports continuam usando como
+// estava). horasAbertura() passa a preferir esse campo quando existir.
+const MESES_PT_ABREV = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
+function parseDataHoraZaaz(s){
+  // formato da planilha da Zaaz: "30-jul-2026 17:11:17"
+  const m = String(s || '').trim().match(/^(\d{1,2})-([a-zç]{3})-(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/i);
+  if (!m) return null;
+  const mesIndex = MESES_PT_ABREV[m[2].toLowerCase()];
+  if (mesIndex == null) return null;
+  // mesmo "truque de fuso" usado no resto do app: grava a hora local da
+  // planilha disfarçada de UTC, pra bater com data_criacao/data_encerramento
+  return new Date(Date.UTC(+m[3], mesIndex, +m[1], +m[4], +m[5], +m[6])).toISOString();
+}
+async function importarAberturaReparosZaaz(rows){
+  const statusEl = document.getElementById('go-import-abertura-zaaz-status');
+  const btn = document.getElementById('go-btn-import-abertura-zaaz');
+  if (!rows || rows.length < 2){ statusEl.textContent = '⚠️ Planilha vazia.'; return; }
+  const header = rows[0];
+  const idx = nomes => header.findIndex(h => nomes.some(n => OPS.normalize(h) === OPS.normalize(n)));
+  const iProtocolo = idx(['ID Protocolo | Proxxima', 'ID Protocolo']);
+  const iAbertura = idx(['Data|Hora Abertura', 'Data/Hora Abertura', 'Data Hora Abertura']);
+  const iFechamento = idx(['Data|Hora Fechamento', 'Data/Hora Fechamento', 'Data Hora Fechamento']);
+  if (iProtocolo < 0 || iAbertura < 0){
+    statusEl.textContent = '⚠️ Não achei as colunas "ID Protocolo" e "Data|Hora Abertura" nessa planilha.';
+    return;
+  }
+
+  const aberturaPorProtocolo = {};
+  const fechamentos = [];
+  for (let i = 1; i < rows.length; i++){
+    const r = rows[i];
+    const protocolo = (r[iProtocolo] || '').trim();
+    if (!protocolo) continue;
+    const iso = parseDataHoraZaaz(r[iAbertura]);
+    if (iso) aberturaPorProtocolo[protocolo] = iso;
+    if (iFechamento >= 0){
+      const isoFech = parseDataHoraZaaz(r[iFechamento]);
+      if (isoFech) fechamentos.push(isoFech);
+    }
+  }
+  const protocolosValidos = Object.keys(aberturaPorProtocolo);
+  if (!protocolosValidos.length){
+    statusEl.textContent = '⚠️ Nenhuma linha com protocolo e data de abertura válidos.';
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = `Buscando registros de ${fmtNum(protocolosValidos.length)} protocolo(s) no site...`;
+  try{
+    // estreita a busca pelo intervalo de fechamento coberto pela planilha
+    // (em vez de trazer a tabela inteira) - dá uma folga de 1 dia pros dois
+    // lados por segurança de fuso/borda
+    let filtroData = '';
+    if (fechamentos.length){
+      const min = fechamentos.reduce((a,b) => a < b ? a : b);
+      const max = fechamentos.reduce((a,b) => a > b ? a : b);
+      const desde = new Date(new Date(min).getTime() - 86400000).toISOString();
+      const ate = new Date(new Date(max).getTime() + 2 * 86400000).toISOString();
+      filtroData = `data_encerramento=gte.${desde}&data_encerramento=lt.${ate}`;
+    }
+    const existentes = await OPS_SUPABASE.select('produtividade_registros', filtroData || null, 'id,protocolo') || [];
+
+    const idsPorProtocoloBase = {};
+    existentes.forEach(r => {
+      if (!r.protocolo) return;
+      const base = r.protocolo.split('/')[0];
+      if (!(base in aberturaPorProtocolo)) return;
+      (idsPorProtocoloBase[base] = idsPorProtocoloBase[base] || []).push(r.id);
+    });
+
+    const payload = [];
+    let protocolosSemMatch = 0;
+    protocolosValidos.forEach(base => {
+      const ids = idsPorProtocoloBase[base];
+      if (!ids || !ids.length){ protocolosSemMatch++; return; }
+      ids.forEach(id => payload.push({ id, data_abertura_real: aberturaPorProtocolo[base] }));
+    });
+
+    if (!payload.length){
+      statusEl.textContent = `⚠️ Nenhum dos ${fmtNum(protocolosValidos.length)} protocolo(s) da planilha bateu com registros no site (conferi de ${filtroData ? 'acordo com o período da planilha' : 'toda a tabela'}).`;
+      return;
+    }
+
+    statusEl.textContent = `Atualizando ${fmtNum(payload.length)} registro(s)...`;
+    for (let i = 0; i < payload.length; i += 500){
+      await OPS_SUPABASE.upsert('produtividade_registros', payload.slice(i, i + 500), 'id');
+    }
+
+    statusEl.textContent = `✅ ${fmtNum(payload.length)} registro(s) atualizado(s) com a abertura real (${fmtNum(protocolosValidos.length - protocolosSemMatch)} de ${fmtNum(protocolosValidos.length)} protocolo(s) da planilha encontrados no site). Atualize a página pra ver os SLAs recalculados.`;
+  }catch(err){
+    console.error('Falha ao importar abertura real dos reparos (Zaaz)', err);
+    statusEl.textContent = `⚠️ Falha ao importar: ${err.message}`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('go-btn-import-abertura-zaaz').addEventListener('click', () => {
+  document.getElementById('go-input-import-abertura-zaaz').click();
+});
+document.getElementById('go-input-import-abertura-zaaz').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  OPS.readSpreadsheetFile(file, rows => importarAberturaReparosZaaz(rows));
+});
+
 // -------- Histórico mensal dos cards (janeiro até o mês atual) --------
 // Independente do período/supervisor/cidade selecionado no topo - busca uma
 // vez só (cacheada) os registros/pares do ano corrente inteiro, porque os
@@ -1379,7 +1498,13 @@ function renderCardsSLA(data){
   }
 }
 function horasAbertura(r){
-  return (new Date(r.data_encerramento) - new Date(r.data_criacao)) / 3600000;
+  // data_abertura_real (importada do relatório de reparos da Zaaz, ver
+  // importarAberturaReparosZaaz) é quando o cliente de fato abriu o chamado;
+  // data_criacao (da planilha de produtividade) é quando o técnico foi
+  // despachado, que pode ser bem depois se o chamado ficou na fila - usa a
+  // real sempre que tiver, senão cai pra data_criacao como antes
+  const abertura = r.data_abertura_real || r.data_criacao;
+  return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
 }
 function dentroDoPrazo(r){
   const t = (r.tipo || '').toUpperCase();

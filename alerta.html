@@ -159,7 +159,12 @@ function grupoSlaDoTipo(tipo){
   for (const [chave, cfg] of Object.entries(SLA_GROUPS)) if (cfg.tipos.includes(t)) return chave;
   return null;
 }
-function horasAbertura(r){ return (new Date(r.data_encerramento) - new Date(r.data_criacao)) / 3600000; }
+// data_abertura_real (importada do relatório de reparos da Zaaz em Gestão
+// Operacional > Cards Geral) é quando o cliente abriu o chamado de fato;
+// data_criacao é quando o técnico foi despachado, que pode ser bem depois
+// se o chamado ficou na fila - usa a real quando tiver, senão cai pra
+// data_criacao como antes
+function horasAbertura(r){ return (new Date(r.data_encerramento) - new Date(r.data_abertura_real || r.data_criacao)) / 3600000; }
 function dentroDoPrazo(r){
   const limite = HORAS_SLA_POR_TIPO[(r.tipo||'').toUpperCase()];
   if (limite == null) return null;
