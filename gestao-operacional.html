@@ -783,6 +783,33 @@ function grupoSlaDoTipo(tipo){
   }
   return null; // Recolhimento (e qualquer tipo não mapeado) fica fora do SLA
 }
+// protocolos que foram concluídos em campo mas depois reabertos na Zaaz pra
+// correção administrativa (não por demora do técnico) - conferido caso a
+// caso com o coordenador, sem sinal nenhum nos dados que permita detectar
+// isso sozinho (é por isso que fica numa lista à parte em vez de uma regra
+// automática). Indexado por protocolo (tabela sla_excecoes_reparo) em vez de
+// por id, mesmo motivo do zaaz_abertura_reparos: sobrevive à reimportação
+// diária, que troca o id das linhas recentes.
+let goSlaExcecoesSet = null;
+async function carregarSlaExcecoesCacheSeNecessario(){
+  if (goSlaExcecoesSet !== null) return;
+  try{
+    const linhas = (await OPS_SUPABASE.select('sla_excecoes_reparo')) || [];
+    goSlaExcecoesSet = new Set(linhas.map(l => l.protocolo));
+  }catch(err){
+    console.error('Falha ao buscar exceções de SLA', err);
+    goSlaExcecoesSet = new Set();
+  }
+}
+// elegibilidade padrão pro SLA de reparo/SA/ativação/MDE: produtivo, tipo
+// dentro de um dos grupos de SLA, com as duas datas, e fora da lista de
+// exceções acima
+function ehElegivelSla(r){
+  if (!isProdutivo(r) || !grupoSlaDoTipo(r.tipo) || !r.data_criacao || !r.data_encerramento) return false;
+  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
+  if (base && goSlaExcecoesSet && goSlaExcecoesSet.has(base)) return false;
+  return true;
+}
 
 const MJ_STATUS_LABEL = {
   aberto: 'Aberto', em_analise: 'Em Análise', aguardando_informacoes: 'Aguardando Informações',
@@ -894,6 +921,7 @@ async function initPage(){
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
     await carregarAberturaZaazCacheSeNecessario();
+    await carregarSlaExcecoesCacheSeNecessario();
     // Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento
     // e com cota diária) - só busca sob demanda, quando alguém realmente
     // clica em "Inspetor" (ver carregarTecnicoInspetorSeNecessario), em vez
@@ -1064,7 +1092,7 @@ async function renderAbaCardsGeral(){
   const supervisor = document.getElementById('go-f-supervisor').value;
   const cidade = document.getElementById('go-f-cidade').value;
   const deduped = dedupePorProtocolo(goRegistrosFiltrados());
-  const elegiveisSla = deduped.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const elegiveisSla = deduped.filter(r => ehElegivelSla(r));
 
   const cardSla = (grupo, label) => {
     const arr = grupo === 'geral' ? elegiveisSla : elegiveisSla.filter(r => grupoSlaDoTipo(r.tipo) === grupo);
@@ -1072,7 +1100,7 @@ async function renderAbaCardsGeral(){
     const pct = arr.length ? (dentro / arr.length) * 100 : 0;
     const meta = grupo === 'geral' ? META_SLA_GERAL : SLA_GROUPS[grupo].meta;
     const cor = pct >= meta ? 'ok' : (pct >= meta - 10 ? 'warn' : 'crit');
-    const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
+    const filtro = r => ehElegivelSla(r) && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
     return { key: `sla-${grupo}`, label, valor: fmtPct1(pct), cor, meta: `Meta: ≥${meta}% · ${fmtNum(arr.length)} elegível(is)`,
       onClick: () => abrirAnalitico('servicos', filtro, label) };
   };
@@ -1271,7 +1299,7 @@ function serieHistoricoCard(key){
     const grupo = key.replace('sla-', '');
     return meses.map(mes => {
       const doMes = regsAno.filter(r => diaKey(r.data_encerramento).slice(0,7) === mes);
-      const elegiveis = doMes.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
+      const elegiveis = doMes.filter(r => ehElegivelSla(r) && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
       const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true).length;
       return { mes, valor: elegiveis.length ? (dentro/elegiveis.length)*100 : 0 };
     });
@@ -1422,7 +1450,7 @@ function renderCardsSLA(data){
   // "Dentro do prazo" = (data_encerramento − data_criacao) em horas <= limite do tipo.
   // Registros importados antes da coluna data_criacao existir ficam de fora
   // do cálculo (não têm como saber a abertura deles).
-  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const elegiveis = data.filter(r => ehElegivelSla(r));
   const semDataCriacao = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && (!r.data_criacao || !r.data_encerramento)).length;
   const dentro = elegiveis.filter(r => dentroDoPrazo(r) === true);
   const pctGeral = elegiveis.length ? (dentro.length / elegiveis.length) * 100 : 0;
@@ -1502,7 +1530,7 @@ function dentroDoPrazo(r){
 // (produtivo + dentro dos grupos de SLA + com as duas datas), só que
 // quebrada por dia em vez de agregada no período inteiro.
 function renderSlaHistorico(data){
-  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const elegiveis = data.filter(r => ehElegivelSla(r));
   const porDia = {};
   elegiveis.forEach(r => {
     const dia = diaKey(r.data_encerramento);
@@ -1838,7 +1866,7 @@ document.getElementById('go-cards-sla').addEventListener('click', (e) => {
   const card = e.target.closest('.sla-card[data-grupo]');
   if (!card) return;
   const grupo = card.dataset.grupo;
-  const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
+  const filtro = r => ehElegivelSla(r) && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo);
   abrirAnalitico('servicos', filtro, grupo === 'geral' ? 'SLA Geral' : SLA_GROUPS[grupo].label);
 });
 
@@ -1848,7 +1876,7 @@ document.getElementById('go-cards-sla').addEventListener('click', (e) => {
 // clique na tabela "Abertura por cidade × tipo").
 function abrirSlaPorCidade(grupo){
   const data = dedupePorProtocolo(goRegistrosFiltrados());
-  const elegiveis = data.filter(r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
+  const elegiveis = data.filter(r => ehElegivelSla(r) && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo));
   const porCidade = {};
   elegiveis.forEach(r => {
     const cidade = r.area || 'Sem informação';
@@ -1871,7 +1899,7 @@ function abrirSlaPorCidade(grupo){
     const tr = e.target.closest('tr[data-cidade]');
     if (!tr) return;
     const cidade = tr.dataset.cidade;
-    const filtro = r => isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo) && (r.area || 'Sem informação') === cidade;
+    const filtro = r => ehElegivelSla(r) && (grupo === 'geral' || grupoSlaDoTipo(r.tipo) === grupo) && (r.area || 'Sem informação') === cidade;
     document.getElementById('go-modal-sla-cidade').style.display = 'none';
     abrirAnalitico('servicos', filtro, `${label} · ${cidade}`);
   };

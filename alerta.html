@@ -185,15 +185,28 @@ let alPessoas = null, alTecnicoSupervisor = {};
 // tabela à parte, indexada por protocolo, porque o import diário de
 // produtividade recria as linhas recentes com id novo)
 let alAberturaZaazMap = {};
+// protocolos concluídos em campo mas reabertos na Zaaz pra correção
+// administrativa (não demora do técnico) - lista conferida manualmente com o
+// coordenador, sem sinal automático nos dados (ver mesmo mecanismo em
+// gestao-operacional.html, tabela sla_excecoes_reparo)
+let alSlaExcecoesSet = new Set();
 async function carregarBaseComum(){
-  const [pessoas, historico, aberturaZaaz] = await Promise.all([
+  const [pessoas, historico, aberturaZaaz, excecoes] = await Promise.all([
     OPS.syncPull('PessoasData').catch(() => []),
     OPS_SUPABASE.select('produtividade_historico').catch(() => []),
     OPS_SUPABASE.select('zaaz_abertura_reparos').catch(() => []),
+    OPS_SUPABASE.select('sla_excecoes_reparo').catch(() => []),
   ]);
   alPessoas = pessoas || [];
   (historico || []).forEach(h => { alTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
   (aberturaZaaz || []).forEach(l => { alAberturaZaazMap[l.protocolo] = l.data_abertura; });
+  alSlaExcecoesSet = new Set((excecoes || []).map(l => l.protocolo));
+}
+function ehElegivelSla(r){
+  if (!isProdutivo(r) || !grupoSlaDoTipo(r.tipo) || !r.data_criacao || !r.data_encerramento) return false;
+  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
+  if (base && alSlaExcecoesSet.has(base)) return false;
+  return true;
 }
 function ehInstaladorReparador(tecnico){
   const pessoa = (alPessoas||[]).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
@@ -465,7 +478,7 @@ async function carregarJustificativaSla(){
     OPS_SUPABASE.select('produtividade_registros', filtro),
     carregarTratamentos('sla'),
   ]);
-  const base = dedupePorProtocolo(registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && isProdutivo(r) && grupoSlaDoTipo(r.tipo) && r.data_criacao && r.data_encerramento);
+  const base = dedupePorProtocolo(registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && ehElegivelSla(r));
   const porCidadeGrupo = {}; // cidade|grupo -> {dentro, total, foraDoPrazo:[]}
   base.forEach(r => {
     const cidade = r.area || 'Sem informação';
