@@ -509,7 +509,7 @@
 
   <!-- ================= ABA: PRODUTIVIDADE TEMPO REAL ================= -->
   <div id="go-aba-produtividade-tempo-real" style="display:none">
-    <p class="page-sub" style="margin:0 0 14px">Dados de hoje/mês atual direto do Supabase, sem depender do período selecionado no topo - sempre em tempo real.</p>
+    <p class="page-sub" style="margin:0 0 14px">Dados de hoje/mês atual direto do Supabase, sem depender do período selecionado no topo - atualiza sozinho a cada 3 minutos.</p>
     <div class="panel toolbar" style="margin-bottom:14px">
       <div class="field">
         <label for="go-ptr-f-supervisor">Supervisor</label>
@@ -518,6 +518,10 @@
       <div class="field">
         <label for="go-ptr-f-inspetor">Inspetor</label>
         <select id="go-ptr-f-inspetor"><option value="">Todos os inspetores</option></select>
+      </div>
+      <div class="field" style="margin-left:auto;align-self:flex-end;display:flex;align-items:center;gap:10px">
+        <span class="page-sub" id="go-ptr-ultima-att" style="margin:0"></span>
+        <button type="button" class="btn ghost" id="go-ptr-btn-atualizar">🔄 Atualizar agora</button>
       </div>
     </div>
     <div class="stat-row" id="go-ptr-resumo-cards" style="margin-bottom:18px"></div>
@@ -846,7 +850,8 @@ async function initPage(){
   // qualquer busca de dados (não depois), senão o iframe mostra a Gestão
   // Operacional inteira "piscando" (Serviços, filtros, todas as abas) até o
   // período carregar, e só depois esconde tudo.
-  if (new URLSearchParams(location.search).get('isolar') === '1'){
+  const isolar = new URLSearchParams(location.search).get('isolar') === '1';
+  if (isolar){
     const pageHead = document.querySelector('.page-head');
     const toolbar = document.querySelector('.panel.toolbar');
     if (pageHead) pageHead.style.display = 'none';
@@ -859,6 +864,20 @@ async function initPage(){
   // busca terminar só pra trocar de aba depois.
   const abaQuery = new URLSearchParams(location.search).get('aba');
   if (abaQuery && document.getElementById('go-aba-' + abaQuery)) irParaAba(abaQuery);
+
+  // Produtividade Tempo Real isolada (iframe de produtividade-tempo-real.html)
+  // não usa histórico, período do topo nem pares de recorrência - ela busca
+  // os próprios dados (sempre hoje + mês atual, ver desenharProdutividadeTempoReal).
+  // Pular produtividade_historico + carregarPeriodo() (que traz
+  // produtividade_registros do período inteiro E produtividade_pares_recorrencia
+  // à toa) evita 3 buscas grandes que essa aba nunca chega a usar - era a
+  // maior causa da lentidão na página isolada. Só entra nesse atalho isolada
+  // (isolar=1): visitar essa aba dentro da própria Gestão Operacional (sem
+  // isolar) ainda precisa do carregamento normal pras outras abas.
+  if (isolar && abaQuery === 'produtividade-tempo-real'){
+    await renderAbaProdutividadeTempoReal();
+    return;
+  }
 
   document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
   try{
@@ -3224,8 +3243,17 @@ function popularFiltrosTempoReal(){
   if (!selSup.dataset.ligado){ selSup.dataset.ligado = '1'; selSup.addEventListener('change', desenharProdutividadeTempoReal); }
   if (!selInsp.dataset.ligado){ selInsp.dataset.ligado = '1'; selInsp.addEventListener('change', desenharProdutividadeTempoReal); }
 }
+let goPtrJaCarregouUmaVez = false;
 async function desenharProdutividadeTempoReal(){
-  document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  // só mostra "Carregando..." na primeira vez - nas atualizações automáticas
+  // (a cada 3min) ou no botão "Atualizar agora", a tabela já preenchida fica
+  // visível até os dados novos chegarem, em vez de piscar em branco toda hora
+  if (!goPtrJaCarregouUmaVez) document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  goPtrJaCarregouUmaVez = true;
+  // liga aqui (não só no fim) pra funcionar mesmo se essa primeira busca
+  // falhar - senão, numa falha de rede na carga inicial, nem o botão
+  // "Atualizar agora" nem o auto-refresh ficariam disponíveis pra tentar de novo
+  ligarAutoAtualizacaoTempoReal();
   const hoje = new Date();
   const hojeStr = hoje.toISOString().slice(0,10);
   const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
@@ -3245,8 +3273,13 @@ async function desenharProdutividadeTempoReal(){
     // da unidade (ex: cobrir um chamado em Natal ou Jucurutu) e isso ainda
     // conta pra meta/pontos dele. Quem decide se o registro conta é o
     // ROSTER (Gestão de Pessoas, roster mais abaixo), não a área do serviço.
+    // só pede as colunas que essa tela realmente usa - produtividade_registros
+    // vem de uma planilha com dezenas de colunas, e sem isso cada linha traz
+    // muito mais dado do que precisa (era boa parte da lentidão dessa aba,
+    // que já busca um período de ~40 dias sem filtrar por técnico)
     registros = await OPS_SUPABASE.select('produtividade_registros',
-      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`) || [];
+      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`,
+      'tecnico,tipo,produtivo,pontos,area,data_criacao,data_deslocamento,data_encerramento') || [];
   }catch(err){
     console.error('Falha ao buscar produtividade tempo real', err);
     document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
@@ -3297,9 +3330,14 @@ async function desenharProdutividadeTempoReal(){
     if (!isProdutivo(r)) t.improdHoje++;
     // data_deslocamento é o horário real de saída pro atendimento (coluna
     // "Data/Hora Deslocamento" da planilha) - cai pra data_criacao só em
-    // registros antigos, importados antes desse campo existir
+    // registros antigos, importados antes desse campo existir. Um chamado
+    // aberto há semanas e só fechado hoje pode ter deslocamento registrado
+    // num dia bem anterior (a planilha não atualiza esse campo se ele já
+    // veio preenchido) - só conta pro "1º Deslocamento de hoje" se a data do
+    // deslocamento também for hoje, senão um valor velho (ex: um mês atrás)
+    // aparecia como se fosse o primeiro horário de hoje.
     const horaDeslocamento = r.data_deslocamento || r.data_criacao;
-    if (horaDeslocamento){
+    if (horaDeslocamento && diaKey(horaDeslocamento) === hojeStr){
       const h = new Date(horaDeslocamento);
       if (!t.primeiroDeslocamento || h < t.primeiroDeslocamento) t.primeiroDeslocamento = h;
     }
@@ -3423,6 +3461,32 @@ async function desenharProdutividadeTempoReal(){
     <td>${fmtNum(l.improdHoje)}</td>
     <td>${fmtHoraCurta(l.primeiroDeslocamento)}</td><td>${fmtHoraCurta(l.ultimoConcluido)}</td>
   </tr>`).join('') || `<tr><td colspan="15" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
+
+  document.getElementById('go-ptr-ultima-att').textContent = `Atualizado às ${fmtHoraCurtaLocal(new Date())}`;
+}
+// horário local de verdade (hora do navegador de quem tá olhando o painel,
+// não o "truque de fuso" dos dados importados) - usado só pro rótulo de
+// "última atualização"
+function fmtHoraCurtaLocal(d){
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+// atualiza sozinho a cada 3min (dado muda o dia inteiro: gente fechando
+// atendimento) + botão pra forçar na hora, sem precisar dar F5 na página
+// inteira (que aqui reimportaria pessoas/atestados à toa)
+const GO_PTR_AUTO_REFRESH_MS = 3 * 60 * 1000;
+let goPtrAutoAtualizacaoLigada = false;
+function ligarAutoAtualizacaoTempoReal(){
+  if (goPtrAutoAtualizacaoLigada) return;
+  goPtrAutoAtualizacaoLigada = true;
+  setInterval(() => { desenharProdutividadeTempoReal(); }, GO_PTR_AUTO_REFRESH_MS);
+  const btn = document.getElementById('go-ptr-btn-atualizar');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Atualizando...';
+    try{ await desenharProdutividadeTempoReal(); }
+    finally{ btn.disabled = false; btn.textContent = textoOriginal; }
+  });
 }
 
 // ================= ABA SLA (fila de protocolos em aberto) =================
