@@ -1097,18 +1097,41 @@ const OPS = (() => {
   async function mapaSupabasePull(){
     try{
       const TAMANHO_PAGINA = 1000;
-      let todos = [];
-      let inicio = 0;
-      while (true){
-        const res = await fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?select=dados`, {
-          headers: Object.assign({ 'Range-Unit': 'items', Range: `${inicio}-${inicio + TAMANHO_PAGINA - 1}` }, MAPA_SUPABASE_HEADERS),
-        });
-        if (!res.ok) return null;
-        const pagina = await res.json();
-        todos = todos.concat((pagina || []).map(r => r.dados));
-        if (!pagina || pagina.length < TAMANHO_PAGINA) break;
-        inicio += TAMANHO_PAGINA;
+      const buscarPagina = (inicio) => fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?select=dados`, {
+        headers: Object.assign({ 'Range-Unit': 'items', Range: `${inicio}-${inicio + TAMANHO_PAGINA - 1}`, Prefer: 'count=exact' }, MAPA_SUPABASE_HEADERS),
+      });
+      // 1ª página já pede a contagem exata (Prefer: count=exact) - com ela dá
+      // pra saber de cara quantas páginas faltam e buscar todas em paralelo
+      // (o navegador enfileira sozinho respeitando o limite de conexões por
+      // origem) em vez de uma atrás da outra. Essa é a coleção mais pesada do
+      // site (milhares de protocolos, cada um com bastante texto) - sequencial
+      // era boa parte do tempo de carga do Mapa de Serviços.
+      const primeira = await buscarPagina(0);
+      if (!primeira.ok) return null;
+      let todos = ((await primeira.json()) || []).map(r => r.dados);
+      if (todos.length < TAMANHO_PAGINA) return todos;
+      const contentRange = primeira.headers.get('content-range');
+      const total = contentRange ? parseInt(contentRange.split('/')[1], 10) : NaN;
+      if (!Number.isFinite(total)){
+        // sem a contagem (ex: header bloqueado em algum proxy) - volta pro
+        // jeito sequencial de sempre, sem travar
+        let inicio = TAMANHO_PAGINA;
+        while (true){
+          const res = await buscarPagina(inicio);
+          if (!res.ok) return null;
+          const pagina = ((await res.json()) || []).map(r => r.dados);
+          todos = todos.concat(pagina);
+          if (pagina.length < TAMANHO_PAGINA) break;
+          inicio += TAMANHO_PAGINA;
+        }
+        return todos;
       }
+      const pedidosRestantes = [];
+      for (let inicio = TAMANHO_PAGINA; inicio < total; inicio += TAMANHO_PAGINA){
+        pedidosRestantes.push(buscarPagina(inicio).then(res => res.ok ? res.json() : Promise.reject(new Error(`Supabase respondeu ${res.status}`))));
+      }
+      const paginas = await Promise.all(pedidosRestantes);
+      paginas.forEach(p => { todos = todos.concat((p || []).map(r => r.dados)); });
       return todos;
     }catch(e){
       console.error('Falha ao buscar dados do Mapa (Supabase)', e);
