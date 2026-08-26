@@ -334,6 +334,14 @@ const els = {
 };
 let selectedCities = new Set(); // vazio = todas as cidades
 let selectedResponsaveis = new Set(); // vazio = todos os responsáveis
+// já filtra pra Unidade Touros aqui, síncrono, usando o cache local (records
+// = OPS.load(), de uma sincronização anterior) - sem isso, qualquer render
+// que dispare antes da sincronização de rede terminar (ex: o recálculo do
+// polígono do município, mais abaixo) mostrava a empresa inteira por alguns
+// segundos até o filtro real (dentro de initPage, só depois do fetch)
+// entrar. Uma vez que isso roda, initPage não mexe mais nisso (só entra se
+// ainda estiver vazio - cache vazio, primeiro acesso etc).
+selectedCities = new Set([...new Set(records.map(r => r.cidade).filter(Boolean))].filter(c => OPS.isUnitCity(c, 'TOUROS')));
 
 // -------- cálculo dinâmico (tempo real) --------
 function getElapsedHours(r){
