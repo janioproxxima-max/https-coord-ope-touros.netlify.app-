@@ -799,6 +799,14 @@ const MJ_MODULO_LABEL = { material: 'Material', frotas: 'Frotas', reclamacao: 'R
 const STATUS_ABERTOS = ['aberto','em_analise','aguardando_informacoes','aguardando_setor','validado_inspetor','aguardando_aprovacao_coordenacao','em_atendimento'];
 
 let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
+// mapa protocolo (base, sem /1 /2) -> data de abertura real (relatório de
+// reparos da Zaaz) - fica numa tabela à parte (zaaz_abertura_reparos) em vez
+// de gravado dentro de produtividade_registros porque o import diário de
+// produtividade recria as linhas de dias recentes com id novo, o que
+// apagaria qualquer coisa gravada por id; indexado por protocolo (que não
+// muda) sobrevive a isso. null = ainda não carregado (ver
+// carregarAberturaZaazCacheSeNecessario).
+let goAberturaZaazMap = null;
 let goPessoasCache = null; // lazy-load compartilhado: filtro Instalador/Reparador do donut + aba Produtividade Técnica
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
@@ -885,6 +893,7 @@ async function initPage(){
     goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
+    await carregarAberturaZaazCacheSeNecessario();
     // Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento
     // e com cota diária) - só busca sob demanda, quando alguém realmente
     // clica em "Inspetor" (ver carregarTecnicoInspetorSeNecessario), em vez
@@ -1170,10 +1179,14 @@ async function renderAbaCardsGeral(){
 // quando o cliente abriu o chamado de fato - um chamado pode ficar horas/dias
 // na fila antes de alguém pegar, e esse tempo não entrava na conta do SLA
 // (o site ficava sempre "melhor" que a realidade). Essa função traz a "Data
-// Hora Abertura" de verdade do relatório de reparos da Zaaz (casando por
-// protocolo) pra um campo à parte (data_abertura_real), sem mexer em
-// data_criacao (que outras contas tipo TMA/exports continuam usando como
-// estava). horasAbertura() passa a preferir esse campo quando existir.
+// Hora Abertura" de verdade do relatório de reparos da Zaaz pra
+// zaaz_abertura_reparos (protocolo -> data_abertura), uma tabela À PARTE de
+// produtividade_registros - de propósito: o import diário de produtividade
+// recria as linhas de dias recentes com id novo, o que apagaria isso se
+// tivesse sido gravado direto numa coluna de lá (foi exatamente o que
+// aconteceu numa primeira tentativa). Protocolo não muda, então indexar por
+// ele sobrevive a qualquer reimportação. horasAbertura() consulta esse mapa
+// (ver carregarAberturaZaazCacheSeNecessario).
 // SEM botão na tela de propósito (pedido explícito) - quando aparecer um
 // caso parecido, roda isso a partir do console: OPS.readSpreadsheetFile no
 // input do arquivo, ou direto com as linhas já em mãos via
@@ -1195,74 +1208,32 @@ async function importarAberturaReparosZaaz(rows){
   const idx = nomes => header.findIndex(h => nomes.some(n => OPS.normalize(h) === OPS.normalize(n)));
   const iProtocolo = idx(['ID Protocolo | Proxxima', 'ID Protocolo']);
   const iAbertura = idx(['Data|Hora Abertura', 'Data/Hora Abertura', 'Data Hora Abertura']);
-  const iFechamento = idx(['Data|Hora Fechamento', 'Data/Hora Fechamento', 'Data Hora Fechamento']);
   if (iProtocolo < 0 || iAbertura < 0){
     console.warn('Não achei as colunas "ID Protocolo" e "Data|Hora Abertura" nessa planilha.');
     return;
   }
 
-  const aberturaPorProtocolo = {};
-  const fechamentos = [];
+  const payload = [];
   for (let i = 1; i < rows.length; i++){
     const r = rows[i];
     const protocolo = (r[iProtocolo] || '').trim();
     if (!protocolo) continue;
     const iso = parseDataHoraZaaz(r[iAbertura]);
-    if (iso) aberturaPorProtocolo[protocolo] = iso;
-    if (iFechamento >= 0){
-      const isoFech = parseDataHoraZaaz(r[iFechamento]);
-      if (isoFech) fechamentos.push(isoFech);
-    }
+    if (iso) payload.push({ protocolo, data_abertura: iso });
   }
-  const protocolosValidos = Object.keys(aberturaPorProtocolo);
-  if (!protocolosValidos.length){
-    console.warn('Nenhuma linha com protocolo e data de abertura válidos.');
-    return;
-  }
-
-  console.log(`Buscando registros de ${protocolosValidos.length} protocolo(s) no site...`);
-  // estreita a busca pelo intervalo de fechamento coberto pela planilha
-  // (em vez de trazer a tabela inteira) - dá uma folga de 1 dia pros dois
-  // lados por segurança de fuso/borda
-  let filtroData = '';
-  if (fechamentos.length){
-    const min = fechamentos.reduce((a,b) => a < b ? a : b);
-    const max = fechamentos.reduce((a,b) => a > b ? a : b);
-    const desde = new Date(new Date(min).getTime() - 86400000).toISOString();
-    const ate = new Date(new Date(max).getTime() + 2 * 86400000).toISOString();
-    filtroData = `data_encerramento=gte.${desde}&data_encerramento=lt.${ate}`;
-  }
-  const existentes = await OPS_SUPABASE.select('produtividade_registros', filtroData || null, 'id,protocolo') || [];
-
-  const idsPorProtocoloBase = {};
-  existentes.forEach(r => {
-    if (!r.protocolo) return;
-    const base = r.protocolo.split('/')[0];
-    if (!(base in aberturaPorProtocolo)) return;
-    (idsPorProtocoloBase[base] = idsPorProtocoloBase[base] || []).push(r.id);
-  });
-
-  const payload = [];
-  let protocolosSemMatch = 0;
-  protocolosValidos.forEach(base => {
-    const ids = idsPorProtocoloBase[base];
-    if (!ids || !ids.length){ protocolosSemMatch++; return; }
-    ids.forEach(id => payload.push({ id, data_abertura_real: aberturaPorProtocolo[base] }));
-  });
-
   if (!payload.length){
-    console.warn(`Nenhum dos ${protocolosValidos.length} protocolo(s) da planilha bateu com registros no site.`);
-    return { atualizados: 0, protocolosEncontrados: 0, protocolosTotal: protocolosValidos.length };
+    console.warn('Nenhuma linha com protocolo e data de abertura válidos.');
+    return { atualizados: 0 };
   }
 
-  console.log(`Atualizando ${payload.length} registro(s)...`);
+  console.log(`Gravando abertura real de ${payload.length} protocolo(s)...`);
   for (let i = 0; i < payload.length; i += 500){
-    await OPS_SUPABASE.upsert('produtividade_registros', payload.slice(i, i + 500), 'id');
+    await OPS_SUPABASE.upsert('zaaz_abertura_reparos', payload.slice(i, i + 500), 'protocolo');
   }
+  goAberturaZaazMap = null; // força recarregar o mapa na próxima vez que for usado
 
-  const resultado = { atualizados: payload.length, protocolosEncontrados: protocolosValidos.length - protocolosSemMatch, protocolosTotal: protocolosValidos.length };
-  console.log(`✅ ${resultado.atualizados} registro(s) atualizado(s) com a abertura real (${resultado.protocolosEncontrados} de ${resultado.protocolosTotal} protocolo(s) da planilha encontrados no site).`, resultado);
-  return resultado;
+  console.log(`✅ ${payload.length} protocolo(s) gravado(s) em zaaz_abertura_reparos.`);
+  return { atualizados: payload.length };
 }
 
 // -------- Histórico mensal dos cards (janeiro até o mês atual) --------
@@ -1479,13 +1450,28 @@ function renderCardsSLA(data){
     avisoEl.style.display = 'none';
   }
 }
+// carrega uma vez (tabela pequena, ver zaaz_abertura_reparos) o mapa de
+// abertura real por protocolo, vindo do relatório de reparos da Zaaz - ver
+// importarAberturaReparosZaaz pra como essa tabela é alimentada
+async function carregarAberturaZaazCacheSeNecessario(){
+  if (goAberturaZaazMap !== null) return;
+  try{
+    const linhas = (await OPS_SUPABASE.select('zaaz_abertura_reparos')) || [];
+    goAberturaZaazMap = {};
+    linhas.forEach(l => { goAberturaZaazMap[l.protocolo] = l.data_abertura; });
+  }catch(err){
+    console.error('Falha ao buscar abertura real dos reparos (Zaaz)', err);
+    goAberturaZaazMap = {};
+  }
+}
 function horasAbertura(r){
-  // data_abertura_real (importada do relatório de reparos da Zaaz, ver
-  // importarAberturaReparosZaaz) é quando o cliente de fato abriu o chamado;
-  // data_criacao (da planilha de produtividade) é quando o técnico foi
-  // despachado, que pode ser bem depois se o chamado ficou na fila - usa a
-  // real sempre que tiver, senão cai pra data_criacao como antes
-  const abertura = r.data_abertura_real || r.data_criacao;
+  // zaaz_abertura_reparos (casado por protocolo, ver
+  // carregarAberturaZaazCacheSeNecessario) é quando o cliente de fato abriu
+  // o chamado; data_criacao (da planilha de produtividade) é quando o
+  // técnico foi despachado, que pode ser bem depois se o chamado ficou na
+  // fila - usa a real sempre que tiver, senão cai pra data_criacao como antes
+  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
+  const abertura = (base && goAberturaZaazMap && goAberturaZaazMap[base]) || r.data_criacao;
   return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
 }
 function dentroDoPrazo(r){

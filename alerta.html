@@ -159,12 +159,16 @@ function grupoSlaDoTipo(tipo){
   for (const [chave, cfg] of Object.entries(SLA_GROUPS)) if (cfg.tipos.includes(t)) return chave;
   return null;
 }
-// data_abertura_real (importada do relatório de reparos da Zaaz em Gestão
-// Operacional > Cards Geral) é quando o cliente abriu o chamado de fato;
+// zaaz_abertura_reparos (casado por protocolo, ver alAberturaZaazMap em
+// carregarBaseComum) é quando o cliente abriu o chamado de fato;
 // data_criacao é quando o técnico foi despachado, que pode ser bem depois
 // se o chamado ficou na fila - usa a real quando tiver, senão cai pra
 // data_criacao como antes
-function horasAbertura(r){ return (new Date(r.data_encerramento) - new Date(r.data_abertura_real || r.data_criacao)) / 3600000; }
+function horasAbertura(r){
+  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
+  const abertura = (base && alAberturaZaazMap[base]) || r.data_criacao;
+  return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
+}
 function dentroDoPrazo(r){
   const limite = HORAS_SLA_POR_TIPO[(r.tipo||'').toUpperCase()];
   if (limite == null) return null;
@@ -175,13 +179,21 @@ function dentroDoPrazo(r){
 // -------- cache compartilhado: pessoas (filtro Instalador/Reparador) e
 // técnico->supervisor (produtividade_historico) --------
 let alPessoas = null, alTecnicoSupervisor = {};
+// mapa protocolo -> abertura real (relatório de reparos da Zaaz), usado por
+// horasAbertura() no lugar de data_criacao quando existir - ver o mesmo
+// mecanismo/motivo em gestao-operacional.html (zaaz_abertura_reparos é
+// tabela à parte, indexada por protocolo, porque o import diário de
+// produtividade recria as linhas recentes com id novo)
+let alAberturaZaazMap = {};
 async function carregarBaseComum(){
-  const [pessoas, historico] = await Promise.all([
+  const [pessoas, historico, aberturaZaaz] = await Promise.all([
     OPS.syncPull('PessoasData').catch(() => []),
     OPS_SUPABASE.select('produtividade_historico').catch(() => []),
+    OPS_SUPABASE.select('zaaz_abertura_reparos').catch(() => []),
   ]);
   alPessoas = pessoas || [];
   (historico || []).forEach(h => { alTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
+  (aberturaZaaz || []).forEach(l => { alAberturaZaazMap[l.protocolo] = l.data_abertura; });
 }
 function ehInstaladorReparador(tecnico){
   const pessoa = (alPessoas||[]).find(p => p.nome && OPS.normalize(p.nome) === OPS.normalize(tecnico));
