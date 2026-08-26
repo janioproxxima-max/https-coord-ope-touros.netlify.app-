@@ -1035,14 +1035,30 @@ const OPS = (() => {
     return par ? cfg.grupoFolgaNaReferencia : (cfg.grupoFolgaNaReferencia === 'A' ? 'B' : 'A');
   }
 
+  // Grupo A/B do colaborador em vigor numa data específica, considerando o histórico de
+  // mudanças (grupoFdsHistorico). Sem histórico registrado (ou data anterior à primeira
+  // mudança registrada), assume o grupo atual (grupoFDS) - é a melhor informação disponível
+  // para o período anterior ao início do rastreamento de mudanças.
+  function grupoFdsNaData(colaborador, date){
+    const hist = colaborador.grupoFdsHistorico;
+    if (Array.isArray(hist) && hist.length){
+      const d = date instanceof Date ? date : new Date(date);
+      const dataStr = d.toISOString().slice(0, 10);
+      const validas = hist.filter(h => h.desde && h.desde <= dataStr).sort((a, b) => a.desde < b.desde ? 1 : -1);
+      if (validas.length) return validas[0].grupo;
+    }
+    return colaborador.grupoFDS || null;
+  }
+
   // Esse colaborador folga no dia informado (folga fixa semanal ou rodízio de FDS)?
   function isFolgaNoDia(colaborador, date){
     const dow = date.getDay();
     if (colaborador.folgaFixaSemana && DIAS_SEMANA[dow] === colaborador.folgaFixaSemana) return true;
     if (dow === 0 || dow === 6){
-      if (!colaborador.grupoFDS) return false;
+      const grupoNaData = grupoFdsNaData(colaborador, date);
+      if (!grupoNaData) return false;
       const grupoFolga = grupoFolgaNoSabado(saturdayOfWeek(date));
-      if (grupoFolga && grupoFolga === colaborador.grupoFDS) return true;
+      if (grupoFolga && grupoFolga === grupoNaData) return true;
     }
     return false;
   }
@@ -1053,8 +1069,9 @@ const OPS = (() => {
     let sab = saturdayOfWeek(hoje);
     if (sab < hoje) sab = new Date(sab.getTime() + 7 * 86400000);
     const grupoFolga = grupoFolgaNoSabado(sab);
-    if (!colaborador.grupoFDS || !grupoFolga) return { status: 'indefinido', sabado: sab };
-    return { status: grupoFolga === colaborador.grupoFDS ? 'folga' : 'trabalha', sabado: sab };
+    const grupoNaData = grupoFdsNaData(colaborador, sab);
+    if (!grupoNaData || !grupoFolga) return { status: 'indefinido', sabado: sab };
+    return { status: grupoFolga === grupoNaData ? 'folga' : 'trabalha', sabado: sab };
   }
 
   // -------- sincronização compartilhada (Planilha Google via Apps Script) --------
@@ -1438,7 +1455,7 @@ const OPS = (() => {
     SUPERVISOR_BY_CITY, supervisorForCity,
     syncPull, syncPush, syncPushWithToast, showToast, importMapaServicosFile,
     DIAS_SEMANA, getRodizioConfig, setRodizioConfig, pullRodizioConfig, saturdayOfWeek,
-    grupoFolgaNoSabado, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
+    grupoFolgaNoSabado, grupoFdsNaData, isFolgaNoDia, proximoFimDeSemanaStatus, isIndisponivelNoDia,
     toDateSafe, formatDateBR, formatDateTimeBR, toDateInputValue,
   };
 })();

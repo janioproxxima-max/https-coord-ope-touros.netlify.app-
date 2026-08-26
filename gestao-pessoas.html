@@ -163,6 +163,7 @@
             <option value="A">Grupo A</option>
             <option value="B">Grupo B</option>
           </select>
+          <p class="page-sub" id="rec-grupo-fds-historico" style="margin:4px 0 0;font-size:11px"></p>
         </div>
       </div>
       <div class="field"><label>Status</label>
@@ -458,6 +459,12 @@ function openModal(rec){
   document.getElementById('rec-admissao').value = rec ? OPS.toDateInputValue(rec.admissao) : '';
   document.getElementById('rec-folga-fixa').value = rec ? (rec.folgaFixaSemana||'') : '';
   document.getElementById('rec-grupo-fds').value = rec ? (rec.grupoFDS||'') : '';
+  const histEl = document.getElementById('rec-grupo-fds-historico');
+  const hist = rec && Array.isArray(rec.grupoFdsHistorico) ? rec.grupoFdsHistorico : [];
+  histEl.textContent = hist.length
+    ? 'Histórico: ' + hist.slice().sort((a, b) => a.desde < b.desde ? -1 : 1)
+        .map(h => `Grupo ${h.grupo} desde ${OPS.formatDateBR(h.desde)}`).join(' · ')
+    : '';
   document.getElementById('rec-status').value = rec ? rec.status : 'ativo';
   modal.style.display = 'flex';
 }
@@ -488,8 +495,19 @@ document.getElementById('form-record').addEventListener('submit', async e => {
     grupoFDS: document.getElementById('rec-grupo-fds').value,
     status: document.getElementById('rec-status').value,
   };
-  if (id) records = records.map(r => r.id === id ? { ...r, ...data } : r);
-  else records.push({ ...data, id: OPS.uid() });
+  if (id){
+    const atual = records.find(r => r.id === id);
+    let grupoFdsHistorico = (atual && Array.isArray(atual.grupoFdsHistorico)) ? atual.grupoFdsHistorico : [];
+    if (atual && (atual.grupoFDS || '') !== data.grupoFDS && data.grupoFDS){
+      const hoje = new Date().toISOString().slice(0, 10);
+      // se já registrou uma mudança hoje, substitui em vez de duplicar (ex: usuário corrigiu a seleção no mesmo dia)
+      grupoFdsHistorico = [...grupoFdsHistorico.filter(h => h.desde !== hoje), { grupo: data.grupoFDS, desde: hoje }];
+    }
+    data.grupoFdsHistorico = grupoFdsHistorico;
+    records = records.map(r => r.id === id ? { ...r, ...data } : r);
+  } else {
+    records.push({ ...data, id: OPS.uid() });
+  }
   await persist();
   populateFilterOptions();
   renderAll();
