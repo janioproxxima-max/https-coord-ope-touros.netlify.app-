@@ -1405,6 +1405,16 @@ function renderMotivoVT(data){
   });
 }
 
+// quantos atendimentos produtivos A MAIS, todos dentro do prazo, precisam
+// entrar na conta pra puxar a média até a meta - matemática de "quantos
+// acertos seguidos pra subir a média": resolve (dentro+x)/(total+x) >= meta
+// pro menor x inteiro. Só faz sentido chamar quando já está abaixo da meta
+// (o card só mostra essa linha nesse caso).
+function atendimentosParaMeta(dentro, total, metaPct){
+  if (total <= 0) return null;
+  const faltam = (metaPct * total - 100 * dentro) / (100 - metaPct);
+  return Math.max(0, Math.ceil(faltam));
+}
 function renderCardsSLA(data){
   // SLA usa a mesma base de encerrados (produtividade_registros, já
   // alimentada automaticamente desde novembro) — filtrada a produtivo=true
@@ -1424,20 +1434,25 @@ function renderCardsSLA(data){
     const pct = arr.length ? (dentroGrupo / arr.length) * 100 : null;
     const cor = pct == null ? 'neutral' : (pct >= cfg.meta ? 'ok' : (pct >= cfg.meta - 10 ? 'warn' : 'crit'));
     const horas = HORAS_SLA_POR_TIPO[cfg.tipos[0]];
+    // só mostra quando já está abaixo da meta - se já bate, não tem "faltam" nenhum
+    const faltam = (pct != null && pct < cfg.meta) ? atendimentosParaMeta(dentroGrupo, arr.length, cfg.meta) : null;
     return `<div class="sla-card ${cor}" data-grupo="${chave}" style="cursor:pointer" title="Clique pra ver o analítico">
       <div class="sla-label">${cfg.label} (${horas}h)</div>
       <div class="sla-value">${pct == null ? '—' : fmtPct(pct)}</div>
       <div class="sla-meta">Meta: ${cfg.meta}% · ${fmtNum(arr.length)} encerrados</div>
+      ${faltam != null ? `<div class="sla-meta" style="color:var(--crit)">⚠️ Faltam ${fmtNum(faltam)} produtivo(s) dentro do prazo pra bater a meta</div>` : ''}
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${pct == null ? 0 : Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
       <button type="button" class="btn ghost" data-cidade-grupo="${chave}" style="margin-top:10px;font-size:11px;padding:4px 8px;width:100%">🏙️ Por cidade</button>
     </div>`;
   }).join('');
 
+  const faltamGeral = pctGeral < META_SLA_GERAL ? atendimentosParaMeta(dentro.length, elegiveis.length, META_SLA_GERAL) : null;
   document.getElementById('go-cards-sla').innerHTML = `
     <div class="sla-card ${corGeral}" data-grupo="geral" style="cursor:pointer" title="Clique pra ver o analítico">
       <div class="sla-label">SLA Geral</div>
       <div class="sla-value">${fmtPct(pctGeral)}</div>
       <div class="sla-meta">Meta: ${META_SLA_GERAL}% · ${fmtNum(elegiveis.length)} encerrados</div>
+      ${faltamGeral != null ? `<div class="sla-meta" style="color:var(--crit)">⚠️ Faltam ${fmtNum(faltamGeral)} produtivo(s) dentro do prazo pra bater a meta</div>` : ''}
       <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pctGeral,100)}%"></div><span class="sla-dot"></span></div>
       <button type="button" class="btn ghost" data-cidade-grupo="geral" style="margin-top:10px;font-size:11px;padding:4px 8px;width:100%">🏙️ Por cidade</button>
     </div>${cardsPorGrupo}`;
@@ -3296,18 +3311,10 @@ function nomeCurto2(nome){
 
 // ================= ABA PRODUTIVIDADE TEMPO REAL =================
 async function renderAbaProdutividadeTempoReal(){
-  try{
-    await carregarPessoasCacheSeNecessario();
-  }catch(err){
-    document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
-    return;
-  }
-  if (goAbaAtiva !== 'produtividade-tempo-real') return;
-  await Promise.all([
-    carregarAtestadosCacheSeNecessario(), // goAtestados: férias/atestado cobrindo hoje
-    carregarAusenciasCacheSeNecessario(), // goAusencias: falta/BH/outro registrado pra hoje
-  ]);
-  if (goAbaAtiva !== 'produtividade-tempo-real') return;
+  // pessoas/atestados/ausências (goAtestados: férias/atestado cobrindo hoje;
+  // goAusencias: falta/BH/outro registrado pra hoje) são carregados dentro de
+  // desenharProdutividadeTempoReal, em paralelo com a busca de registros -
+  // ver comentário lá
   await desenharProdutividadeTempoReal();
 }
 // data_deslocamento/data_encerramento são gravados com o "truque de fuso"
@@ -3369,10 +3376,21 @@ async function desenharProdutividadeTempoReal(){
     // só pede as colunas que essa tela realmente usa - produtividade_registros
     // vem de uma planilha com dezenas de colunas, e sem isso cada linha traz
     // muito mais dado do que precisa (era boa parte da lentidão dessa aba,
-    // que já busca um período de ~40 dias sem filtrar por técnico)
-    registros = await OPS_SUPABASE.select('produtividade_registros',
-      `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`,
-      'tecnico,tipo,produtivo,pontos,area,data_criacao,data_deslocamento,data_encerramento') || [];
+    // que já busca um período de ~40 dias sem filtrar por técnico).
+    // Dispara junto (Promise.all) com pessoas/atestados/ausências em vez de
+    // esperar elas terminarem primeiro - são Apps Script (mais lento, sujeito
+    // a cold start) e essa busca de registros nem depende delas pra começar,
+    // só pro roster mais abaixo. Nas chamadas seguintes (auto-refresh/botão)
+    // os 3 caches já estão prontos e resolvem na hora (memoizados).
+    const [regs] = await Promise.all([
+      OPS_SUPABASE.select('produtividade_registros',
+        `data_encerramento=gte.${buscaDesdeStr}T00:00:00&data_encerramento=lt.${amanhaStr}T00:00:00`,
+        'tecnico,tipo,produtivo,pontos,area,data_criacao,data_deslocamento,data_encerramento'),
+      carregarPessoasCacheSeNecessario(),
+      carregarAtestadosCacheSeNecessario(),
+      carregarAusenciasCacheSeNecessario(),
+    ]);
+    registros = regs || [];
   }catch(err){
     console.error('Falha ao buscar produtividade tempo real', err);
     document.getElementById('go-ptr-tbody').innerHTML = `<tr><td colspan="15" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
