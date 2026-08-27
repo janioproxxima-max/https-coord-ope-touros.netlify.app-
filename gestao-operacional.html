@@ -840,6 +840,26 @@ let goVeiculos = null, goLavagens = null, goManutencoes = null;
 let goAuditoriasGeral = null; // todas as auditorias (não só a semana/inspetor da Área do Inspetor) - usado só pela aba Cards Geral
 let goTecnicoSupervisor = {};
 let goTecnicoInspetor = null; // null = ainda não buscado (ver carregarTecnicoInspetorSeNecessario)
+// Frotas/Lavagens/Manutenções/Pessoas/Auditorias/Absenteísmo/Tickets/Férias
+// e o vínculo técnico->inspetor são "carrega uma vez, guarda pro resto da
+// sessão" (ver os vários "if (goX === null)" espalhados pela página) - bom
+// pra não gastar a mesma chamada de novo a cada troca de aba, mas isso
+// também significava que registrar uma lavagem/manutenção/pessoa nova em
+// outra aba (ou até em outra janela) nunca aparecia aqui, nem clicando em
+// "↻ Atualizar" — essas variáveis nunca voltavam a ficar null pra forçar
+// uma busca nova. invalidarCachesRegistro() zera todas de uma vez; chamada
+// em toda atualização (manual ou automática, ver initPage/auto-refresh mais
+// abaixo), faz a próxima renderização de cada aba buscar de novo.
+function invalidarCachesRegistro(){
+  goPessoasCache = null;
+  goPessoas = null; goAusencias = null; goAtestados = null;
+  goVeiculos = null; goLavagens = null; goManutencoes = null;
+  goAuditoriasGeral = null;
+  goAbsenteismoPonto = null;
+  goTickets = [];
+  goFerias = null;
+  goTecnicoInspetor = null;
+}
 let goRespImprod = 'tecnico', goRespRec = 'inspetor';
 let goCharts = {};
 let goAbaAtiva = 'servicos';
@@ -916,6 +936,12 @@ async function initPage(){
 
   document.getElementById('go-status-info').textContent = 'Carregando histórico de encerrados...';
   try{
+    // zera os caches de Lavagens/Manutenção/Pessoas/Auditorias/etc (ver
+    // invalidarCachesRegistro) - toda vez que essa função roda (carga
+    // inicial, "↻ Atualizar" manual, ou o auto-refresh mais abaixo) é sinal
+    // de que os dados podem ter mudado, então força a próxima renderização
+    // de cada aba a buscar de novo em vez de reaproveitar o que já tinha
+    invalidarCachesRegistro();
     // busca só uma vez: histórico por técnico (tabela pequena) — não depende do período
     goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
@@ -977,8 +1003,16 @@ function atualizarOpcoesCidade(){
 function popularFiltros(){
   const supervisores = [...new Set(Object.values(goTecnicoSupervisor))].filter(Boolean).sort();
   const selSupervisor = document.getElementById('go-f-supervisor');
-  supervisores.forEach(s => selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`));
+  const jaTem = new Set(Array.from(selSupervisor.options).map(o => o.value));
+  supervisores.forEach(s => { if (!jaTem.has(s)) selSupervisor.insertAdjacentHTML('beforeend', `<option value="${s}">${tituloCase(s)}</option>`); });
   atualizarOpcoesCidade();
+
+  // popularFiltros roda de novo a cada atualização manual/automática (pra
+  // pegar supervisor/cidade novos) - sem essa trava, cada chamada grudava
+  // mais um listener em cima do anterior, e depois de algumas atualizações
+  // um clique/mudança de filtro disparava a busca várias vezes seguidas
+  if (selSupervisor.dataset.ligado) return;
+  selSupervisor.dataset.ligado = '1';
 
   document.getElementById('go-f-inicio').addEventListener('change', carregarPeriodo);
   document.getElementById('go-f-fim').addEventListener('change', carregarPeriodo);
@@ -4387,6 +4421,14 @@ function desenharAbaInspetor(){
 
 window.OPS_ON_REFRESH = initPage;
 initPage();
+// atualiza sozinho a cada 5min (histórico/período do Supabase + invalida os
+// caches de Lavagens/Manutenção/Pessoas/etc, que passam a buscar de novo na
+// próxima vez que a aba deles for renderizada) - só quando a aba do
+// navegador está em primeiro plano, pra não gastar chamada à toa com quem
+// deixou a tela aberta em segundo plano
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage();
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>

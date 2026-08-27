@@ -638,10 +638,19 @@ document.querySelectorAll('#al-abas .qf-tile').forEach(btn => {
 
 async function initPage(){
   await carregarBaseComum();
-  carregarRecorrenciaD1();
+  // recarrega a aba que realmente está aberta (não sempre Recorrência D-1) -
+  // importante agora que isso também roda sozinho a cada alguns minutos (ver
+  // auto-refresh mais abaixo), senão quem estivesse vendo Improdutividade ou
+  // SLA seria jogado de volta pra D-1 sem querer
+  AL_CARREGADORES[alAbaAtiva]();
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
+// atualiza sozinho a cada 5min, só quando a aba do navegador está em
+// primeiro plano
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage();
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>

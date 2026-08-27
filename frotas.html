@@ -706,14 +706,14 @@ document.getElementById('btn-export').onclick = () => {
   OPS.downloadXLSX('frotas-touros.xlsx', headers, rows);
 };
 
-async function initPage(){
-  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+async function initPage(silencioso = false){
+  const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
   const [sharedFrotas, sharedLavagens, sharedManutencoes] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COLLECTION_LAVAGENS),
     OPS.syncPull(SYNC_COLLECTION_MANUTENCOES),
   ]);
-  toast.remove();
+  if (toast) toast.remove();
   if (sharedFrotas){ records = sharedFrotas; }
   if (sharedLavagens){ lavagens = sharedLavagens; }
   if (sharedManutencoes){ manutencoes = sharedManutencoes; }
@@ -739,6 +739,12 @@ async function initPage(){
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
+// atualiza sozinho a cada 5min (silencioso - sem o toast "Buscando dados..."
+// que a carga inicial/botão manual mostram), só quando a aba do navegador
+// está em primeiro plano
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage(true);
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>

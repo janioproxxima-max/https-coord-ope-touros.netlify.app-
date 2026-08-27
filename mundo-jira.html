@@ -2854,8 +2854,8 @@ function populateFiltroTecnicoProdutividade(){
   if (tecnicos.includes(valorAtual)) sel.value = valorAtual;
 }
 
-async function initPage(){
-  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+async function initPage(silencioso = false){
+  const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
   // Mundo Jira agora vem do Supabase; Pessoas/Frotas continuam no Google
   // Sheets (Apps Script), sem mudança nenhuma nessa parte
   const [sharedPessoas, sharedFrotas, sharedAusencias, sharedAtestados] = await Promise.all([
@@ -2886,8 +2886,11 @@ async function initPage(){
     comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
     historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
   }
-  toast.remove();
-  if (!supabaseFuncionou){
+  if (toast) toast.remove();
+  // alert() trava a tela - só mostra em carga inicial/atualização manual;
+  // no auto-refresh silencioso uma falha passageira não pode interromper
+  // quem está no meio de alguma outra coisa na tela
+  if (!supabaseFuncionou && !silencioso){
     alert('⚠️ Não consegui buscar os chamados do Mundo Jira no servidor agora — mostrando o que ficou salvo no seu navegador da última vez. Tenta atualizar a página em instantes.');
   }
   if (!produtividadeSyncPendente){
@@ -2913,12 +2916,22 @@ async function initPage(){
   populateFiltroTipoProdutividade();
   populateFiltroTecnicoProdutividade();
   renderAll();
-  const ticketParam = new URLSearchParams(location.search).get('ticket');
-  if (ticketParam && tickets.some(t => t.id === ticketParam)) abrirDetalhe(ticketParam);
+  // só abre automático na carga inicial/atualização manual - no auto-refresh
+  // silencioso reabrir do zero um ticket que a pessoa já está lendo (ou já
+  // fechou) reiniciaria o modal sem motivo
+  if (!silencioso){
+    const ticketParam = new URLSearchParams(location.search).get('ticket');
+    if (ticketParam && tickets.some(t => t.id === ticketParam)) abrirDetalhe(ticketParam);
+  }
   return supabaseFuncionou;
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
+// atualiza sozinho a cada 5min (silencioso), só quando a aba do navegador
+// está em primeiro plano
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage(true);
+}, 5 * 60 * 1000);
 
 if ('serviceWorker' in navigator){
   let swRegistration = null;

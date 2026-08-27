@@ -838,15 +838,15 @@ function renderRodizioFDSChart(){
   });
 }
 
-async function initPage(){
-  const toast = OPS.showToast('☁️ Buscando dados compartilhados...');
+async function initPage(silencioso = false){
+  const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
   const [sharedPessoas, sharedFeedback, sharedAusencias, sharedAtestados] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COLLECTION_FEEDBACK),
     OPS.syncPull(SYNC_COLLECTION_AUSENCIAS),
     OPS.syncPull(SYNC_COLLECTION_ATESTADOS),
   ]);
-  toast.remove();
+  if (toast) toast.remove();
   if (sharedPessoas){ records = sharedPessoas; }
   if (sharedFeedback){ feedbacks = sharedFeedback; }
   if (sharedAusencias){ ausencias = sharedAusencias; }
@@ -915,6 +915,11 @@ function renderAuditoriaCadastros(lista, reconstruidos){
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
+// atualiza sozinho a cada 5min (silencioso), só quando a aba do navegador
+// está em primeiro plano
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage(true);
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>
