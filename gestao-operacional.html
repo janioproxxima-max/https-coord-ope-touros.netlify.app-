@@ -3599,6 +3599,16 @@ async function desenharProdutividadeTempoReal(){
     };
   }).sort((a,b) => b.pontosDia - a.pontosDia);
 
+  // "Média do dia" = pontos realizados hoje ÷ nº de equipes ativas hoje
+  // (mesmo roster do painel abaixo) - dá o quanto cada equipe rendeu em
+  // média, pra comparar direto com a meta individual (META_PONTOS_DIA).
+  const pontosHojeTotal = linhas.reduce((s, l) => s + l.pontosDia, 0);
+  const equipesAtivas = roster.length;
+  const mediaDia = equipesAtivas ? pontosHojeTotal / equipesAtivas : 0;
+  document.getElementById('go-ptr-resumo-cards').insertAdjacentHTML('beforeend', `
+    <div class="stat-card ${corPontosDia(mediaDia)}"><div class="label">Média do dia</div><div class="value">${mediaDia.toFixed(1).replace('.', ',')}</div>
+      <div class="sla-meta" style="margin-top:2px">${fmtNum(Math.round(pontosHojeTotal * 10) / 10)} pontos ÷ ${fmtNum(equipesAtivas)} equipe(s) · meta ${META_PONTOS_DIA}/equipe</div></div>`);
+
   // quadrados de % por supervisor - quantos da equipe já bateram os 8
   // pontos individualmente hoje ÷ total da equipe (não é soma de pontos -
   // quem passou muito da meta não "cobre" outro que ainda não bateu)

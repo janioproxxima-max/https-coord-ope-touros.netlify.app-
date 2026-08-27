@@ -183,6 +183,7 @@ h1.page-title{ font-size:26px; margin:0 0 4px; font-weight:800; letter-spacing:-
 }
 .stat-card .value small{ font-size:14px; color:var(--ink-dim); font-weight:500; }
 .stat-card.ok .value{ color:var(--ok); }
+.stat-card.warn .value{ color:var(--warn); }
 .stat-card.crit .value{ color:var(--crit); }
 .stat-card.brand .value{ color:var(--brand); }
 
