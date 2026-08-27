@@ -569,7 +569,7 @@
       <p class="page-sub" style="padding:0 16px;margin:10px 0">O que foi feito, quando e o que foi registrado — Auditorias Internas, Pós Atendimento, Durante o Atendimento, Ferramental e SESMT do inspetor selecionado acima.</p>
       <div class="table-wrap" style="max-height:360px">
         <table class="services">
-          <thead><tr><th>Tipo</th><th>Técnico auditado</th><th>Protocolo</th><th>Quando</th><th>Nota</th><th>Checklist</th><th>Observação</th></tr></thead>
+          <thead><tr><th>Tipo</th><th>Técnico auditado</th><th>Protocolo</th><th>Quando</th><th>Nota</th><th>Checklist</th><th>Detalhes</th></tr></thead>
           <tbody id="go-insp-hist-tbody"></tbody>
         </table>
       </div>
@@ -634,7 +634,7 @@
     <div style="display:flex;flex-direction:column;gap:14px;margin:16px 0">
       <div class="field"><label>Técnico auditado</label><input class="input" id="go-insp-modal-tecnico" placeholder="Nome do técnico"></div>
       <div class="field"><label>Protocolo (se aplicável)</label><input class="input" id="go-insp-modal-protocolo" placeholder="Ex: 8784054/1"></div>
-      <div id="go-insp-modal-checklist" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div id="go-insp-modal-checklist" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="field"><label>Nota geral (1-5)</label>
         <select class="input" id="go-insp-modal-nota">
           <option value="">Selecione...</option>
@@ -645,7 +645,6 @@
           <option value="5">5 - Excelente</option>
         </select>
       </div>
-      <div class="field"><label>Observações</label><textarea class="input" id="go-insp-modal-obs" rows="3" style="resize:vertical"></textarea></div>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="go-insp-modal-fechar">Fechar</button>
@@ -4030,12 +4029,10 @@ const INSP_TAREFAS = [
   { chave: 'lavagens', label: 'Lavagens', icon: '💧', meta: null, sufixo: 'veículos lavados no mês', tipo: 'existente', coberturaMensal: true },
   { chave: 'manutencao', label: 'Manutenção', icon: '🔧', meta: null, sufixo: 'Acompanhamento contínuo', tipo: 'existente' },
 ];
-// Checklist inicial (proposta) pra cada tipo - dá pra ajustar os itens
-// depois, é só editar essas listas.
 const AUDITORIA_CHECKLIST = {
-  interna: ['Uniforme e identificação em dia', 'Ferramentas e EPIs completos', 'Documentação do serviço preenchida corretamente', 'Cliente foi orientado sobre o serviço prestado'],
-  pos_atendimento: ['Fotos/evidências anexadas corretamente', 'Descrição do encerramento condiz com o serviço realizado', 'Cliente confirma satisfação com o atendimento'],
-  durante_atendimento: ['Procedimento de segurança seguido', 'Comunicação com o cliente adequada', 'Execução técnica dentro do padrão'],
+  interna: ['Check list APR', 'Check list de Serviço', 'Verificação de material utilizado', 'Verificação do relato preenchido'],
+  pos_atendimento: ['Fotos/evidências anexadas corretamente', 'Descrição do encerramento condiz com o serviço realizado', 'Cliente confirma satisfação com o atendimento', 'Material condiz com o serviço executado', 'Aplicação de equipamentos de acordo com o plano do cliente (1R/2R/3R/4R)'],
+  durante_atendimento: ['Procedimento de segurança seguido', 'Comunicação com o cliente adequada', 'Execução técnica dentro do padrão', 'Verificação do material utilizado durante o atendimento', 'Organização do veículo', 'Fardamento adequado durante o atendimento', 'Ferramental utilizado corretamente', 'Apresentação individual'],
   ferramental: ['Ferramentas básicas completas', 'Ferramentas em bom estado de conservação'],
   sesmt: ['EPIs completos e em bom estado', 'Uso correto dos EPIs observado'],
 };
@@ -4139,21 +4136,67 @@ function desenharHistoricoAuditorias(){
     const tarefa = INSP_TAREFAS.find(t => t.chave === a.tipo);
     const label = tarefa ? `${tarefa.icon} ${tarefa.label}` : a.tipo;
     const itensChecklist = Object.entries(a.checklist || {});
-    const marcados = itensChecklist.filter(([,ok]) => ok).length;
-    const checklistTexto = itensChecklist.length
-      ? `${marcados}/${itensChecklist.length} ok` + (marcados < itensChecklist.length
-        ? ` · faltou: ${itensChecklist.filter(([,ok]) => !ok).map(([item]) => item).join('; ')}` : '')
-      : '—';
+    // formato novo: { item: { status, observacao, foto } }. formato antigo
+    // (registros salvos antes dessa mudança): { item: boolean } - mantém
+    // compatibilidade pra não quebrar o histórico já existente.
+    const ehNovoFormato = itensChecklist.length > 0 && itensChecklist[0][1] !== null && typeof itensChecklist[0][1] === 'object';
+    let checklistTexto = '—';
+    let detalhesHtml = '';
+    if (ehNovoFormato){
+      const conformes = itensChecklist.filter(([,v]) => v.status === 'conforme').length;
+      const naoConformes = itensChecklist.filter(([,v]) => v.status === 'nao_conforme');
+      checklistTexto = `${conformes}/${itensChecklist.length} conforme`
+        + (naoConformes.length ? ` · não conforme: ${naoConformes.map(([item]) => item).join('; ')}` : '');
+      detalhesHtml = itensChecklist.filter(([,v]) => v.observacao || v.foto).map(([item, v]) => `
+        <div style="margin-bottom:8px">
+          <strong>${item}:</strong> ${v.observacao || '<span style="color:var(--ink-faint)">sem observação</span>'}
+          ${v.foto ? `<br><img src="${v.foto}" style="max-height:90px;border-radius:6px;margin-top:4px">` : ''}
+        </div>`).join('');
+    }else if (itensChecklist.length){
+      const marcados = itensChecklist.filter(([,ok]) => ok).length;
+      checklistTexto = `${marcados}/${itensChecklist.length} ok` + (marcados < itensChecklist.length
+        ? ` · faltou: ${itensChecklist.filter(([,ok]) => !ok).map(([item]) => item).join('; ')}` : '');
+      detalhesHtml = a.observacao ? `<div style="white-space:pre-wrap">${a.observacao}</div>` : '';
+    }
     return `<tr>
       <td>${label}</td><td>${tituloCase(a.tecnico || '—')}</td><td>${a.protocolo || '—'}</td>
       <td>${OPS.formatDateTimeBR(a.data)}</td>
       <td>${a.nota != null ? a.nota : '—'}</td><td style="max-width:260px">${checklistTexto}</td>
-      <td style="max-width:180px">${a.observacao
-        ? `<details><summary style="cursor:pointer;color:var(--brand);font-size:12px">📝 Ver</summary><div style="margin-top:6px;white-space:pre-wrap">${a.observacao}</div></details>`
+      <td style="max-width:180px">${detalhesHtml
+        ? `<details><summary style="cursor:pointer;color:var(--brand);font-size:12px">📝 Ver</summary><div style="margin-top:6px">${detalhesHtml}</div></details>`
         : '—'}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhuma auditoria registrada nessa semana pra esse inspetor.</td></tr>`;
 }
+
+// compressão de foto client-side (mesmo padrão do mundo-jira.html) - reduz
+// pra um base64 pequeno antes de guardar no jsonb do registro.
+function comprimirImagemAuditoria(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const tentar = (maxLado, qualidade) => {
+        let { width, height } = img;
+        if (width > height && width > maxLado){ height = height * (maxLado / width); width = maxLado; }
+        else if (height > maxLado){ width = width * (maxLado / height); height = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', qualidade);
+      };
+      let resultado = tentar(500, 0.55);
+      if (resultado.length > 60000) resultado = tentar(360, 0.45);
+      resolve(resultado);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let goInspFotos = {}; // idx do item -> base64 (fotos anexadas no modal aberto)
 
 function abrirModalAuditoria(tipo){
   document.getElementById('go-insp-modal').dataset.tipo = tipo;
@@ -4162,11 +4205,52 @@ function abrirModalAuditoria(tipo){
   document.getElementById('go-insp-modal-tecnico').value = '';
   document.getElementById('go-insp-modal-protocolo').value = '';
   document.getElementById('go-insp-modal-nota').value = '';
-  document.getElementById('go-insp-modal-obs').value = '';
-  document.getElementById('go-insp-modal-checklist').innerHTML = (AUDITORIA_CHECKLIST[tipo] || []).map((item, i) => `
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim)">
-      <input type="checkbox" id="go-insp-check-${i}"> ${item}
-    </label>`).join('');
+  goInspFotos = {};
+  const itens = AUDITORIA_CHECKLIST[tipo] || [];
+  document.getElementById('go-insp-modal-checklist').innerHTML = itens.map((item, i) => `
+    <div class="go-insp-item" data-idx="${i}" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--ink-dim);flex:1;min-width:200px">${item}</span>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn ghost go-insp-btn-status" data-status="conforme" data-idx="${i}" style="padding:4px 10px;font-size:12px">✅ Conforme</button>
+          <button type="button" class="btn ghost go-insp-btn-status" data-status="nao_conforme" data-idx="${i}" style="padding:4px 10px;font-size:12px">❌ Não Conforme</button>
+        </div>
+      </div>
+      <textarea class="input go-insp-item-obs" data-idx="${i}" placeholder="Observação (opcional)" rows="2" style="resize:vertical;font-size:12px"></textarea>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label class="btn ghost" style="padding:4px 10px;font-size:12px;cursor:pointer;margin:0">📷 Anexar imagem<input type="file" accept="image/*" class="go-insp-item-foto" data-idx="${i}" style="display:none"></label>
+        <span class="go-insp-item-foto-status" data-idx="${i}" style="font-size:12px;color:var(--ink-faint)"></span>
+      </div>
+    </div>`).join('');
+
+  document.querySelectorAll('#go-insp-modal-checklist .go-insp-btn-status').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = document.querySelector(`.go-insp-item[data-idx="${btn.dataset.idx}"]`);
+      item.querySelectorAll('.go-insp-btn-status').forEach(b => {
+        const ativo = b === btn && b.dataset.ativo !== '1';
+        b.dataset.ativo = ativo ? '1' : '';
+        b.style.background = ativo ? (b.dataset.status === 'conforme' ? 'var(--ok)' : 'var(--crit)') : '';
+        b.style.color = ativo ? '#fff' : '';
+        b.style.borderColor = ativo ? 'transparent' : '';
+      });
+    });
+  });
+  document.querySelectorAll('#go-insp-modal-checklist .go-insp-item-foto').forEach(input => {
+    input.addEventListener('change', async () => {
+      const idx = input.dataset.idx;
+      const status = document.querySelector(`.go-insp-item-foto-status[data-idx="${idx}"]`);
+      const file = input.files[0];
+      if (!file) return;
+      status.textContent = 'Comprimindo...';
+      try{
+        goInspFotos[idx] = await comprimirImagemAuditoria(file);
+        status.textContent = '✅ Imagem anexada';
+      }catch(err){
+        status.textContent = '⚠️ Falha ao anexar imagem';
+      }
+    });
+  });
+
   document.getElementById('go-insp-modal').style.display = 'flex';
 }
 document.getElementById('go-insp-modal-fechar').addEventListener('click', () => { document.getElementById('go-insp-modal').style.display = 'none'; });
@@ -4177,7 +4261,15 @@ document.getElementById('go-insp-modal-salvar').addEventListener('click', async 
   if (!tecnico){ alert('Informe o técnico auditado.'); return; }
   const itens = AUDITORIA_CHECKLIST[tipo] || [];
   const checklist = {};
-  itens.forEach((item, i) => { checklist[item] = document.getElementById(`go-insp-check-${i}`).checked; });
+  itens.forEach((item, i) => {
+    const btnAtivo = document.querySelector(`.go-insp-btn-status[data-idx="${i}"][data-ativo="1"]`);
+    const obs = document.querySelector(`.go-insp-item-obs[data-idx="${i}"]`);
+    checklist[item] = {
+      status: btnAtivo ? btnAtivo.dataset.status : null,
+      observacao: obs ? obs.value.trim() : '',
+      foto: goInspFotos[i] || null,
+    };
+  });
   const btn = document.getElementById('go-insp-modal-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try{
@@ -4186,7 +4278,6 @@ document.getElementById('go-insp-modal-salvar').addEventListener('click', async 
       protocolo: document.getElementById('go-insp-modal-protocolo').value.trim() || null,
       data: new Date().toISOString(), checklist,
       nota: document.getElementById('go-insp-modal-nota').value ? Number(document.getElementById('go-insp-modal-nota').value) : null,
-      observacao: document.getElementById('go-insp-modal-obs').value.trim(),
       criado_por: nomeDoLogin(),
     };
     await OPS_SUPABASE.upsert('auditorias_registros', [registro], 'id');
