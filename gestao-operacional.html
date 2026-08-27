@@ -3614,20 +3614,23 @@ async function desenharProdutividadeTempoReal(){
   // quem passou muito da meta não "cobre" outro que ainda não bateu)
   const porSupervisorMeta = {};
   linhas.forEach(l => {
-    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0 };
+    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0, pontos: 0 };
     if (l.pontosDia >= META_PONTOS_DIA) porSupervisorMeta[l.supervisor].bateram++;
     porSupervisorMeta[l.supervisor].pessoas++;
+    porSupervisorMeta[l.supervisor].pontos += l.pontosDia;
   });
   document.getElementById('go-ptr-supervisor-cards').innerHTML = Object.entries(porSupervisorMeta)
     .map(([sup, v]) => ({ sup, ...v }))
     .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
-    .map(({ sup, bateram, pessoas }) => {
+    .map(({ sup, bateram, pessoas, pontos }) => {
       const pct = pessoas ? (bateram / pessoas) * 100 : 0;
       const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
+      const mediaSup = pessoas ? pontos / pessoas : 0;
       return `<div class="sla-card ${cor}">
         <div class="sla-label">${nomeCurto2(sup)}</div>
         <div class="sla-value">${fmtPct(pct)}</div>
         <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
+        <div class="sla-meta" style="color:var(--${corPontosDia(mediaSup)});font-weight:700">Média do dia: ${mediaSup.toFixed(1).replace('.', ',')} (meta ${META_PONTOS_DIA})</div>
         <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
       </div>`;
     }).join('') || `<p style="color:var(--ink-faint);padding:0 2px">Sem colaboradores ativos agora.</p>`;
