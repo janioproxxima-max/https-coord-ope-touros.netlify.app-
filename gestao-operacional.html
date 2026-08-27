@@ -3610,16 +3610,18 @@ async function desenharProdutividadeTempoReal(){
   // pra ficar comparável ponto a ponto com a de hoje - quem não tem
   // registro no dia anterior entra como 0, do mesmo jeito que quem ainda
   // não fechou nada hoje conta 0 na média de hoje.
-  // "Média do mês" já é por natureza uma média por dia trabalhado, então o
-  // denominador é a soma de dias trabalhados no mês (não o nº de equipes).
+  // "Média do mês" = média simples do PPC (pontos ÷ dias trabalhados) de
+  // cada equipe ativa no mês - não é soma de pontos ÷ soma de dias (isso
+  // pesaria mais quem trabalhou mais dias); cada equipe conta igual,
+  // do jeito que o PPC individual já é calculado (ppc, acima). Quem não
+  // trabalhou nenhum dia no mês (ppc null) fica fora da média.
   const pontosHojeTotal = linhas.reduce((s, l) => s + l.pontosDia, 0);
   const equipesAtivas = roster.length;
   const mediaDia = equipesAtivas ? pontosHojeTotal / equipesAtivas : 0;
   const pontosDiaAnteriorTotal = linhas.reduce((s, l) => s + (l.pontosDiaAnterior || 0), 0);
   const mediaDiaAnterior = equipesAtivas ? pontosDiaAnteriorTotal / equipesAtivas : 0;
-  const pontosMesTotal = linhas.reduce((s, l) => s + l.pontosMes, 0);
-  const diasMesTotal = linhas.reduce((s, l) => s + l.diasMesQtd, 0);
-  const mediaMes = diasMesTotal ? pontosMesTotal / diasMesTotal : 0;
+  const ppcsValidos = linhas.map(l => l.ppc).filter(v => v != null);
+  const mediaMes = ppcsValidos.length ? ppcsValidos.reduce((s, v) => s + v, 0) / ppcsValidos.length : 0;
   const linhaMedia = (label, valor) => `<div class="sla-meta" style="color:var(--${corMedia(valor)});font-weight:700">${label}: ${valor.toFixed(1).replace('.', ',')} (meta ${META_PONTOS_DIA})</div>`;
   document.getElementById('go-ptr-resumo-cards').insertAdjacentHTML('beforeend', `
     <div class="stat-card ${corPontosDia(mediaDia)}"><div class="label">Média do dia</div><div class="value">${mediaDia.toFixed(1).replace('.', ',')}</div>
@@ -3633,24 +3635,23 @@ async function desenharProdutividadeTempoReal(){
   // quem passou muito da meta não "cobre" outro que ainda não bateu)
   const porSupervisorMeta = {};
   linhas.forEach(l => {
-    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0, pontos: 0, pontosDiaAnterior: 0, pontosMes: 0, diasMes: 0 };
+    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0, pontos: 0, pontosDiaAnterior: 0, somaPPC: 0, qtdPPC: 0 };
     const v = porSupervisorMeta[l.supervisor];
     if (l.pontosDia >= META_PONTOS_DIA) v.bateram++;
     v.pessoas++;
     v.pontos += l.pontosDia;
     v.pontosDiaAnterior += l.pontosDiaAnterior || 0;
-    v.pontosMes += l.pontosMes;
-    v.diasMes += l.diasMesQtd;
+    if (l.ppc != null){ v.somaPPC += l.ppc; v.qtdPPC++; }
   });
   document.getElementById('go-ptr-supervisor-cards').innerHTML = Object.entries(porSupervisorMeta)
     .map(([sup, v]) => ({ sup, ...v }))
     .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
-    .map(({ sup, bateram, pessoas, pontos, pontosDiaAnterior, pontosMes, diasMes }) => {
+    .map(({ sup, bateram, pessoas, pontos, pontosDiaAnterior, somaPPC, qtdPPC }) => {
       const pct = pessoas ? (bateram / pessoas) * 100 : 0;
       const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
       const mediaSup = pessoas ? pontos / pessoas : 0;
       const mediaSupDiaAnterior = pessoas ? pontosDiaAnterior / pessoas : 0;
-      const mediaSupMes = diasMes ? pontosMes / diasMes : 0;
+      const mediaSupMes = qtdPPC ? somaPPC / qtdPPC : 0;
       return `<div class="sla-card ${cor}">
         <div class="sla-label">${nomeCurto2(sup)}</div>
         <div class="sla-value">${fmtPct(pct)}</div>
