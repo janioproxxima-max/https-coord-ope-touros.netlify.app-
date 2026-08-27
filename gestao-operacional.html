@@ -3046,7 +3046,10 @@ function calcularChavesPremiacao(){
 // referência tem o valor ajustado proporcionalmente (valor × equipes/8).
 // A coordenação usa o total de equipes da unidade; cada supervisor usa só
 // as equipes dele. Recolhimento não entra nessa conta - já tem a própria
-// regra (valor/OS × produtivos).
+// regra (valor/OS × produtivos). Sempre chamada com goPremiacaoRegistrosEquipe
+// (por técnico, não por cidade) - uma equipe que foi atender fora da unidade
+// (ex: Marcello mandou um técnico cobrir chamado em Natal) ainda conta como
+// equipe ativa dele, mesma lógica da Chave 1.
 const EQUIPES_REFERENCIA = 8;
 function equipesAtivas(registros, supervisor){
   const set = new Set();
@@ -3131,7 +3134,7 @@ function desenharPremiacao(){
   const chaves = calcularChavesPremiacao();
   const meuSupervisor = supervisorLogado();
   const supervisoresTodos = [...new Set(Object.values(goTecnicoSupervisor))].filter(s => s && s !== '—').sort();
-  const equipesUnidade = equipesAtivas(goPremiacaoRegistros);
+  const equipesUnidade = equipesAtivas(goPremiacaoRegistrosEquipe);
 
   const cardsComuns = `
     <div class="sla-grid">
@@ -3145,7 +3148,7 @@ function desenharPremiacao(){
   let html = cardsComuns;
 
   if (meuSupervisor){
-    const equipesSup = equipesAtivas(goPremiacaoRegistros, meuSupervisor);
+    const equipesSup = equipesAtivas(goPremiacaoRegistrosEquipe, meuSupervisor);
     const valorOS = chaves.recolhimento.banda ? PREMIACAO_LIDERANCA.recolhimentoValorOS[chaves.recolhimento.banda.nome] : 0;
     const valorRecolhimentoTotal = valorOS * chaves.recolhimento.produtivos;
     const valorRecolhimentoFinal = valorRecolhimentoTotal / chaves.nSupervisores;
@@ -3166,7 +3169,7 @@ function desenharPremiacao(){
     const valorRecLidTotal = valorOSLid * chaves.recolhimento.produtivos;
     const valorRecLidFinal = valorRecLidTotal / chaves.nSupervisores;
     const linhasSupervisores = supervisoresTodos.map(s => {
-      const equipesSup = equipesAtivas(goPremiacaoRegistros, s);
+      const equipesSup = equipesAtivas(goPremiacaoRegistrosEquipe, s);
       const totalSup = somaTotalPremiacao(PREMIACAO_LIDERANCA, chaves, valorRecLidFinal, equipesSup);
       return `<tr><td>${tituloCase(s)}</td><td>${fmtNum(equipesSup)}</td><td>${fmtReais(valorRecLidFinal)}</td><td style="font-weight:700">${fmtReais(totalSup)}</td></tr>`;
     }).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Nenhum supervisor encontrado no histórico de produtividade.</td></tr>`;
