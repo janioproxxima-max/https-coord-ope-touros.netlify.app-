@@ -419,6 +419,8 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .marker-label.proximo .code, .marker-label.proximo .hrs{ color:#1e1035; }
 .marker-label.futuro{ background:#5eead4; }
 .marker-label.futuro .code, .marker-label.futuro .hrs{ color:#04302a; }
+.marker-label.rosa{ background:#ec4899; }
+.marker-label.rosa .code, .marker-label.rosa .hrs{ color:#3a0620; }
 .marker-badges{
   position:absolute; top:-9px; left:50%; transform:translateX(-50%);
   display:flex; gap:1px; font-size:11px; line-height:1; white-space:nowrap;

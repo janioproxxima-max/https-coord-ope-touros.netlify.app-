@@ -399,7 +399,7 @@ const STATUS_CHAMADO_DEFS = [
   { key: 'proximo_atendimento', label: 'Próximo atendimento', cor: 'var(--accent2)' },
   { key: 'pendente', label: 'Pendente', cor: 'var(--ink-faint)' },
   { key: 'futuro', label: 'Agendamento futuro', cor: '#5eead4' },
-  { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: 'var(--warn)' },
+  { key: 'atendimento_hoje', label: 'Atendimento para hoje', cor: '#ec4899' },
   { key: 'atendimento_atrasado', label: 'Atendimento atrasado', cor: 'var(--crit)', alerta: true },
 ];
 const STATUS_CHAMADO_LABEL = Object.fromEntries(STATUS_CHAMADO_DEFS.map(d => [d.key, d.label]));
@@ -878,6 +878,10 @@ function renderMap(fitView = true){
     // cor do pino: verde/azul/cinza só pra Iniciado/Deslocamento/Pendente —
     // as demais situações mantêm a cor de prazo (dentro/perto/fora) e ganham
     // um selinho de alerta em cima, pra não perder a info de urgência.
+    // "Atendimento para hoje" (tem responsável, ainda não iniciado, mas
+    // precisa ser atendido hoje pelo prazo) tem cor própria (rosa) - antes
+    // caía no runwayColor() de baixo, que olha só o tempo decorrido e podia
+    // sair verde (dentro do prazo) mesmo sem ninguém ter começado a atender.
     let color;
     if (statusChamado === 'iniciado') color = 'ok';
     else if (statusChamado === 'deslocamento') color = 'deslocamento';
@@ -885,6 +889,7 @@ function renderMap(fitView = true){
     else if (statusChamado === 'proximo_atendimento') color = 'proximo';
     else if (statusChamado === 'futuro') color = 'futuro';
     else if (statusChamado === 'pendente') color = 'neutral';
+    else if (statusChamado === 'atendimento_hoje') color = 'rosa';
     else color = runwayColor(r);
 
     const badges = [];
