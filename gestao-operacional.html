@@ -3280,7 +3280,13 @@ async function renderAbaProdutividadeTecnica(){
 const META_PONTOS_DIA = 8;
 
 function desenharProdutividadeTecnica(){
-  const data = goRegistrosFiltrados();
+  // só técnico Instalador/Reparador cadastrado em Gestão de Pessoas (mesmo
+  // critério usado em Recorrência/Improdutividade/Produtividade Tempo Real)
+  // - sem isso, qualquer nome que apareça em "tecnico" na planilha de
+  // produtividade entra no ranking, mesmo quem não é da operação (ex: nome
+  // de supervisor aparecendo por engano num registro, ou gente de outro
+  // cargo/unidade).
+  const data = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico));
 
   // dias trabalhados = dias distintos em que o colaborador fechou algum
   // atendimento no período, produtivo OU improdutivo, como responsável
@@ -3545,8 +3551,12 @@ async function desenharProdutividadeTempoReal(){
   });
 
   // quartil do mês atual: mesmo critério (ranking por pontos/dia) já usado
-  // no Ranking de colaboradores da Produtividade Técnica
-  const rankingMes = Object.entries(porTecnico).map(([key, t]) => ({
+  // no Ranking de colaboradores da Produtividade Técnica. Só entra na
+  // "pool" do ranking quem é Instalador/Reparador cadastrado - senão um
+  // nome estranho em "tecnico" (fora da operação) desloca o corte dos
+  // quartis pra todo mundo, mesmo sem aparecer na tabela (que já só mostra
+  // o roster).
+  const rankingMes = Object.entries(porTecnico).filter(([key]) => ehInstaladorReparador(key)).map(([key, t]) => ({
     key, pontosDia: t.diasMes.size ? t.pontosMes / t.diasMes.size : 0,
   })).sort((a,b) => b.pontosDia - a.pontosDia);
   const nq = rankingMes.length;
