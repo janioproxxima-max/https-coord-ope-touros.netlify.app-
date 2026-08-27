@@ -3581,6 +3581,10 @@ async function desenharProdutividadeTempoReal(){
 
   const QUARTIL_COR = { 1:'ok', 2:'ok', 3:'warn', 4:'crit' };
   const corPontosDia = pts => pts >= META_PONTOS_DIA ? 'ok' : (pts >= META_PONTOS_DIA * 0.5 ? 'warn' : 'crit');
+  // cor das médias (dia/dia anterior/mês): <6 vermelho, 6 a 7,99 amarelo,
+  // >=8 (a meta) verde - faixa própria, mais rígida que o corPontosDia
+  // individual (que só fica crítico abaixo de 4).
+  const corMedia = m => m >= META_PONTOS_DIA ? 'ok' : (m >= 6 ? 'warn' : 'crit');
   const linhas = roster.map(p => {
     const key = OPS.normalize(p.nome);
     const t = porTecnico[key];
@@ -3593,7 +3597,7 @@ async function desenharProdutividadeTempoReal(){
       pontosRecolhimento: t ? t.pontosRecolhimento : 0, pontosMudancaEndereco: t ? t.pontosMudancaEndereco : 0,
       pontosDia: t ? t.pontosDia : 0,
       pontosDiaAnterior: diaAnterior ? diaAnterior.pontos : null,
-      pontosMes: t ? t.pontosMes : 0, ppc: diasMesQtd ? t.pontosMes / diasMesQtd : null,
+      pontosMes: t ? t.pontosMes : 0, diasMesQtd, ppc: diasMesQtd ? t.pontosMes / diasMesQtd : null,
       improdHoje: t ? t.improdHoje : 0,
       primeiroDeslocamento: t ? t.primeiroDeslocamento : null, ultimoConcluido: t ? t.ultimoConcluido : null,
     };
@@ -3602,35 +3606,58 @@ async function desenharProdutividadeTempoReal(){
   // "Média do dia" = pontos realizados hoje ÷ nº de equipes ativas hoje
   // (mesmo roster do painel abaixo) - dá o quanto cada equipe rendeu em
   // média, pra comparar direto com a meta individual (META_PONTOS_DIA).
+  // "Média do dia anterior" usa o mesmo denominador (equipes ativas hoje),
+  // pra ficar comparável ponto a ponto com a de hoje - quem não tem
+  // registro no dia anterior entra como 0, do mesmo jeito que quem ainda
+  // não fechou nada hoje conta 0 na média de hoje.
+  // "Média do mês" já é por natureza uma média por dia trabalhado, então o
+  // denominador é a soma de dias trabalhados no mês (não o nº de equipes).
   const pontosHojeTotal = linhas.reduce((s, l) => s + l.pontosDia, 0);
   const equipesAtivas = roster.length;
   const mediaDia = equipesAtivas ? pontosHojeTotal / equipesAtivas : 0;
+  const pontosDiaAnteriorTotal = linhas.reduce((s, l) => s + (l.pontosDiaAnterior || 0), 0);
+  const mediaDiaAnterior = equipesAtivas ? pontosDiaAnteriorTotal / equipesAtivas : 0;
+  const pontosMesTotal = linhas.reduce((s, l) => s + l.pontosMes, 0);
+  const diasMesTotal = linhas.reduce((s, l) => s + l.diasMesQtd, 0);
+  const mediaMes = diasMesTotal ? pontosMesTotal / diasMesTotal : 0;
+  const linhaMedia = (label, valor) => `<div class="sla-meta" style="color:var(--${corMedia(valor)});font-weight:700">${label}: ${valor.toFixed(1).replace('.', ',')} (meta ${META_PONTOS_DIA})</div>`;
   document.getElementById('go-ptr-resumo-cards').insertAdjacentHTML('beforeend', `
     <div class="stat-card ${corPontosDia(mediaDia)}"><div class="label">Média do dia</div><div class="value">${mediaDia.toFixed(1).replace('.', ',')}</div>
-      <div class="sla-meta" style="margin-top:2px">${fmtNum(Math.round(pontosHojeTotal * 10) / 10)} pontos ÷ ${fmtNum(equipesAtivas)} equipe(s) · meta ${META_PONTOS_DIA}/equipe</div></div>`);
+      <div class="sla-meta" style="margin-top:2px">${fmtNum(Math.round(pontosHojeTotal * 10) / 10)} pontos ÷ ${fmtNum(equipesAtivas)} equipe(s) · meta ${META_PONTOS_DIA}/equipe</div>
+      ${linhaMedia('Dia anterior', mediaDiaAnterior)}
+      ${linhaMedia('Mês', mediaMes)}
+    </div>`);
 
   // quadrados de % por supervisor - quantos da equipe já bateram os 8
   // pontos individualmente hoje ÷ total da equipe (não é soma de pontos -
   // quem passou muito da meta não "cobre" outro que ainda não bateu)
   const porSupervisorMeta = {};
   linhas.forEach(l => {
-    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0, pontos: 0 };
-    if (l.pontosDia >= META_PONTOS_DIA) porSupervisorMeta[l.supervisor].bateram++;
-    porSupervisorMeta[l.supervisor].pessoas++;
-    porSupervisorMeta[l.supervisor].pontos += l.pontosDia;
+    porSupervisorMeta[l.supervisor] = porSupervisorMeta[l.supervisor] || { bateram: 0, pessoas: 0, pontos: 0, pontosDiaAnterior: 0, pontosMes: 0, diasMes: 0 };
+    const v = porSupervisorMeta[l.supervisor];
+    if (l.pontosDia >= META_PONTOS_DIA) v.bateram++;
+    v.pessoas++;
+    v.pontos += l.pontosDia;
+    v.pontosDiaAnterior += l.pontosDiaAnterior || 0;
+    v.pontosMes += l.pontosMes;
+    v.diasMes += l.diasMesQtd;
   });
   document.getElementById('go-ptr-supervisor-cards').innerHTML = Object.entries(porSupervisorMeta)
     .map(([sup, v]) => ({ sup, ...v }))
     .sort((a,b) => (b.bateram/b.pessoas) - (a.bateram/a.pessoas))
-    .map(({ sup, bateram, pessoas, pontos }) => {
+    .map(({ sup, bateram, pessoas, pontos, pontosDiaAnterior, pontosMes, diasMes }) => {
       const pct = pessoas ? (bateram / pessoas) * 100 : 0;
       const cor = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'crit');
       const mediaSup = pessoas ? pontos / pessoas : 0;
+      const mediaSupDiaAnterior = pessoas ? pontosDiaAnterior / pessoas : 0;
+      const mediaSupMes = diasMes ? pontosMes / diasMes : 0;
       return `<div class="sla-card ${cor}">
         <div class="sla-label">${nomeCurto2(sup)}</div>
         <div class="sla-value">${fmtPct(pct)}</div>
         <div class="sla-meta">${fmtNum(bateram)} de ${fmtNum(pessoas)} bateram a meta hoje</div>
-        <div class="sla-meta" style="color:var(--${corPontosDia(mediaSup)});font-weight:700">Média do dia: ${mediaSup.toFixed(1).replace('.', ',')} (meta ${META_PONTOS_DIA})</div>
+        ${linhaMedia('Média do dia', mediaSup)}
+        ${linhaMedia('Dia anterior', mediaSupDiaAnterior)}
+        ${linhaMedia('Mês', mediaSupMes)}
         <div class="sla-bar-track"><div class="sla-bar-fill" style="width:${Math.min(pct,100)}%"></div><span class="sla-dot"></span></div>
       </div>`;
     }).join('') || `<p style="color:var(--ink-faint);padding:0 2px">Sem colaboradores ativos agora.</p>`;
