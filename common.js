@@ -706,11 +706,11 @@ const OPS = (() => {
     const produtivo = found ? found.produtivo : null;
     const planoNorm = normalize(planoProduto);
     const ehAtivacaoOuMudanca = tipoCurto === 'ATIVAÇÃO' || tipoCurto === 'TROCA DE ENDEREÇO';
-    // o bônus só vale pra fechamento de ativação/mudança de verdade — "COM
-    // VIABILIDADE" é só uma checagem de viabilidade, não conclui o serviço,
-    // então continua com a pontuação normal do catálogo (2.00)
-    const ehComViabilidade = n === 'operacoes - com viabilidade';
-    if (ehAtivacaoOuMudanca && !ehComViabilidade && /(^| )(2r|3r|4r)( |$)/.test(planoNorm) && produtivo){
+    // "COM VIABILIDADE" É o fechamento de ativação bem-sucedida na prática
+    // (confirmado: ~96% das ativações fecham com esse motivo) - conta pro
+    // bônus normalmente. Só fica de fora quem já não é produtivo (motivo de
+    // improdutividade, ex: inviabilidade/endereço incompleto).
+    if (ehAtivacaoOuMudanca && /(^| )(2r|3r|4r)( |$)/.test(planoNorm) && produtivo){
       pontos = 2.40;
     }
     return { encontrado: !!found, produtivo, pontos };
