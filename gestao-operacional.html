@@ -2959,6 +2959,13 @@ function fmtReais(v){ return `R$ ${v.toFixed(2).replace('.', ',')}`; }
 
 let goPremiacaoSemanaSegunda = null;
 let goPremiacaoRegistros = [];
+// mesma semana, mas filtrado por EQUIPE (técnico da Unidade Touros) em vez
+// de por cidade do serviço - usado só na Chave 1 (Projeção Ativação), que
+// conta ativação fechada pelas equipes daqui mesmo quando o atendimento foi
+// numa cidade fora da unidade (ex: cobrindo um chamado em Natal). As outras
+// chaves (SLA Reparo, Recolhimento etc) continuam usando goPremiacaoRegistros
+// (por cidade), porque são metas de atendimento da região, não da equipe.
+let goPremiacaoRegistrosEquipe = [];
 let goPremiacaoCarregando = false;
 
 async function carregarSemanaPremiacao(){
@@ -2968,6 +2975,7 @@ async function carregarSemanaPremiacao(){
   const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
   const registros = (await OPS_SUPABASE.select('produtividade_registros', filtro)) || [];
   goPremiacaoRegistros = dedupePorProtocolo(registros.filter(r => OPS.isTourosUnitCity(r.area)));
+  goPremiacaoRegistrosEquipe = dedupePorProtocolo(registros.filter(r => ehInstaladorReparador(r.tecnico)));
 }
 
 // nome de verdade de quem tá logado - casa o "usuarioLogin" salvo na sessão
@@ -3007,7 +3015,8 @@ function supervisorLogado(){
 function calcularChavesPremiacao(){
   const semana = goPremiacaoRegistros;
 
-  const ativacoes = semana.filter(r => r.tipo === 'ATIVAÇÃO' && isProdutivo(r));
+  // por EQUIPE (não por cidade) - ver comentário em goPremiacaoRegistrosEquipe
+  const ativacoes = goPremiacaoRegistrosEquipe.filter(r => r.tipo === 'ATIVAÇÃO' && isProdutivo(r));
   const pctProjecao = (ativacoes.length / PREMIACAO_META_SEMANAL_ATIVACAO) * 100;
 
   function pctSlaGrupo(chave){
