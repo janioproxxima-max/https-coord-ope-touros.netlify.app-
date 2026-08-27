@@ -260,6 +260,7 @@
               <option value="Problema com a quantidade do KIT de Campo">Problema com a quantidade do KIT de Campo</option>
               <option value="Problema para devolução de Equipamentos">Problema para devolução de Equipamentos</option>
               <option value="Material Aniel">Material Aniel</option>
+              <option value="Problema com Equipamento">Problema com Equipamento</option>
             </select>
           </div>
           <div class="field" id="mj-n-bloco-pc-devolucao" style="display:none">
@@ -275,6 +276,15 @@
             <select id="mj-n-pc-aniel-tipo">
               <option value="Equipamento Apenas Físico">Equipamento Apenas Físico</option>
               <option value="Equipamento Apenas no Sistema">Equipamento Apenas no Sistema</option>
+            </select>
+          </div>
+          <div class="field" id="mj-n-bloco-pc-equipamento" style="display:none">
+            <label>Qual seria o problema?</label>
+            <select id="mj-n-pc-equipamento-problema">
+              <option value="Sujeira">Sujeira</option>
+              <option value="Provisionamento">Provisionamento</option>
+              <option value="Não Liga">Não Liga</option>
+              <option value="Outros">Outros</option>
             </select>
           </div>
           <div class="grid2">
@@ -946,6 +956,7 @@ function atualizarCamposPcEstoqueProblema(){
   const problema = document.getElementById('mj-n-pc-estoque-problema').value;
   document.getElementById('mj-n-bloco-pc-devolucao').style.display = problema === 'Problema para devolução de Equipamentos' ? 'block' : 'none';
   document.getElementById('mj-n-bloco-pc-aniel').style.display = problema === 'Material Aniel' ? 'block' : 'none';
+  document.getElementById('mj-n-bloco-pc-equipamento').style.display = problema === 'Problema com Equipamento' ? 'block' : 'none';
 }
 document.getElementById('mj-n-pc-tipo').addEventListener('change', atualizarCamposPcTipo);
 document.getElementById('mj-n-pc-estoque-problema').addEventListener('change', atualizarCamposPcEstoqueProblema);
@@ -1023,6 +1034,7 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
   const pcSubOpcao = pcTipo === 'estoque'
     ? (pcProblema === 'Problema para devolução de Equipamentos' ? document.getElementById('mj-n-pc-devolucao-motivo').value
       : pcProblema === 'Material Aniel' ? document.getElementById('mj-n-pc-aniel-tipo').value
+      : pcProblema === 'Problema com Equipamento' ? document.getElementById('mj-n-pc-equipamento-problema').value
       : '')
     : '';
 
