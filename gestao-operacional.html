@@ -632,7 +632,7 @@
     <h3 id="go-insp-modal-titulo">Registrar auditoria</h3>
     <p class="modal-sub" id="go-insp-modal-sub"></p>
     <div style="display:flex;flex-direction:column;gap:14px;margin:16px 0">
-      <div class="field"><label>Técnico auditado</label><input class="input" id="go-insp-modal-tecnico" placeholder="Nome do técnico"></div>
+      <div class="field"><label>Técnico auditado</label><select class="input" id="go-insp-modal-tecnico"><option value="">Selecione...</option></select></div>
       <div class="field"><label>Protocolo (se aplicável)</label><input class="input" id="go-insp-modal-protocolo" placeholder="Ex: 8784054/1"></div>
       <div id="go-insp-modal-checklist" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="field"><label>Nota geral (1-5)</label>
@@ -4202,7 +4202,17 @@ function abrirModalAuditoria(tipo){
   document.getElementById('go-insp-modal').dataset.tipo = tipo;
   document.getElementById('go-insp-modal-titulo').textContent = AUDITORIA_TITULOS[tipo];
   document.getElementById('go-insp-modal-sub').textContent = `Inspetor: ${tituloCase(goInspSelecionado)} · semana de ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingoDaSemana(goInspSemanaSegunda))}`;
-  document.getElementById('go-insp-modal-tecnico').value = '';
+  // lista de técnicos: prioriza a equipe do inspetor selecionado; se não
+  // achar ninguém vinculado (cadastro incompleto, cache ainda carregando
+  // etc.), cai pra lista geral de Instalador/Reparador ativos pra não
+  // deixar o campo vazio.
+  let tecnicosOpcoes = (goPessoasCache || []).filter(p => p.nome && p.inspetor === goInspSelecionado && p.status === 'ativo' && ehInstaladorReparador(p.nome)).map(p => p.nome);
+  if (!tecnicosOpcoes.length){
+    tecnicosOpcoes = (goPessoasCache || []).filter(p => p.nome && p.status === 'ativo' && ehInstaladorReparador(p.nome)).map(p => p.nome);
+  }
+  tecnicosOpcoes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  document.getElementById('go-insp-modal-tecnico').innerHTML = '<option value="">Selecione...</option>'
+    + tecnicosOpcoes.map(n => `<option value="${n}">${tituloCase(n)}</option>`).join('');
   document.getElementById('go-insp-modal-protocolo').value = '';
   document.getElementById('go-insp-modal-nota').value = '';
   goInspFotos = {};
