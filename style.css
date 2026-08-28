@@ -338,6 +338,18 @@ table.services td.proto:hover{ color:var(--brand); text-decoration:underline; }
 .badge.warn{ background:var(--warn-wash); color:var(--warn); }
 .badge.crit{ background:var(--crit-wash); color:var(--crit); }
 .badge.neutral{ background:var(--bg-raised); color:var(--ink-dim); }
+.badge.brand{ background:var(--brand-wash); color:var(--brand); }
+
+/* fluxo/timeline do ticket de Atividades (atividades.html) */
+.atv-flow{ display:flex; align-items:center; margin:16px 0; }
+.atv-flow-step{ display:flex; flex-direction:column; align-items:center; gap:6px; min-width:70px; }
+.atv-flow-dot{ width:16px; height:16px; border-radius:50%; background:var(--bg-raised); border:2px solid var(--ink-faint); }
+.atv-flow-step.done .atv-flow-dot{ background:var(--ok); border-color:var(--ok); }
+.atv-flow-step.active .atv-flow-dot{ background:var(--brand); border-color:var(--brand); box-shadow:0 0 0 4px var(--brand-wash); }
+.atv-flow-label{ font-size:11px; color:var(--ink-faint); text-align:center; }
+.atv-flow-step.done .atv-flow-label, .atv-flow-step.active .atv-flow-label{ color:var(--ink-dim); font-weight:600; }
+.atv-flow-line{ flex:1; height:2px; background:var(--ink-faint); margin:0 4px 20px; }
+.atv-flow-cancelado{ font-size:13px; color:var(--crit); font-weight:700; margin:16px 0; }
 .badge .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
 
 .row-actions{ display:flex; gap:6px; }

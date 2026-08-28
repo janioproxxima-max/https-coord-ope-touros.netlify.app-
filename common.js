@@ -1537,6 +1537,7 @@ const OPS_NAV_LINKS = [
   { href: 'produtividade-tempo-real.html', label: 'Produtividade Tempo Real', icon: '⚡' },
   { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
   { href: 'gestao-operacional.html', label: 'Gestão Operacional', icon: '🧭' },
+  { href: 'atividades.html',      label: 'Atividades',         icon: '📋' },
   { href: 'alerta.html',           label: 'Alerta',             icon: '🚨' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },

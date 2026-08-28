@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atividades · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Atividades</p>
+    <h1 class="page-title">Gestão de Atividades e Treinamentos</h1>
+    <p class="page-sub">Solicitação → responsável(is) → 5W2H → encaminhamento pro campo → evidências → conclusão.</p>
+  </div>
+
+  <div class="stat-row" id="atv-stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="atv-f-busca">Buscar</label>
+      <input class="input" id="atv-f-busca" placeholder="Código, atividade, solicitante...">
+    </div>
+    <div class="field">
+      <label for="atv-f-status">Status</label>
+      <select id="atv-f-status">
+        <option value="">Todos</option>
+        <option value="elaboracao">Em elaboração</option>
+        <option value="campo">Encaminhado ao campo</option>
+        <option value="atrasado">Atrasados</option>
+        <option value="concluido">Concluído</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="atv-f-tipo">Tipo</label>
+      <select id="atv-f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="atv-f-responsavel">Responsável</label>
+      <select id="atv-f-responsavel"><option value="">Todos</option></select>
+    </div>
+    <div class="field" style="justify-content:flex-end">
+      <label>&nbsp;</label>
+      <button type="button" class="btn primary" id="atv-btn-novo">＋ Novo ticket</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>🎫 Tickets</h3><span class="cnt-badge" id="atv-badge">—</span></div>
+    <div class="table-wrap">
+      <table class="services">
+        <thead><tr>
+          <th>Código</th><th>Tipo</th><th>Atividade</th><th>Responsável(is)</th>
+          <th>Status</th><th>Prazo</th>
+        </tr></thead>
+        <tbody id="atv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: novo ticket -->
+<div class="modal-backdrop" id="atv-modal-novo" style="display:none">
+  <div class="modal" style="max-width:min(640px,94vw)">
+    <h3>🎫 Novo ticket de Atividade/Treinamento</h3>
+    <p class="modal-sub">Quem solicitou → o que precisa ser feito → quem são os responsáveis.</p>
+    <div style="display:flex;flex-direction:column;gap:14px;margin:16px 0">
+      <div class="grid2">
+        <div class="field"><label>Solicitante</label><input class="input" id="atv-n-solicitante"></div>
+        <div class="field"><label>Tipo</label><select class="input" id="atv-n-tipo"></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Cidade</label><select class="input" id="atv-n-cidade"><option value="">Selecione...</option></select></div>
+        <div class="field"><label>Prazo</label><input class="input" type="date" id="atv-n-prazo"></div>
+      </div>
+      <div class="field"><label>Qual é a Atividade ou Treinamento?</label>
+        <textarea class="input" id="atv-n-atividade" rows="2" placeholder="Ex: Treinamento sobre preenchimento correto da ordem de serviço e registro das evidências fotográficas."></textarea>
+      </div>
+      <div class="field">
+        <label>Responsável ou Responsáveis</label>
+        <div id="atv-n-responsaveis" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px"></div>
+      </div>
+      <details>
+        <summary style="cursor:pointer;color:var(--brand);font-size:13px;font-weight:600">📋 Planejamento 5W2H (opcional pra Atividade/Outro, recomendado pra Treinamento/Plano de Ação)</summary>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+          <div class="field"><label>Why — Por que? (motivo/problema que originou)</label><input class="input" id="atv-n-por-que"></div>
+          <div class="grid2">
+            <div class="field"><label>Where — Onde?</label><input class="input" id="atv-n-onde"></div>
+            <div class="field"><label>How much — Quanto? (custo previsto)</label><input class="input" id="atv-n-quanto"></div>
+          </div>
+          <div class="field"><label>How — Como será feito?</label><textarea class="input" id="atv-n-como" rows="2"></textarea></div>
+        </div>
+      </details>
+      <div class="field"><label>Link da planilha (material, se já tiver)</label><input class="input" id="atv-n-link-planilha" placeholder="https://docs.google.com/spreadsheets/..."></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="atv-n-fechar">Fechar</button>
+      <button type="button" class="btn primary" id="atv-n-salvar">💾 Criar ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalhe do ticket -->
+<div class="modal-backdrop" id="atv-modal-detalhe" style="display:none">
+  <div class="modal" style="max-width:min(720px,94vw)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div>
+        <h3 id="atv-d-titulo">Ticket</h3>
+        <p class="modal-sub" id="atv-d-sub"></p>
+      </div>
+      <span id="atv-d-status-badge"></span>
+    </div>
+
+    <div class="atv-flow" id="atv-d-flow"></div>
+
+    <div id="atv-d-corpo" style="display:flex;flex-direction:column;gap:16px;margin:14px 0"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="atv-d-fechar">Fechar</button>
+      <button type="button" class="btn ghost" id="atv-d-cancelar" style="color:var(--crit)">🚫 Cancelar ticket</button>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('atividades.html', 'Atividades');
+
+// ================= dados / config =================
+const ATV_TIPOS = ['Atividade', 'Treinamento', 'Plano de Ação', 'Outro'];
+const ATV_STATUS_LABEL = { elaboracao: '🟡 Em elaboração', campo: '🔵 Encaminhado ao campo', concluido: '🟢 Concluído', cancelado: '⚫ Cancelado' };
+const ATV_STATUS_COR = { elaboracao: 'warn', campo: 'brand', concluido: 'ok', cancelado: 'neutral' };
+const ATV_RESULTADO_LABEL = { sucesso: 'Concluído com sucesso', parcial: 'Concluído parcialmente', nova_acao: 'Necessita nova ação', nao_realizado: 'Não realizado' };
+
+let atvRegistros = [];
+let atvPessoas = [];
+let atvCarregando = false;
+let atvFotoConclusaoBase64 = null;
+let atvTicketAberto = null; // id do ticket aberto no modal de detalhe
+
+function tituloCase(s){ return String(s || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+function fmtDataBR(v){
+  if (!v) return '—';
+  const d = typeof v === 'string' ? new Date(v.length <= 10 ? v + 'T12:00:00' : v) : v;
+  if (!isFinite(d)) return '—';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
+function hojeStr(){ return new Date().toISOString().slice(0,10); }
+
+// nome de quem tá logado - mesmo padrão usado em gestao-operacional.html
+function nomeDoLogin(){
+  const nomeSessao = (sessionStorage.getItem('ops_user_nome') || '').trim();
+  if (nomeSessao) return nomeSessao;
+  const usuario = (sessionStorage.getItem('ops_user') || '').trim();
+  if (!usuario) return '';
+  const pessoa = atvPessoas.find(p => p.usuarioLogin && OPS.normalize(p.usuarioLogin) === OPS.normalize(usuario));
+  if (pessoa) return pessoa.nome;
+  if (/^[a-z]+\.[a-z]+$/i.test(usuario)){
+    return usuario.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+  return usuario;
+}
+
+function ehTecnicoDeCampo(p){
+  const c = OPS.normalize(p.cargo || '');
+  return c.includes('instalador') && c.includes('reparador');
+}
+
+// código curto de referência (ex: TRE-260828-4F2K) - mesmo padrão já usado
+// nas Auditorias (gestao-operacional.html) - não é chave primária (isso é
+// o "id"), é só uma referência legível pra citar em conversa.
+function gerarCodigoAtividade(tipo){
+  const prefixos = { 'Atividade': 'ATV', 'Treinamento': 'TRE', 'Plano de Ação': 'PLA', 'Outro': 'OUT' };
+  const prefixo = prefixos[tipo] || 'ATV';
+  const hoje = new Date();
+  const yy = String(hoje.getFullYear()).slice(-2);
+  const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dd = String(hoje.getDate()).padStart(2, '0');
+  const sufixo = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefixo}-${yy}${mm}${dd}-${sufixo}`;
+}
+
+// "atrasado" não é um status salvo - é calculado (prazo passou e o ticket
+// ainda não terminou), pro mesmo jeito que SLA é calculado no resto do
+// site, em vez de depender de alguém marcar manualmente.
+function estaAtrasado(reg){
+  if (!reg.prazo || reg.status === 'concluido' || reg.status === 'cancelado') return false;
+  return reg.prazo < hojeStr();
+}
+
+// compressão de foto client-side (mesmo padrão do mundo-jira.html /
+// auditorias de gestao-operacional.html) - reduz pra um base64 pequeno
+// antes de guardar no jsonb do registro.
+function comprimirImagemAtividade(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const tentar = (maxLado, qualidade) => {
+        let { width, height } = img;
+        if (width > height && width > maxLado){ height = height * (maxLado / width); width = maxLado; }
+        else if (height > maxLado){ width = width * (maxLado / height); height = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', qualidade);
+      };
+      let resultado = tentar(500, 0.55);
+      if (resultado.length > 60000) resultado = tentar(360, 0.45);
+      resolve(resultado);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function carregarAtividades(){
+  const [pessoas, registros] = await Promise.all([
+    OPS.syncPull('PessoasData').catch(() => []),
+    OPS_SUPABASE.select('atividades_registros').catch(() => []),
+  ]);
+  atvPessoas = (pessoas || []).filter(p => p.nome && p.status === 'ativo');
+  atvRegistros = (registros || []).sort((a,b) => new Date(b.data_solicitacao) - new Date(a.data_solicitacao));
+}
+
+async function initPage(silencioso){
+  if (atvCarregando) return;
+  atvCarregando = true;
+  if (!silencioso) document.getElementById('atv-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+  try{
+    await carregarAtividades();
+    popularFiltrosAtividades();
+    desenharAtividades();
+  }catch(err){
+    document.getElementById('atv-tbody').innerHTML = `<tr><td colspan="6" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+  }finally{
+    atvCarregando = false;
+  }
+}
+
+function popularFiltrosAtividades(){
+  const selTipo = document.getElementById('atv-f-tipo');
+  if (!selTipo.dataset.ligado){
+    selTipo.insertAdjacentHTML('beforeend', ATV_TIPOS.map(t => `<option value="${t}">${t}</option>`).join(''));
+    selTipo.dataset.ligado = '1';
+  }
+  const selResp = document.getElementById('atv-f-responsavel');
+  const jaTem = new Set([...selResp.options].map(o => o.value));
+  atvPessoas.slice().sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach(p => {
+    if (!jaTem.has(p.nome)){ selResp.insertAdjacentHTML('beforeend', `<option value="${p.nome}">${tituloCase(p.nome)}</option>`); jaTem.add(p.nome); }
+  });
+
+  const selCidade = document.getElementById('atv-n-cidade');
+  if (!selCidade.dataset.ligado){
+    selCidade.insertAdjacentHTML('beforeend', OPS.TOUROS_UNIT_CITIES.map(c => `<option value="${c}">${tituloCase(c)}</option>`).join(''));
+    selCidade.dataset.ligado = '1';
+  }
+  const selTipoNovo = document.getElementById('atv-n-tipo');
+  if (!selTipoNovo.dataset.ligado){
+    selTipoNovo.insertAdjacentHTML('beforeend', ATV_TIPOS.map(t => `<option value="${t}">${t}</option>`).join(''));
+    selTipoNovo.dataset.ligado = '1';
+  }
+}
+
+function desenharAtividades(){
+  const filtroStatus = document.getElementById('atv-f-status').value;
+  const filtroTipo = document.getElementById('atv-f-tipo').value;
+  const filtroResp = document.getElementById('atv-f-responsavel').value;
+  const busca = OPS.normalize(document.getElementById('atv-f-busca').value.trim());
+
+  let lista = atvRegistros.slice();
+  if (filtroStatus === 'atrasado') lista = lista.filter(r => estaAtrasado(r));
+  else if (filtroStatus) lista = lista.filter(r => r.status === filtroStatus);
+  if (filtroTipo) lista = lista.filter(r => r.tipo === filtroTipo);
+  if (filtroResp) lista = lista.filter(r => (r.responsaveis || []).includes(filtroResp));
+  if (busca) lista = lista.filter(r => OPS.normalize(`${r.codigo} ${r.atividade} ${r.solicitante}`).includes(busca));
+
+  // cards resumo
+  const emElaboracao = atvRegistros.filter(r => r.status === 'elaboracao').length;
+  const noCampo = atvRegistros.filter(r => r.status === 'campo').length;
+  const atrasados = atvRegistros.filter(r => estaAtrasado(r)).length;
+  const mesAtual = hojeStr().slice(0,7);
+  const concluidosMes = atvRegistros.filter(r => r.status === 'concluido' && (r.data_execucao_campo || '').slice(0,7) === mesAtual).length;
+  document.getElementById('atv-stat-row').innerHTML = `
+    <div class="stat-card brand"><div class="label">Total de tickets</div><div class="value">${fmtNum(atvRegistros.length)}</div></div>
+    <div class="stat-card warn"><div class="label">Em elaboração</div><div class="value">${fmtNum(emElaboracao)}</div></div>
+    <div class="stat-card ok"><div class="label">No campo</div><div class="value">${fmtNum(noCampo)}</div></div>
+    <div class="stat-card ${atrasados ? 'crit' : 'ok'}"><div class="label">Atrasados</div><div class="value">${fmtNum(atrasados)}</div></div>
+    <div class="stat-card ok"><div class="label">Concluídos no mês</div><div class="value">${fmtNum(concluidosMes)}</div></div>
+  `;
+
+  document.getElementById('atv-badge').textContent = `${fmtNum(lista.length)} ticket(s)`;
+  document.getElementById('atv-tbody').innerHTML = lista.map(r => {
+    const atrasado = estaAtrasado(r);
+    const statusHtml = atrasado
+      ? `<span class="badge crit"><span class="dot"></span>🔴 Atrasado</span>`
+      : `<span class="badge ${ATV_STATUS_COR[r.status] || 'neutral'}"><span class="dot"></span>${ATV_STATUS_LABEL[r.status] || r.status}</span>`;
+    return `<tr data-id="${r.id}" style="cursor:pointer">
+      <td style="font-family:monospace;white-space:nowrap">${r.codigo || '—'}</td>
+      <td>${r.tipo || '—'}</td>
+      <td style="max-width:280px">${r.atividade || '—'}</td>
+      <td>${(r.responsaveis || []).map(tituloCase).join(', ') || '—'}</td>
+      <td>${statusHtml}</td>
+      <td>${fmtDataBR(r.prazo)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" style="color:var(--ink-faint)">Nenhum ticket encontrado.</td></tr>`;
+
+  [...document.querySelectorAll('#atv-tbody tr[data-id]')].forEach(tr => {
+    tr.addEventListener('click', () => abrirDetalheAtividade(tr.dataset.id));
+  });
+}
+
+['atv-f-status','atv-f-tipo','atv-f-responsavel'].forEach(id => document.getElementById(id).addEventListener('change', desenharAtividades));
+document.getElementById('atv-f-busca').addEventListener('input', desenharAtividades);
+
+// ================= modal: novo ticket =================
+document.getElementById('atv-btn-novo').addEventListener('click', () => {
+  document.getElementById('atv-n-solicitante').value = nomeDoLogin();
+  document.getElementById('atv-n-tipo').value = 'Atividade';
+  document.getElementById('atv-n-cidade').value = '';
+  document.getElementById('atv-n-prazo').value = '';
+  document.getElementById('atv-n-atividade').value = '';
+  document.getElementById('atv-n-por-que').value = '';
+  document.getElementById('atv-n-onde').value = '';
+  document.getElementById('atv-n-quanto').value = '';
+  document.getElementById('atv-n-como').value = '';
+  document.getElementById('atv-n-link-planilha').value = '';
+  document.getElementById('atv-n-responsaveis').innerHTML = atvPessoas.slice().sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(p => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);border:1px solid var(--border);border-radius:6px;padding:4px 8px">
+      <input type="checkbox" class="atv-n-resp-check" value="${p.nome}"> ${tituloCase(p.nome)}
+    </label>`).join('');
+  document.getElementById('atv-modal-novo').style.display = 'flex';
+});
+document.getElementById('atv-n-fechar').addEventListener('click', () => { document.getElementById('atv-modal-novo').style.display = 'none'; });
+document.getElementById('atv-modal-novo').addEventListener('click', (e) => { if (e.target.id === 'atv-modal-novo') document.getElementById('atv-modal-novo').style.display = 'none'; });
+
+document.getElementById('atv-n-salvar').addEventListener('click', async () => {
+  const atividade = document.getElementById('atv-n-atividade').value.trim();
+  const responsaveis = [...document.querySelectorAll('.atv-n-resp-check:checked')].map(c => c.value);
+  if (!atividade){ alert('Descreva a atividade ou treinamento.'); return; }
+  if (!responsaveis.length){ alert('Selecione pelo menos um responsável.'); return; }
+  const tipo = document.getElementById('atv-n-tipo').value;
+  const btn = document.getElementById('atv-n-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    const agora = new Date().toISOString();
+    const registro = {
+      id: OPS.uid(), codigo: gerarCodigoAtividade(tipo),
+      solicitante: document.getElementById('atv-n-solicitante').value.trim() || nomeDoLogin(),
+      data_solicitacao: agora,
+      cidade: document.getElementById('atv-n-cidade').value || null,
+      tipo, atividade, responsaveis,
+      prazo: document.getElementById('atv-n-prazo').value || null,
+      por_que: document.getElementById('atv-n-por-que').value.trim(),
+      onde: document.getElementById('atv-n-onde').value.trim(),
+      quanto: document.getElementById('atv-n-quanto').value.trim(),
+      como: document.getElementById('atv-n-como').value.trim(),
+      link_planilha: document.getElementById('atv-n-link-planilha').value.trim() || null,
+      status: 'elaboracao',
+      tecnicos_campo: [], link_drive: null, link_lista_presenca: null,
+      nota_treinamento: null, resultado: null, observacoes: null, evidencias: [],
+      historico: [{ quando: agora, quem: nomeDoLogin(), texto: 'Ticket criado.' }],
+      criado_por: nomeDoLogin(), atualizado_em: agora,
+    };
+    await OPS_SUPABASE.upsert('atividades_registros', [registro], 'id');
+    atvRegistros.unshift(registro);
+    document.getElementById('atv-modal-novo').style.display = 'none';
+    desenharAtividades();
+    abrirDetalheAtividade(registro.id);
+  }catch(err){
+    alert('Não consegui criar o ticket: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Criar ticket';
+  }
+});
+
+// ================= modal: detalhe / fluxo =================
+function flowHtml(reg){
+  const etapas = [
+    { chave: 'solicitacao', label: 'Solicitação' },
+    { chave: 'elaboracao', label: 'Elaboração' },
+    { chave: 'campo', label: 'Campo' },
+    { chave: 'concluido', label: 'Conclusão' },
+  ];
+  if (reg.status === 'cancelado'){
+    return `<div class="atv-flow-cancelado">⚫ Ticket cancelado</div>`;
+  }
+  const ordem = { elaboracao: 1, campo: 2, concluido: 3 };
+  const atual = ordem[reg.status] || 1;
+  return etapas.map((e, i) => {
+    const passo = i === 0 ? 0 : ordem[e.chave];
+    const estado = passo === 0 ? 'done' : (passo < atual ? 'done' : (passo === atual ? 'active' : ''));
+    return `<div class="atv-flow-step ${estado}">
+      <div class="atv-flow-dot"></div>
+      <div class="atv-flow-label">${e.label}</div>
+    </div>${i < etapas.length - 1 ? '<div class="atv-flow-line"></div>' : ''}`;
+  }).join('');
+}
+
+function abrirDetalheAtividade(id){
+  const reg = atvRegistros.find(r => r.id === id);
+  if (!reg) return;
+  atvTicketAberto = id;
+  atvFotoConclusaoBase64 = null;
+
+  document.getElementById('atv-d-titulo').textContent = `${reg.codigo || ''} · ${reg.tipo || ''}`;
+  document.getElementById('atv-d-sub').textContent = `Solicitado por ${tituloCase(reg.solicitante)} em ${fmtDataBR(reg.data_solicitacao)}${reg.cidade ? ' · ' + tituloCase(reg.cidade) : ''}`;
+  const atrasado = estaAtrasado(reg);
+  document.getElementById('atv-d-status-badge').innerHTML = atrasado
+    ? `<span class="badge crit"><span class="dot"></span>🔴 Atrasado</span>`
+    : `<span class="badge ${ATV_STATUS_COR[reg.status] || 'neutral'}"><span class="dot"></span>${ATV_STATUS_LABEL[reg.status] || reg.status}</span>`;
+  document.getElementById('atv-d-flow').innerHTML = flowHtml(reg);
+
+  const historicoHtml = (reg.historico || []).slice().reverse().map(h => `
+    <div style="font-size:12px;color:var(--ink-faint)">${OPS.formatDateTimeBR(h.quando)} · <b style="color:var(--ink-dim)">${tituloCase(h.quem)}</b> — ${h.texto}</div>`).join('');
+
+  const blocoPrincipal = `
+    <div class="card" style="margin:0">
+      <div class="card-head"><h3>📋 5W2H</h3></div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div><b>What (o que):</b> ${reg.atividade || '—'}</div>
+        <div><b>Why (por que):</b> ${reg.por_que || '—'}</div>
+        <div><b>Where (onde):</b> ${reg.onde || tituloCase(reg.cidade) || '—'}</div>
+        <div><b>When (quando):</b> Prazo ${fmtDataBR(reg.prazo)}</div>
+        <div><b>Who (quem):</b> ${(reg.responsaveis || []).map(tituloCase).join(', ') || '—'}</div>
+        <div><b>How (como):</b> ${reg.como || '—'}</div>
+        <div><b>How much (quanto):</b> ${reg.quanto || '—'}</div>
+      </div>
+    </div>
+    <div class="field"><label>Link da planilha</label><input class="input" id="atv-d-link-planilha" value="${reg.link_planilha || ''}" placeholder="https://..."></div>
+  `;
+
+  let blocoEtapa = '';
+  if (reg.status === 'elaboracao'){
+    const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    blocoEtapa = `
+      <div class="card" style="margin:0;border-color:var(--brand)">
+        <div class="card-head"><h3>📤 Encaminhar para o Campo</h3></div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <p class="page-sub" style="margin:0">Quando os responsáveis terminarem de elaborar o conteúdo, encaminhe pro campo pra aplicar com os técnicos.</p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim)">
+            <input type="checkbox" id="atv-d-campo-todos"> ☑️ Todos os técnicos (${fmtNum(tecnicosCampo.length)})
+          </label>
+          <div id="atv-d-campo-tecnicos" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px">
+            ${tecnicosCampo.map(p => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);border:1px solid var(--border);border-radius:6px;padding:4px 8px">
+              <input type="checkbox" class="atv-d-campo-check" value="${p.nome}"> ${tituloCase(p.nome)}
+            </label>`).join('')}
+          </div>
+          <div class="field"><label>Data prevista da aplicação em campo</label><input class="input" type="date" id="atv-d-campo-data"></div>
+          <button type="button" class="btn primary" id="atv-d-btn-encaminhar" style="align-self:flex-start">📤 Encaminhar para o Campo</button>
+        </div>
+      </div>`;
+  } else if (reg.status === 'campo'){
+    blocoEtapa = `
+      <div class="card" style="margin:0;border-color:var(--ok)">
+        <div class="card-head"><h3>✅ Evidências e Conclusão</h3></div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <p class="page-sub" style="margin:0">Encaminhado ao campo em ${OPS.formatDateTimeBR(reg.data_encaminhamento_campo)} · Técnicos: ${reg.tecnicos_campo && reg.tecnicos_campo.length ? reg.tecnicos_campo.map(tituloCase).join(', ') : '—'}${reg.data_prevista_campo ? ' · Previsto pra ' + fmtDataBR(reg.data_prevista_campo) : ''}</p>
+          <div class="grid2">
+            <div class="field"><label>Data de realização</label><input class="input" type="date" id="atv-d-conc-data" value="${reg.data_execucao_campo || ''}"></div>
+            <div class="field"><label>Nota do treinamento (0-10)</label><input class="input" type="number" min="0" max="10" step="0.1" id="atv-d-conc-nota" value="${reg.nota_treinamento != null ? reg.nota_treinamento : ''}"></div>
+          </div>
+          <div class="field"><label>Link da ficha de presença assinada</label><input class="input" id="atv-d-conc-presenca" value="${reg.link_lista_presenca || ''}" placeholder="https://..."></div>
+          <div class="field"><label>Link do Drive (evidências, fotos, documentos)</label><input class="input" id="atv-d-conc-drive" value="${reg.link_drive || ''}" placeholder="https://..."></div>
+          <div class="field"><label>Resultado</label>
+            <select class="input" id="atv-d-conc-resultado">
+              <option value="">Selecione...</option>
+              <option value="sucesso">Concluído com sucesso</option>
+              <option value="parcial">Concluído parcialmente</option>
+              <option value="nova_acao">Necessita nova ação</option>
+              <option value="nao_realizado">Não realizado</option>
+            </select>
+          </div>
+          <div class="field"><label>Observações</label><textarea class="input" id="atv-d-conc-obs" rows="2">${reg.observacoes || ''}</textarea></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="btn ghost" style="padding:4px 10px;font-size:12px;cursor:pointer;margin:0">📷 Anexar foto<input type="file" accept="image/*" id="atv-d-conc-foto" style="display:none"></label>
+            <span id="atv-d-conc-foto-status" style="font-size:12px;color:var(--ink-faint)"></span>
+          </div>
+          <button type="button" class="btn primary" id="atv-d-btn-concluir" style="align-self:flex-start">✅ Concluir ticket</button>
+        </div>
+      </div>`;
+  } else if (reg.status === 'concluido'){
+    blocoEtapa = `
+      <div class="card" style="margin:0;border-color:var(--ok)">
+        <div class="card-head"><h3>✅ Concluído</h3></div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div><b>Resultado:</b> ${ATV_RESULTADO_LABEL[reg.resultado] || '—'}</div>
+          <div><b>Data de realização:</b> ${fmtDataBR(reg.data_execucao_campo)}</div>
+          <div><b>Nota do treinamento:</b> ${reg.nota_treinamento != null ? reg.nota_treinamento : '—'}</div>
+          <div><b>Ficha de presença:</b> ${reg.link_lista_presenca ? `<a href="${reg.link_lista_presenca}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</div>
+          <div><b>Drive:</b> ${reg.link_drive ? `<a href="${reg.link_drive}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</div>
+          <div><b>Técnicos de campo:</b> ${reg.tecnicos_campo && reg.tecnicos_campo.length ? reg.tecnicos_campo.map(tituloCase).join(', ') : '—'}</div>
+          <div><b>Observações:</b> ${reg.observacoes || '—'}</div>
+          ${(reg.evidencias || []).map(ev => `<img src="${ev.foto}" style="max-height:120px;border-radius:6px;margin-top:4px">`).join('')}
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('atv-d-corpo').innerHTML = blocoPrincipal + blocoEtapa + `
+    <div class="card" style="margin:0">
+      <div class="card-head"><h3>📜 Histórico</h3></div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">${historicoHtml || '<span style="color:var(--ink-faint);font-size:12px">Sem eventos.</span>'}</div>
+    </div>`;
+
+  if (reg.status === 'elaboracao'){
+    document.getElementById('atv-d-campo-todos').addEventListener('change', (e) => {
+      document.querySelectorAll('.atv-d-campo-check').forEach(c => { c.checked = e.target.checked; });
+    });
+    document.getElementById('atv-d-btn-encaminhar').addEventListener('click', () => encaminharParaCampo(reg));
+  } else if (reg.status === 'campo'){
+    document.getElementById('atv-d-conc-foto').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const status = document.getElementById('atv-d-conc-foto-status');
+      status.textContent = 'Comprimindo...';
+      try{
+        atvFotoConclusaoBase64 = await comprimirImagemAtividade(file);
+        status.textContent = '✅ Foto anexada';
+      }catch(err){
+        status.textContent = '⚠️ Falha ao anexar';
+      }
+    });
+    document.getElementById('atv-d-btn-concluir').addEventListener('click', () => concluirTicket(reg));
+  }
+
+  document.getElementById('atv-d-cancelar').style.display = (reg.status === 'concluido' || reg.status === 'cancelado') ? 'none' : 'inline-flex';
+  document.getElementById('atv-modal-detalhe').style.display = 'flex';
+}
+document.getElementById('atv-d-fechar').addEventListener('click', () => { document.getElementById('atv-modal-detalhe').style.display = 'none'; });
+document.getElementById('atv-modal-detalhe').addEventListener('click', (e) => { if (e.target.id === 'atv-modal-detalhe') document.getElementById('atv-modal-detalhe').style.display = 'none'; });
+
+async function salvarLinkPlanilhaSeMudou(reg){
+  const valor = document.getElementById('atv-d-link-planilha').value.trim() || null;
+  if (valor === reg.link_planilha) return;
+  reg.link_planilha = valor;
+  reg.atualizado_em = new Date().toISOString();
+  await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+}
+
+async function encaminharParaCampo(reg){
+  await salvarLinkPlanilhaSeMudou(reg);
+  const tecnicos = [...document.querySelectorAll('.atv-d-campo-check:checked')].map(c => c.value);
+  if (!tecnicos.length){ alert('Selecione pelo menos um técnico (ou marque "Todos os técnicos").'); return; }
+  const btn = document.getElementById('atv-d-btn-encaminhar');
+  btn.disabled = true; btn.textContent = 'Encaminhando...';
+  try{
+    const agora = new Date().toISOString();
+    reg.status = 'campo';
+    reg.tecnicos_campo = tecnicos;
+    reg.data_prevista_campo = document.getElementById('atv-d-campo-data').value || null;
+    reg.data_encaminhamento_campo = agora;
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: `Encaminhado para o campo (${tecnicos.length} técnico(s)).` }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    desenharAtividades();
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui encaminhar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '📤 Encaminhar para o Campo';
+  }
+}
+
+async function concluirTicket(reg){
+  const resultado = document.getElementById('atv-d-conc-resultado').value;
+  if (!resultado){ alert('Selecione o resultado da atividade/treinamento.'); return; }
+  const btn = document.getElementById('atv-d-btn-concluir');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    const agora = new Date().toISOString();
+    reg.data_execucao_campo = document.getElementById('atv-d-conc-data').value || null;
+    reg.nota_treinamento = document.getElementById('atv-d-conc-nota').value ? Number(document.getElementById('atv-d-conc-nota').value) : null;
+    reg.link_lista_presenca = document.getElementById('atv-d-conc-presenca').value.trim() || null;
+    reg.link_drive = document.getElementById('atv-d-conc-drive').value.trim() || null;
+    reg.resultado = resultado;
+    reg.observacoes = document.getElementById('atv-d-conc-obs').value.trim();
+    reg.link_planilha = document.getElementById('atv-d-link-planilha').value.trim() || reg.link_planilha || null;
+    if (atvFotoConclusaoBase64) reg.evidencias = [...(reg.evidencias || []), { foto: atvFotoConclusaoBase64 }];
+    reg.status = 'concluido';
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: `Concluído — ${ATV_RESULTADO_LABEL[resultado]}.` }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    desenharAtividades();
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui concluir: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '✅ Concluir ticket';
+  }
+}
+
+document.getElementById('atv-d-cancelar').addEventListener('click', async () => {
+  const reg = atvRegistros.find(r => r.id === atvTicketAberto);
+  if (!reg || reg.status === 'concluido' || reg.status === 'cancelado') return;
+  if (!confirm('Cancelar esse ticket? Essa ação não apaga o registro, só marca como cancelado.')) return;
+  try{
+    const agora = new Date().toISOString();
+    reg.status = 'cancelado';
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: 'Ticket cancelado.' }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    desenharAtividades();
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui cancelar: ' + err.message);
+  }
+});
+
+window.OPS_ON_REFRESH = initPage;
+initPage();
+setInterval(() => {
+  if (document.visibilityState === 'visible') initPage(true);
+}, 5 * 60 * 1000);
+</script>
+</body>
+</html>
