@@ -28,6 +28,12 @@
     </div>
   </div>
 
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>🗂️ Quadro por tipo</h3><span class="cnt-badge" id="atv-quadro-badge">—</span></div>
+    <p class="page-sub" style="padding:0 16px;margin:10px 0">Só o que ainda está em aberto (elaboração ou campo) — concluídos e cancelados ficam na lista abaixo. Clique num cartão pra abrir.</p>
+    <div id="atv-quadro" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;padding:0 16px 16px"></div>
+  </div>
+
   <div class="panel toolbar">
     <div class="field">
       <label for="atv-f-busca">Buscar</label>
@@ -75,7 +81,7 @@
 <!-- Modal: novo ticket -->
 <div class="modal-backdrop" id="atv-modal-novo" style="display:none">
   <div class="modal" style="max-width:min(640px,94vw)">
-    <h3>🎫 Novo ticket de Atividade/Treinamento</h3>
+    <h3>🎫 Novo ticket de Atividade, Tarefa ou Treinamento</h3>
     <p class="modal-sub">Quem solicitou → o que precisa ser feito → quem são os responsáveis.</p>
     <div style="display:flex;flex-direction:column;gap:14px;margin:16px 0">
       <div class="grid2">
@@ -86,8 +92,33 @@
         <div class="field"><label>Cidade</label><select class="input" id="atv-n-cidade"><option value="">Selecione...</option></select></div>
         <div class="field"><label>Prazo</label><input class="input" type="date" id="atv-n-prazo"></div>
       </div>
-      <div class="field"><label>Qual é a Atividade ou Treinamento?</label>
-        <textarea class="input" id="atv-n-atividade" rows="2" placeholder="Ex: Treinamento sobre preenchimento correto da ordem de serviço e registro das evidências fotográficas."></textarea>
+      <div class="grid2">
+        <div class="field"><label>Recorrência</label>
+          <select class="input" id="atv-n-recorrencia">
+            <option value="">Pontual (só dessa vez)</option>
+            <option value="semanal">Fixa — toda semana</option>
+            <option value="mensal">Fixa — todo mês</option>
+          </select>
+        </div>
+        <div class="field" id="atv-n-recorrencia-dia-semana-campo" style="display:none">
+          <label>Dia da semana</label>
+          <select class="input" id="atv-n-recorrencia-dia-semana">
+            <option value="1">Segunda</option>
+            <option value="2">Terça</option>
+            <option value="3">Quarta</option>
+            <option value="4">Quinta</option>
+            <option value="5">Sexta</option>
+            <option value="6">Sábado</option>
+            <option value="0">Domingo</option>
+          </select>
+        </div>
+        <div class="field" id="atv-n-recorrencia-dia-mes-campo" style="display:none">
+          <label>A partir de que dia do mês</label>
+          <input class="input" type="number" min="1" max="31" id="atv-n-recorrencia-dia-mes" placeholder="Ex: 15">
+        </div>
+      </div>
+      <div class="field"><label>Qual é a Atividade, Tarefa ou Treinamento?</label>
+        <textarea class="input" id="atv-n-atividade" rows="2" placeholder="Ex: Atualizar a escala do mês seguinte / Treinamento sobre preenchimento de OS / Pegar o carro na oficina"></textarea>
       </div>
       <div class="field">
         <label>Responsável ou Responsáveis</label>
@@ -140,7 +171,8 @@
 requireAuthThenInit('atividades.html', 'Atividades');
 
 // ================= dados / config =================
-const ATV_TIPOS = ['Atividade', 'Treinamento', 'Plano de Ação', 'Outro'];
+const ATV_TIPOS = ['Atividade', 'Tarefa', 'Treinamento', 'Plano de Ação', 'Outro'];
+const ATV_FREQ_LABEL = { semanal: '🔁 Toda semana', mensal: '🔁 Todo mês' };
 const ATV_STATUS_LABEL = { elaboracao: '🟡 Em elaboração', campo: '🔵 Encaminhado ao campo', concluido: '🟢 Concluído', cancelado: '⚫ Cancelado' };
 const ATV_STATUS_COR = { elaboracao: 'warn', campo: 'brand', concluido: 'ok', cancelado: 'neutral' };
 const ATV_RESULTADO_LABEL = { sucesso: 'Concluído com sucesso', parcial: 'Concluído parcialmente', nova_acao: 'Necessita nova ação', nao_realizado: 'Não realizado' };
@@ -160,6 +192,28 @@ function fmtDataBR(v){
 }
 function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
 function hojeStr(){ return new Date().toISOString().slice(0,10); }
+
+// próxima data pra uma tarefa/atividade recorrente - "mensal" acha o
+// próximo dia X do mês (esse mês se ainda não passou, senão mês que vem);
+// "semanal" acha o próximo dia da semana X (essa semana se ainda não
+// passou, senão semana que vem). Usado tanto pro prazo inicial quanto pra
+// gerar a próxima ocorrência quando uma recorrente é concluída.
+function calcularProximoPrazo(frequencia, dia, apartirDe){
+  const base = apartirDe ? new Date(apartirDe + 'T12:00:00') : new Date();
+  if (frequencia === 'mensal'){
+    let d = new Date(base.getFullYear(), base.getMonth(), Number(dia));
+    if (d < new Date(base.getFullYear(), base.getMonth(), base.getDate())) d = new Date(base.getFullYear(), base.getMonth() + 1, Number(dia));
+    return d.toISOString().slice(0, 10);
+  }
+  if (frequencia === 'semanal'){
+    const alvo = Number(dia);
+    let diff = alvo - base.getDay();
+    if (diff < 0) diff += 7;
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  }
+  return null;
+}
 
 // nome de quem tá logado - mesmo padrão usado em gestao-operacional.html
 function nomeDoLogin(){
@@ -245,7 +299,7 @@ function ligarSeletorPessoas(prefixo, grupos){
 // nas Auditorias (gestao-operacional.html) - não é chave primária (isso é
 // o "id"), é só uma referência legível pra citar em conversa.
 function gerarCodigoAtividade(tipo){
-  const prefixos = { 'Atividade': 'ATV', 'Treinamento': 'TRE', 'Plano de Ação': 'PLA', 'Outro': 'OUT' };
+  const prefixos = { 'Atividade': 'ATV', 'Tarefa': 'TAR', 'Treinamento': 'TRE', 'Plano de Ação': 'PLA', 'Outro': 'OUT' };
   const prefixo = prefixos[tipo] || 'ATV';
   const hoje = new Date();
   const yy = String(hoje.getFullYear()).slice(-2);
@@ -316,6 +370,44 @@ function desenharGraficoSituacao(){
         datalabels: { color: '#0b1220', font: { weight: '700', size: 12 }, formatter: v => v },
       },
     },
+  });
+}
+
+// quadro visual dividido por tipo (Tarefa/Atividade/Treinamento/Plano de
+// Ação/Outro), lado a lado - só o que está em aberto (elaboração/campo),
+// pra dar uma visão rápida do que falta fazer em cada frente sem precisar
+// filtrar a tabela toda vez.
+function desenharQuadroPorTipo(){
+  const abertos = atvRegistros.filter(r => r.status === 'elaboracao' || r.status === 'campo');
+  document.getElementById('atv-quadro-badge').textContent = `${fmtNum(abertos.length)} em aberto`;
+  const porTipo = {};
+  ATV_TIPOS.forEach(t => { porTipo[t] = []; });
+  abertos.forEach(r => { (porTipo[r.tipo] = porTipo[r.tipo] || []).push(r); });
+
+  document.getElementById('atv-quadro').innerHTML = ATV_TIPOS.map(tipo => {
+    const lista = (porTipo[tipo] || []).slice().sort((a,b) => {
+      const pa = a.prazo || '9999-99-99', pb = b.prazo || '9999-99-99';
+      return pa < pb ? -1 : pa > pb ? 1 : 0;
+    });
+    const cards = lista.map(r => {
+      const situacao = bucketSituacao(r);
+      const cor = ATV_SITUACAO_CFG[situacao] ? ATV_SITUACAO_CFG[situacao].cor : 'var(--ink-faint)';
+      return `<div class="atv-quadro-card" data-id="${r.id}" style="cursor:pointer;background:var(--bg-raised);border-left:3px solid ${cor};border-radius:6px;padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:4px">${r.atividade || '—'}</div>
+        <div style="font-size:11.5px;color:var(--ink-faint)">${(r.responsaveis || []).map(tituloCase).join(', ') || '—'}</div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">${r.prazo ? fmtDataBR(r.prazo) : 'sem prazo'}${r.recorrencia ? ' · 🔁' : ''} · ${ATV_STATUS_LABEL[r.status]}</div>
+      </div>`;
+    }).join('');
+    return `<div>
+      <div style="font-size:12px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;display:flex;justify-content:space-between">
+        <span>${tipo}</span><span>${fmtNum(lista.length)}</span>
+      </div>
+      <div style="min-height:40px">${cards || '<p style="color:var(--ink-faint);font-size:12px">Nada em aberto.</p>'}</div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('#atv-quadro .atv-quadro-card').forEach(card => {
+    card.addEventListener('click', () => abrirDetalheAtividade(card.dataset.id));
   });
 }
 
@@ -423,6 +515,7 @@ function desenharAtividades(){
   `;
 
   desenharGraficoSituacao();
+  desenharQuadroPorTipo();
 
   document.getElementById('atv-badge').textContent = `${fmtNum(lista.length)} ticket(s)`;
   document.getElementById('atv-tbody').innerHTML = lista.map(r => {
@@ -432,7 +525,7 @@ function desenharAtividades(){
       : `<span class="badge ${ATV_STATUS_COR[r.status] || 'neutral'}"><span class="dot"></span>${ATV_STATUS_LABEL[r.status] || r.status}</span>`;
     return `<tr data-id="${r.id}" style="cursor:pointer">
       <td style="font-family:monospace;white-space:nowrap">${r.codigo || '—'}</td>
-      <td>${r.tipo || '—'}</td>
+      <td>${r.tipo || '—'}${r.recorrencia ? ' 🔁' : ''}</td>
       <td style="max-width:280px">${r.atividade || '—'}</td>
       <td>${(r.responsaveis || []).map(tituloCase).join(', ') || '—'}</td>
       <td>${statusHtml}</td>
@@ -454,6 +547,11 @@ document.getElementById('atv-btn-novo').addEventListener('click', () => {
   document.getElementById('atv-n-tipo').value = 'Atividade';
   document.getElementById('atv-n-cidade').value = 'touros'; // padrão = a própria Unidade; ainda dá pra trocar se for uma atividade localizada numa cidade específica
   document.getElementById('atv-n-prazo').value = '';
+  document.getElementById('atv-n-recorrencia').value = '';
+  document.getElementById('atv-n-recorrencia-dia-semana-campo').style.display = 'none';
+  document.getElementById('atv-n-recorrencia-dia-mes-campo').style.display = 'none';
+  document.getElementById('atv-n-recorrencia-dia-semana').value = '1';
+  document.getElementById('atv-n-recorrencia-dia-mes').value = '';
   document.getElementById('atv-n-atividade').value = '';
   document.getElementById('atv-n-por-que').value = '';
   document.getElementById('atv-n-onde').value = '';
@@ -468,6 +566,20 @@ document.getElementById('atv-btn-novo').addEventListener('click', () => {
   ligarSeletorPessoas('atv-n-resp', gruposResp);
   document.getElementById('atv-modal-novo').style.display = 'flex';
 });
+function atualizarCamposRecorrenciaNovo(){
+  const freq = document.getElementById('atv-n-recorrencia').value;
+  document.getElementById('atv-n-recorrencia-dia-semana-campo').style.display = freq === 'semanal' ? 'block' : 'none';
+  document.getElementById('atv-n-recorrencia-dia-mes-campo').style.display = freq === 'mensal' ? 'block' : 'none';
+  if (freq === 'semanal'){
+    document.getElementById('atv-n-prazo').value = calcularProximoPrazo('semanal', document.getElementById('atv-n-recorrencia-dia-semana').value);
+  } else if (freq === 'mensal' && document.getElementById('atv-n-recorrencia-dia-mes').value){
+    document.getElementById('atv-n-prazo').value = calcularProximoPrazo('mensal', document.getElementById('atv-n-recorrencia-dia-mes').value);
+  }
+}
+document.getElementById('atv-n-recorrencia').addEventListener('change', atualizarCamposRecorrenciaNovo);
+document.getElementById('atv-n-recorrencia-dia-semana').addEventListener('change', atualizarCamposRecorrenciaNovo);
+document.getElementById('atv-n-recorrencia-dia-mes').addEventListener('input', atualizarCamposRecorrenciaNovo);
+
 document.getElementById('atv-n-fechar').addEventListener('click', () => { document.getElementById('atv-modal-novo').style.display = 'none'; });
 document.getElementById('atv-modal-novo').addEventListener('click', (e) => { if (e.target.id === 'atv-modal-novo') document.getElementById('atv-modal-novo').style.display = 'none'; });
 
@@ -488,6 +600,13 @@ document.getElementById('atv-n-salvar').addEventListener('click', async () => {
       cidade: document.getElementById('atv-n-cidade').value || null,
       tipo, atividade, responsaveis,
       prazo: document.getElementById('atv-n-prazo').value || null,
+      recorrencia: (() => {
+        const freq = document.getElementById('atv-n-recorrencia').value;
+        if (!freq) return null;
+        const dia = freq === 'semanal' ? document.getElementById('atv-n-recorrencia-dia-semana').value : document.getElementById('atv-n-recorrencia-dia-mes').value;
+        if (freq === 'mensal' && !dia) return null;
+        return { frequencia: freq, dia: Number(dia) };
+      })(),
       por_que: document.getElementById('atv-n-por-que').value.trim(),
       onde: document.getElementById('atv-n-onde').value.trim(),
       quanto: document.getElementById('atv-n-quanto').value.trim(),
@@ -513,16 +632,24 @@ document.getElementById('atv-n-salvar').addEventListener('click', async () => {
 
 // ================= modal: detalhe / fluxo =================
 function flowHtml(reg){
-  const etapas = [
-    { chave: 'solicitacao', label: 'Solicitação' },
-    { chave: 'elaboracao', label: 'Elaboração' },
-    { chave: 'campo', label: 'Campo' },
-    { chave: 'concluido', label: 'Conclusão' },
-  ];
+  // Tarefa não passa pela etapa de Campo (vai direto de Elaboração pra
+  // Conclusão) - ver abrirDetalheAtividade/concluirTarefaDireto.
+  const etapas = reg.tipo === 'Tarefa'
+    ? [
+        { chave: 'solicitacao', label: 'Solicitação' },
+        { chave: 'elaboracao', label: 'Elaboração' },
+        { chave: 'concluido', label: 'Conclusão' },
+      ]
+    : [
+        { chave: 'solicitacao', label: 'Solicitação' },
+        { chave: 'elaboracao', label: 'Elaboração' },
+        { chave: 'campo', label: 'Campo' },
+        { chave: 'concluido', label: 'Conclusão' },
+      ];
   if (reg.status === 'cancelado'){
     return `<div class="atv-flow-cancelado">⚫ Ticket cancelado</div>`;
   }
-  const ordem = { elaboracao: 1, campo: 2, concluido: 3 };
+  const ordem = reg.tipo === 'Tarefa' ? { elaboracao: 1, concluido: 2 } : { elaboracao: 1, campo: 2, concluido: 3 };
   const atual = ordem[reg.status] || 1;
   return etapas.map((e, i) => {
     const passo = i === 0 ? 0 : ordem[e.chave];
@@ -558,7 +685,7 @@ function abrirDetalheAtividade(id){
         <div><b>What (o que):</b> ${reg.atividade || '—'}</div>
         <div><b>Why (por que):</b> ${reg.por_que || '—'}</div>
         <div><b>Where (onde):</b> ${reg.onde || tituloCase(reg.cidade) || '—'}</div>
-        <div><b>When (quando):</b> Prazo ${fmtDataBR(reg.prazo)}</div>
+        <div><b>When (quando):</b> Prazo ${fmtDataBR(reg.prazo)}${reg.recorrencia ? ` · ${ATV_FREQ_LABEL[reg.recorrencia.frequencia]}${reg.recorrencia.frequencia === 'mensal' ? ` (dia ${reg.recorrencia.dia})` : ''}` : ''}</div>
         <div><b>Who (quem):</b> ${(reg.responsaveis || []).map(tituloCase).join(', ') || '—'}</div>
         <div><b>How (como):</b> ${reg.como || '—'}</div>
         <div><b>How much (quanto):</b> ${reg.quanto || '—'}</div>
@@ -585,7 +712,20 @@ function abrirDetalheAtividade(id){
   `;
 
   let blocoEtapa = '';
-  if (reg.status === 'elaboracao'){
+  if (reg.status === 'elaboracao' && reg.tipo === 'Tarefa'){
+    // Tarefa não passa pela etapa de campo (não faz sentido "encaminhar pra
+    // equipe" uma tarefa individual tipo "pegar o carro na oficina") - vai
+    // direto de elaboração pra concluída.
+    blocoEtapa = `
+      <div class="card" style="margin:0;border-color:var(--ok)">
+        <div class="card-head"><h3>✅ Concluir tarefa</h3></div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <div class="field"><label>Data de realização</label><input class="input" type="date" id="atv-d-tarefa-data" value="${hojeStr()}"></div>
+          <div class="field"><label>Observação (opcional)</label><textarea class="input" id="atv-d-tarefa-obs" rows="2"></textarea></div>
+          <button type="button" class="btn primary" id="atv-d-btn-concluir-tarefa" style="align-self:flex-start">✅ Concluir tarefa</button>
+        </div>
+      </div>`;
+  } else if (reg.status === 'elaboracao'){
     const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo);
     blocoEtapa = `
       <div class="card" style="margin:0;border-color:var(--brand)">
@@ -626,6 +766,15 @@ function abrirDetalheAtividade(id){
           <button type="button" class="btn primary" id="atv-d-btn-concluir" style="align-self:flex-start">✅ Concluir ticket</button>
         </div>
       </div>`;
+  } else if (reg.status === 'concluido' && reg.tipo === 'Tarefa'){
+    blocoEtapa = `
+      <div class="card" style="margin:0;border-color:var(--ok)">
+        <div class="card-head"><h3>✅ Concluída</h3></div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div><b>Data de realização:</b> ${fmtDataBR(reg.data_execucao_campo)}</div>
+          <div><b>Observações:</b> ${reg.observacoes || '—'}</div>
+        </div>
+      </div>`;
   } else if (reg.status === 'concluido'){
     blocoEtapa = `
       <div class="card" style="margin:0;border-color:var(--ok)">
@@ -653,7 +802,9 @@ function abrirDetalheAtividade(id){
     btn.addEventListener('click', () => confirmarRecebimento(reg, btn.dataset.nome));
   });
 
-  if (reg.status === 'elaboracao'){
+  if (reg.status === 'elaboracao' && reg.tipo === 'Tarefa'){
+    document.getElementById('atv-d-btn-concluir-tarefa').addEventListener('click', () => concluirTarefaDireto(reg));
+  } else if (reg.status === 'elaboracao'){
     const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo);
     // pra cada responsável que for inspetor/supervisor, oferece a equipe
     // DELE como atalho (é o que normalmente se quer dizer com "todos" -
@@ -757,6 +908,7 @@ async function concluirTicket(reg){
     reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: `Concluído — ${ATV_RESULTADO_LABEL[resultado]}.` }];
     reg.atualizado_em = agora;
     await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    await criarProximaOcorrenciaSeRecorrente(reg);
     desenharAtividades();
     abrirDetalheAtividade(reg.id);
   }catch(err){
@@ -764,6 +916,61 @@ async function concluirTicket(reg){
   }finally{
     btn.disabled = false; btn.textContent = '✅ Concluir ticket';
   }
+}
+
+async function concluirTarefaDireto(reg){
+  const btn = document.getElementById('atv-d-btn-concluir-tarefa');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    const agora = new Date().toISOString();
+    reg.data_execucao_campo = document.getElementById('atv-d-tarefa-data').value || hojeStr();
+    reg.observacoes = document.getElementById('atv-d-tarefa-obs').value.trim();
+    reg.resultado = 'sucesso';
+    reg.status = 'concluido';
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: 'Tarefa concluída.' }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    await criarProximaOcorrenciaSeRecorrente(reg);
+    desenharAtividades();
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui concluir: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '✅ Concluir tarefa';
+  }
+}
+
+// quando uma tarefa/atividade/treinamento RECORRENTE é concluída, já cria
+// a próxima ocorrência automaticamente (próximo mês/semana) - o
+// coordenador/supervisor não precisa lembrar de recriar manualmente todo
+// ciclo. A data-base do cálculo é amanhã, não hoje, pra não gerar a
+// ocorrência já vencida caso conclua no mesmo dia do prazo.
+async function criarProximaOcorrenciaSeRecorrente(reg){
+  if (!reg.recorrencia) return;
+  // a base do cálculo é o dia seguinte ao PRAZO do ticket que acabou de ser
+  // concluído (não "hoje") - se conclui adiantado, a próxima ocorrência
+  // ainda tem que ser do PRÓXIMO ciclo, não do mesmo mês/semana de novo.
+  // Sem prazo (não devia acontecer numa recorrente, mas por segurança) cai
+  // pra hoje mesmo.
+  const baseStr = reg.prazo || hojeStr();
+  const baseMaisUm = new Date(baseStr + 'T12:00:00'); baseMaisUm.setDate(baseMaisUm.getDate() + 1);
+  const proximoPrazo = calcularProximoPrazo(reg.recorrencia.frequencia, reg.recorrencia.dia, baseMaisUm.toISOString().slice(0,10));
+  const agora = new Date().toISOString();
+  const proxima = {
+    id: OPS.uid(), codigo: gerarCodigoAtividade(reg.tipo),
+    solicitante: reg.solicitante, data_solicitacao: agora,
+    cidade: reg.cidade, tipo: reg.tipo, atividade: reg.atividade,
+    responsaveis: reg.responsaveis, prazo: proximoPrazo, recorrencia: reg.recorrencia,
+    por_que: reg.por_que, onde: reg.onde, quanto: reg.quanto, como: reg.como,
+    link_planilha: reg.link_planilha,
+    status: 'elaboracao', confirmacoes: [],
+    tecnicos_campo: [], link_drive: null, link_lista_presenca: null,
+    nota_treinamento: null, resultado: null, observacoes: null, evidencias: [],
+    historico: [{ quando: agora, quem: nomeDoLogin(), texto: `Próxima ocorrência gerada automaticamente a partir de ${reg.codigo}.` }],
+    criado_por: nomeDoLogin(), atualizado_em: agora,
+  };
+  await OPS_SUPABASE.upsert('atividades_registros', [proxima], 'id');
+  atvRegistros.unshift(proxima);
 }
 
 document.getElementById('atv-d-cancelar').addEventListener('click', async () => {
