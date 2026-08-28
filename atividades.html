@@ -179,6 +179,67 @@ function ehTecnicoDeCampo(p){
   const c = OPS.normalize(p.cargo || '');
   return c.includes('instalador') && c.includes('reparador');
 }
+function pessoasInspetores(pessoas){ return pessoas.filter(p => OPS.normalize(p.cargo || '').includes('inspetor')); }
+function pessoasSupervisores(pessoas){ return pessoas.filter(p => OPS.normalize(p.cargo || '').includes('supervisor')); }
+// técnicos vinculados a um inspetor (campo "inspetor" do cadastro) ou a um
+// supervisor (campo "gestor") - "Todos os técnicos" quando quem encaminha
+// é inspetor tem que ser só a equipe DELE, não a unidade inteira; quando é
+// supervisor, a equipe dele (naturalmente maior, um supervisor cobre vários
+// inspetores).
+function tecnicosVinculadosA(pessoa, todasPessoas){
+  const cargo = OPS.normalize(pessoa.cargo || '');
+  if (cargo.includes('inspetor')) return todasPessoas.filter(p => OPS.normalize(p.inspetor || '') === OPS.normalize(pessoa.nome));
+  if (cargo.includes('supervisor')) return todasPessoas.filter(p => OPS.normalize(p.gestor || '') === OPS.normalize(pessoa.nome));
+  return [];
+}
+
+// ================= seletor de pessoas (grupos + individual) =================
+// Em vez de sempre mostrar a lista inteira de gente cadastrada (poluído,
+// difícil de achar quem precisa), mostra atalhos de grupo (Inspetores,
+// Supervisores, Todos os técnicos) e só abre a lista rolante em ordem
+// alfabética quando alguém escolhe "Selecionar individualmente". Usado
+// tanto no Responsável (Novo ticket) quanto nos Técnicos de campo
+// (Encaminhar pro campo) - o prefixo vira o nome da classe do checkbox
+// (ex: "atv-n-resp" -> ".atv-n-resp-check"), então quem lê a seleção
+// depois não precisa mudar nada.
+function htmlSeletorPessoas(prefixo, pool, grupos){
+  const ordenado = pool.slice().sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      ${grupos.map(g => `<button type="button" class="btn ghost atv-sel-grupo" data-prefixo="${prefixo}" data-grupo="${g.label}">${g.icone} ${g.label} (${fmtNum(g.pessoas.length)})</button>`).join('')}
+      <button type="button" class="btn ghost atv-sel-individual" data-prefixo="${prefixo}">👤 Selecionar individualmente</button>
+    </div>
+    <div id="${prefixo}-resumo" style="font-size:12.5px;color:var(--ink-dim);margin-bottom:8px">Nenhum selecionado ainda.</div>
+    <div id="${prefixo}-lista" style="display:none;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px">
+      ${ordenado.map(p => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);border:1px solid var(--border);border-radius:6px;padding:4px 8px">
+        <input type="checkbox" class="${prefixo}-check" value="${p.nome}"> ${tituloCase(p.nome)}
+      </label>`).join('')}
+    </div>`;
+}
+function atualizarResumoSeletor(prefixo){
+  const marcados = [...document.querySelectorAll(`.${prefixo}-check:checked`)].map(c => c.value);
+  const resumo = document.getElementById(`${prefixo}-resumo`);
+  if (!resumo) return;
+  resumo.textContent = marcados.length ? `${marcados.length} selecionado(s): ${marcados.map(tituloCase).join(', ')}` : 'Nenhum selecionado ainda.';
+}
+function ligarSeletorPessoas(prefixo, grupos){
+  document.querySelectorAll(`.atv-sel-grupo[data-prefixo="${prefixo}"]`).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grupo = grupos.find(g => g.label === btn.dataset.grupo);
+      const nomes = new Set(grupo.pessoas.map(p => p.nome));
+      document.querySelectorAll(`.${prefixo}-check`).forEach(c => { c.checked = nomes.has(c.value); });
+      document.getElementById(`${prefixo}-lista`).style.display = 'none';
+      atualizarResumoSeletor(prefixo);
+    });
+  });
+  const btnIndividual = document.querySelector(`.atv-sel-individual[data-prefixo="${prefixo}"]`);
+  if (btnIndividual) btnIndividual.addEventListener('click', () => {
+    const lista = document.getElementById(`${prefixo}-lista`);
+    lista.style.display = lista.style.display === 'none' ? 'flex' : 'none';
+  });
+  document.querySelectorAll(`.${prefixo}-check`).forEach(c => c.addEventListener('change', () => atualizarResumoSeletor(prefixo)));
+  atualizarResumoSeletor(prefixo);
+}
 
 // código curto de referência (ex: TRE-260828-4F2K) - mesmo padrão já usado
 // nas Auditorias (gestao-operacional.html) - não é chave primária (isso é
@@ -399,10 +460,12 @@ document.getElementById('atv-btn-novo').addEventListener('click', () => {
   document.getElementById('atv-n-quanto').value = '';
   document.getElementById('atv-n-como').value = '';
   document.getElementById('atv-n-link-planilha').value = '';
-  document.getElementById('atv-n-responsaveis').innerHTML = atvPessoas.slice().sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(p => `
-    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);border:1px solid var(--border);border-radius:6px;padding:4px 8px">
-      <input type="checkbox" class="atv-n-resp-check" value="${p.nome}"> ${tituloCase(p.nome)}
-    </label>`).join('');
+  const gruposResp = [
+    { label: 'Inspetores', icone: '🔍', pessoas: pessoasInspetores(atvPessoas) },
+    { label: 'Supervisores', icone: '👔', pessoas: pessoasSupervisores(atvPessoas) },
+  ].filter(g => g.pessoas.length);
+  document.getElementById('atv-n-responsaveis').innerHTML = htmlSeletorPessoas('atv-n-resp', atvPessoas, gruposResp);
+  ligarSeletorPessoas('atv-n-resp', gruposResp);
   document.getElementById('atv-modal-novo').style.display = 'flex';
 });
 document.getElementById('atv-n-fechar').addEventListener('click', () => { document.getElementById('atv-modal-novo').style.display = 'none'; });
@@ -430,7 +493,7 @@ document.getElementById('atv-n-salvar').addEventListener('click', async () => {
       quanto: document.getElementById('atv-n-quanto').value.trim(),
       como: document.getElementById('atv-n-como').value.trim(),
       link_planilha: document.getElementById('atv-n-link-planilha').value.trim() || null,
-      status: 'elaboracao',
+      status: 'elaboracao', confirmacoes: [],
       tecnicos_campo: [], link_drive: null, link_lista_presenca: null,
       nota_treinamento: null, resultado: null, observacoes: null, evidencias: [],
       historico: [{ quando: agora, quem: nomeDoLogin(), texto: 'Ticket criado.' }],
@@ -502,24 +565,34 @@ function abrirDetalheAtividade(id){
       </div>
     </div>
     <div class="field"><label>Link da planilha</label><input class="input" id="atv-d-link-planilha" value="${reg.link_planilha || ''}" placeholder="https://..."></div>
+    <div class="card" style="margin:0">
+      <div class="card-head"><h3>✅ Confirmação de recebimento</h3></div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+        ${(reg.responsaveis || []).map(nome => {
+          const conf = (reg.confirmacoes || []).find(c => OPS.normalize(c.nome) === OPS.normalize(nome));
+          const souEu = OPS.normalize(nomeDoLogin()) === OPS.normalize(nome);
+          const acao = conf
+            ? `<span style="color:var(--ok);font-size:12.5px">✅ Confirmado em ${OPS.formatDateTimeBR(conf.quando)}</span>`
+            : (souEu
+              ? `<button type="button" class="btn ghost atv-d-btn-confirmar" data-nome="${nome}" style="padding:4px 10px;font-size:12px">Confirmar recebimento</button>`
+              : `<span style="color:var(--warn);font-size:12.5px">⏳ Aguardando confirmação</span>`);
+          return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px">
+            <span>${tituloCase(nome)}</span>${acao}
+          </div>`;
+        }).join('') || '<span style="color:var(--ink-faint);font-size:12.5px">Sem responsáveis.</span>'}
+      </div>
+    </div>
   `;
 
   let blocoEtapa = '';
   if (reg.status === 'elaboracao'){
-    const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo);
     blocoEtapa = `
       <div class="card" style="margin:0;border-color:var(--brand)">
         <div class="card-head"><h3>📤 Encaminhar para o Campo</h3></div>
         <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
           <p class="page-sub" style="margin:0">Quando os responsáveis terminarem de elaborar o conteúdo, encaminhe pro campo pra aplicar com os técnicos.</p>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim)">
-            <input type="checkbox" id="atv-d-campo-todos"> ☑️ Todos os técnicos (${fmtNum(tecnicosCampo.length)})
-          </label>
-          <div id="atv-d-campo-tecnicos" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px">
-            ${tecnicosCampo.map(p => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);border:1px solid var(--border);border-radius:6px;padding:4px 8px">
-              <input type="checkbox" class="atv-d-campo-check" value="${p.nome}"> ${tituloCase(p.nome)}
-            </label>`).join('')}
-          </div>
+          <div id="atv-d-campo-seletor"></div>
           <div class="field"><label>Data prevista da aplicação em campo</label><input class="input" type="date" id="atv-d-campo-data"></div>
           <button type="button" class="btn primary" id="atv-d-btn-encaminhar" style="align-self:flex-start">📤 Encaminhar para o Campo</button>
         </div>
@@ -576,10 +649,27 @@ function abrirDetalheAtividade(id){
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">${historicoHtml || '<span style="color:var(--ink-faint);font-size:12px">Sem eventos.</span>'}</div>
     </div>`;
 
+  [...document.querySelectorAll('.atv-d-btn-confirmar')].forEach(btn => {
+    btn.addEventListener('click', () => confirmarRecebimento(reg, btn.dataset.nome));
+  });
+
   if (reg.status === 'elaboracao'){
-    document.getElementById('atv-d-campo-todos').addEventListener('change', (e) => {
-      document.querySelectorAll('.atv-d-campo-check').forEach(c => { c.checked = e.target.checked; });
+    const tecnicosCampo = atvPessoas.filter(ehTecnicoDeCampo);
+    // pra cada responsável que for inspetor/supervisor, oferece a equipe
+    // DELE como atalho (é o que normalmente se quer dizer com "todos" -
+    // "todos os técnicos vinculados a ele", não a unidade inteira) - "Todos
+    // os técnicos" (unidade inteira) fica só como opção extra, por último.
+    const responsaveisPessoas = (reg.responsaveis || [])
+      .map(nome => atvPessoas.find(p => OPS.normalize(p.nome) === OPS.normalize(nome)))
+      .filter(Boolean);
+    const gruposCampo = [];
+    responsaveisPessoas.forEach(p => {
+      const vinculados = tecnicosVinculadosA(p, atvPessoas).filter(ehTecnicoDeCampo);
+      if (vinculados.length) gruposCampo.push({ label: `Equipe do ${tituloCase(p.nome)}`, icone: '🧑‍🔧', pessoas: vinculados });
     });
+    gruposCampo.push({ label: 'Todos os técnicos (unidade)', icone: '🔧', pessoas: tecnicosCampo });
+    document.getElementById('atv-d-campo-seletor').innerHTML = htmlSeletorPessoas('atv-d-campo', tecnicosCampo, gruposCampo);
+    ligarSeletorPessoas('atv-d-campo', gruposCampo);
     document.getElementById('atv-d-btn-encaminhar').addEventListener('click', () => encaminharParaCampo(reg));
   } else if (reg.status === 'campo'){
     document.getElementById('atv-d-conc-foto').addEventListener('change', async (e) => {
@@ -609,6 +699,19 @@ async function salvarLinkPlanilhaSeMudou(reg){
   reg.link_planilha = valor;
   reg.atualizado_em = new Date().toISOString();
   await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+}
+
+async function confirmarRecebimento(reg, nome){
+  try{
+    const agora = new Date().toISOString();
+    reg.confirmacoes = [...(reg.confirmacoes || []), { nome, quando: agora }];
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: 'Confirmou recebimento da demanda.' }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui confirmar: ' + err.message);
+  }
 }
 
 async function encaminharParaCampo(reg){
