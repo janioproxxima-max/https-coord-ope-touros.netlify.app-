@@ -439,6 +439,10 @@
             <option value="avarias">Avarias/Sinistro</option>
           </select>
         </div>
+        <div class="field" id="mj-n-bloco-sinistro-responsavel" style="display:none">
+          <label>Quem ocasionou o sinistro?</label>
+          <input class="input" id="mj-n-sinistro-responsavel" placeholder="Ex: técnico Fulano de Tal">
+        </div>
       </div>
 
       <div id="mj-n-bloco-acesso" style="display:none">
@@ -942,8 +946,16 @@ function atualizarCamposModulo(){
   atualizarCamposPcTipo();
   atualizarCamposGestaoTipo();
   atualizarCamposPagamentoTipo();
+  atualizarCamposFrotasCategoria();
 }
 document.getElementById('mj-n-modulo').addEventListener('change', atualizarCamposModulo);
+
+// ---------- Frotas: Manutenção × Lavagem × Avarias/Sinistro ----------
+function atualizarCamposFrotasCategoria(){
+  const categoria = document.getElementById('mj-n-frotas-categoria').value;
+  document.getElementById('mj-n-bloco-sinistro-responsavel').style.display = categoria === 'avarias' ? 'block' : 'none';
+}
+document.getElementById('mj-n-frotas-categoria').addEventListener('change', atualizarCamposFrotasCategoria);
 
 // ---------- Problema de Campo: Estoque × Material ----------
 function atualizarCamposPcTipo(){
@@ -1100,7 +1112,10 @@ document.getElementById('mj-form-novo').addEventListener('submit', async (e) => 
       : modulo === 'pagamento' ? (pagTipo === 'frotas' ? document.getElementById('mj-n-pag-veiculo').value : document.getElementById('mj-n-pag-colaborador').value)
       : '',
     tipoProblemaCampo: modulo === 'material' ? pcTipo : null,
-    subOpcao: modulo === 'material' ? pcSubOpcao : null,
+    subOpcao: modulo === 'material' ? pcSubOpcao
+      : (modulo === 'frotas' && document.getElementById('mj-n-frotas-categoria').value === 'avarias')
+        ? document.getElementById('mj-n-sinistro-responsavel').value.trim() || null
+        : null,
     equipamento: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-equipamento').value.trim() : '',
     serial: modulo === 'material' && pcTipo === 'estoque' ? document.getElementById('mj-n-pc-serial').value.trim() : '',
     tipoGestao: modulo === 'gestao' ? gestaoTipo : null,
@@ -1176,7 +1191,7 @@ function renderDetalhe(){
     ${t.matricula ? `<div class="status-row"><span class="status-name">Matrícula</span><span class="status-val">${t.matricula}</span></div>` : ''}
     ${t.categoria ? `<div class="status-row"><span class="status-name">Categoria</span><span class="status-val">${MJ_CATEGORIA_LABEL[t.categoria]}</span></div>` : ''}
     ${t.tipoProblemaCampo ? `<div class="status-row"><span class="status-name">Tipo</span><span class="status-val">${t.tipoProblemaCampo === 'estoque' ? 'Estoque' : 'Material'}</span></div>` : ''}
-    ${t.subOpcao ? `<div class="status-row"><span class="status-name">Motivo/Situação</span><span class="status-val">${t.subOpcao}</span></div>` : ''}
+    ${t.subOpcao ? `<div class="status-row"><span class="status-name">${t.modulo === 'frotas' ? 'Responsável pelo sinistro' : 'Motivo/Situação'}</span><span class="status-val">${t.subOpcao}</span></div>` : ''}
     ${t.equipamento ? `<div class="status-row"><span class="status-name">Equipamento</span><span class="status-val">${t.equipamento}</span></div>` : ''}
     ${t.serial ? `<div class="status-row"><span class="status-name">Serial</span><span class="status-val">${t.serial}</span></div>` : ''}
     ${t.tamanho ? `<div class="status-row"><span class="status-name">Tamanho</span><span class="status-val">${t.tamanho}</span></div>` : ''}

@@ -176,7 +176,19 @@
       <div class="field"><label>Motivo</label><input class="input" id="man-motivo" required placeholder="Ex: troca de pneu, revisão elétrica..."></div>
       <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary" id="btn-man-submit">＋ Abrir manutenção</button></div>
     </form>
-    <div id="manutencao-list" style="max-height:220px;overflow-y:auto"></div>
+    <div id="manutencao-list" style="max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+
+    <div class="sec-hdr">🚗 Sinistros</div>
+    <form id="form-sinistro" style="margin-bottom:10px">
+      <input type="hidden" id="sin-placa">
+      <div class="grid2">
+        <div class="field"><label>Data do sinistro</label><input class="input" type="date" id="sin-data" required></div>
+        <div class="field"><label>Quem ocasionou</label><input class="input" id="sin-responsavel" required placeholder="Ex: técnico Fulano de Tal"></div>
+      </div>
+      <div class="field"><label>O que aconteceu</label><input class="input" id="sin-descricao" required placeholder="Ex: batida na lateral ao manobrar"></div>
+      <div class="modal-actions" style="margin-top:0"><button type="submit" class="btn primary" id="btn-sin-submit">＋ Registrar sinistro</button></div>
+    </form>
+    <div id="sinistro-list" style="max-height:200px;overflow-y:auto"></div>
 
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="btn-hist-close">Fechar</button>
@@ -214,10 +226,13 @@ const MANUTENCOES_KEY = 'ops_touros_manutencoes_v1';
 const SYNC_COLLECTION = 'FrotasData';
 const SYNC_COLLECTION_LAVAGENS = 'LavagensData';
 const SYNC_COLLECTION_MANUTENCOES = 'ManutencoesData';
+const SINISTROS_KEY = 'ops_touros_sinistros_v1';
+const SYNC_COLLECTION_SINISTROS = 'SinistrosData';
 
 let records = OPS.loadData(STORAGE_KEY) || [];
 let lavagens = OPS.loadData(LAVAGENS_KEY) || [];
 let manutencoes = OPS.loadData(MANUTENCOES_KEY) || [];
+let sinistros = OPS.loadData(SINISTROS_KEY) || [];
 let sortKey = null, sortDir = 1;
 
 const els = {
@@ -469,6 +484,10 @@ async function persistManutencoes(){
   OPS.saveData(MANUTENCOES_KEY, manutencoes);
   await OPS.syncPushWithToast(SYNC_COLLECTION_MANUTENCOES, manutencoes);
 }
+async function persistSinistros(){
+  OPS.saveData(SINISTROS_KEY, sinistros);
+  await OPS.syncPushWithToast(SYNC_COLLECTION_SINISTROS, sinistros);
+}
 
 els.tbody.addEventListener('click', async (e) => {
   const editId = e.target.dataset.edit;
@@ -535,11 +554,17 @@ function openHistorico(placa){
   document.getElementById('hist-sub').textContent = rec ? rec.veiculo : '';
   document.getElementById('lav-placa').value = placa;
   document.getElementById('man-placa').value = placa;
+  document.getElementById('sin-placa').value = placa;
   document.getElementById('lav-data').value = new Date().toISOString().slice(0,10);
   document.getElementById('lav-pagamento').value = 'Nota Prazo';
   document.getElementById('man-data').value = new Date().toISOString().slice(0,10);
   document.getElementById('man-prazo').value = '';
   document.getElementById('man-motivo').value = '';
+  document.getElementById('sin-data').value = new Date().toISOString().slice(0,10);
+  // pré-preenche com o responsável cadastrado do veículo (o mais comum é
+  // ser ele mesmo) - fica fácil de trocar se foi outra pessoa dirigindo
+  document.getElementById('sin-responsavel').value = rec ? rec.responsavel || '' : '';
+  document.getElementById('sin-descricao').value = '';
 
   const wash = nextWashInfo(placa);
   const avisoEl = document.getElementById('lavagem-aviso');
@@ -552,16 +577,19 @@ function openHistorico(placa){
 
   renderLavagemList();
   renderManutencaoList();
+  renderSinistroList();
   modalHist.style.display = 'flex';
 }
 function renderHistoricoResumo(){
   const minhasLavagens = lavagens.filter(l => l.placa === histPlacaAtual);
   const minhasManutencoes = manutencoes.filter(m => m.placa === histPlacaAtual);
+  const meusSinistros = sinistros.filter(s => s.placa === histPlacaAtual);
   const abertas = minhasManutencoes.filter(m => m.status === 'aberta').length;
   document.getElementById('hist-resumo').innerHTML = `
     <div class="stat-card brand"><div class="label">Lavagens (total)</div><div class="value">${minhasLavagens.length}</div></div>
     <div class="stat-card ${abertas ? 'crit' : 'ok'}"><div class="label">Manutenções abertas</div><div class="value">${abertas}</div></div>
     <div class="stat-card"><div class="label">Manutenções (total)</div><div class="value">${minhasManutencoes.length}</div></div>
+    <div class="stat-card ${meusSinistros.length ? 'crit' : ''}"><div class="label">Sinistros (total)</div><div class="value">${meusSinistros.length}</div></div>
   `;
 }
 function closeHistorico(){ modalHist.style.display = 'none'; }
@@ -617,6 +645,71 @@ function renderManutencaoList(){
   });
   renderHistoricoResumo();
 }
+
+function renderSinistroList(){
+  const list = sinistros.filter(s => s.placa === histPlacaAtual).sort((a,b) => (OPS.toDateSafe(b.data)||0) - (OPS.toDateSafe(a.data)||0));
+  const el = document.getElementById('sinistro-list');
+  el.innerHTML = list.length ? list.map(s => `
+    <div class="status-row" style="display:block;padding:10px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600;font-size:13px">${OPS.formatDateBR(s.data)}</span>
+        <span class="badge crit"><span class="dot"></span>${s.responsavel}</span>
+      </div>
+      <div style="color:var(--ink-dim);font-size:12px;margin-top:4px">${s.descricao}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button type="button" class="btn ghost" style="font-size:12px;padding:5px 10px" data-editar-sin="${s.id}">✎ Editar</button>
+        <button type="button" class="btn ghost danger" style="font-size:12px;padding:5px 10px" data-excluir-sin="${s.id}">✕ Excluir</button>
+      </div>
+    </div>
+  `).join('') : '<p style="color:var(--ink-dim);font-size:13px">Nenhum sinistro registrado.</p>';
+
+  el.querySelectorAll('[data-editar-sin]').forEach(btn => {
+    btn.addEventListener('click', () => editarSinistro(btn.dataset.editarSin));
+  });
+  el.querySelectorAll('[data-excluir-sin]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Excluir este registro de sinistro?')) return;
+      sinistros = sinistros.filter(s => s.id !== btn.dataset.excluirSin);
+      await persistSinistros();
+      renderSinistroList();
+      renderAll();
+    });
+  });
+  renderHistoricoResumo();
+}
+
+let editandoSinistroId = null;
+function editarSinistro(id){
+  const s = sinistros.find(x => x.id === id);
+  if (!s) return;
+  editandoSinistroId = id;
+  document.getElementById('sin-data').value = OPS.toDateInputValue(s.data);
+  document.getElementById('sin-responsavel').value = s.responsavel;
+  document.getElementById('sin-descricao').value = s.descricao;
+  document.getElementById('btn-sin-submit').textContent = '✓ Salvar edição';
+  document.getElementById('sin-descricao').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+document.getElementById('form-sinistro').addEventListener('submit', async e => {
+  e.preventDefault();
+  const dados = {
+    data: document.getElementById('sin-data').value,
+    responsavel: document.getElementById('sin-responsavel').value.trim(),
+    descricao: document.getElementById('sin-descricao').value.trim(),
+  };
+  if (editandoSinistroId){
+    sinistros = sinistros.map(s => s.id === editandoSinistroId ? { ...s, ...dados } : s);
+    editandoSinistroId = null;
+    document.getElementById('btn-sin-submit').textContent = '＋ Registrar sinistro';
+  } else {
+    sinistros.push({ id: OPS.uid(), placa: document.getElementById('sin-placa').value, ...dados });
+  }
+  await persistSinistros();
+  document.getElementById('sin-responsavel').value = '';
+  document.getElementById('sin-descricao').value = '';
+  renderSinistroList();
+  renderAll();
+});
 
 let editandoManutencaoId = null;
 function editarManutencao(id){
@@ -708,34 +801,39 @@ document.getElementById('btn-export').onclick = () => {
 
 async function initPage(silencioso = false){
   const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [sharedFrotas, sharedLavagens, sharedManutencoes] = await Promise.all([
+  const [sharedFrotas, sharedLavagens, sharedManutencoes, sharedSinistros] = await Promise.all([
     OPS.syncPull(SYNC_COLLECTION),
     OPS.syncPull(SYNC_COLLECTION_LAVAGENS),
     OPS.syncPull(SYNC_COLLECTION_MANUTENCOES),
+    OPS.syncPull(SYNC_COLLECTION_SINISTROS),
   ]);
   if (toast) toast.remove();
   if (sharedFrotas){ records = sharedFrotas; }
   if (sharedLavagens){ lavagens = sharedLavagens; }
   if (sharedManutencoes){ manutencoes = sharedManutencoes; }
+  if (sharedSinistros){ sinistros = sharedSinistros; }
 
   // corrige registros sem "id" (ex: veículo/lavagem/manutenção adicionados
   // direto na planilha, sem passar pelo formulário do site) — sem isso,
   // editar ou excluir não sabe identificar de qual registro é o clique
-  let precisaResyncFrotas = false, precisaResyncLavagens = false, precisaResyncManutencoes = false;
+  let precisaResyncFrotas = false, precisaResyncLavagens = false, precisaResyncManutencoes = false, precisaResyncSinistros = false;
   records = records.map(r => { if (r.id) return r; precisaResyncFrotas = true; return { ...r, id: OPS.uid() }; });
   lavagens = lavagens.map(l => { if (l.id) return l; precisaResyncLavagens = true; return { ...l, id: OPS.uid() }; });
   manutencoes = manutencoes.map(m => { if (m.id) return m; precisaResyncManutencoes = true; return { ...m, id: OPS.uid() }; });
+  sinistros = sinistros.map(s => { if (s.id) return s; precisaResyncSinistros = true; return { ...s, id: OPS.uid() }; });
 
   OPS.saveData(STORAGE_KEY, records);
   OPS.saveData(LAVAGENS_KEY, lavagens);
   OPS.saveData(MANUTENCOES_KEY, manutencoes);
+  OPS.saveData(SINISTROS_KEY, sinistros);
   if (precisaResyncFrotas) await OPS.syncPush(SYNC_COLLECTION, records);
   if (precisaResyncLavagens) await OPS.syncPush(SYNC_COLLECTION_LAVAGENS, lavagens);
   if (precisaResyncManutencoes) await OPS.syncPush(SYNC_COLLECTION_MANUTENCOES, manutencoes);
+  if (precisaResyncSinistros) await OPS.syncPush(SYNC_COLLECTION_SINISTROS, sinistros);
 
   populateFilterOptions();
   renderAll();
-  return !!(sharedFrotas || sharedLavagens || sharedManutencoes);
+  return !!(sharedFrotas || sharedLavagens || sharedManutencoes || sharedSinistros);
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
