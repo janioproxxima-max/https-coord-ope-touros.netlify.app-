@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Atividades · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="supabase-client.js"></script>
 </head>
 <body>
@@ -17,6 +19,14 @@
   </div>
 
   <div class="stat-row" id="atv-stat-row"></div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>📊 Situação dos tickets</h3><span class="cnt-badge" id="atv-chart-badge">—</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;padding:16px">
+      <div style="position:relative;height:200px;width:200px;flex-shrink:0"><canvas id="atv-chart-situacao"></canvas></div>
+      <div id="atv-chart-legenda" style="display:flex;flex-direction:column;gap:8px;font-size:13px;flex:1;min-width:180px"></div>
+    </div>
+  </div>
 
   <div class="panel toolbar">
     <div class="field">
@@ -192,6 +202,62 @@ function estaAtrasado(reg){
   return reg.prazo < hojeStr();
 }
 
+// classifica cada ticket numa situação de urgência (pro gráfico de rosca) -
+// concluído/cancelado primeiro, depois atrasado, depois "quase vencendo"
+// (prazo nos próximos 3 dias), senão "no prazo".
+const ATV_SITUACAO_PRAZO_LIMITE_DIAS = 3;
+function bucketSituacao(reg){
+  if (reg.status === 'concluido') return 'concluido';
+  if (reg.status === 'cancelado') return 'cancelado';
+  if (estaAtrasado(reg)) return 'atrasado';
+  if (reg.prazo){
+    const dias = Math.round((new Date(reg.prazo + 'T12:00:00') - new Date(hojeStr() + 'T12:00:00')) / 86400000);
+    if (dias <= ATV_SITUACAO_PRAZO_LIMITE_DIAS) return 'quase_vencendo';
+  }
+  return 'no_prazo';
+}
+const ATV_SITUACAO_CFG = {
+  atrasado:       { label: '🔴 Atrasado',        cor: '#ff4d6d' },
+  quase_vencendo: { label: '🟠 Quase vencendo',   cor: '#ff9a3c' },
+  no_prazo:       { label: '🟢 No prazo',         cor: '#00e5a0' },
+  concluido:      { label: '🔵 Concluído',        cor: '#00d4ff' },
+  cancelado:      { label: '⚫ Cancelado',        cor: '#5a6b85' },
+};
+let atvChartSituacao = null;
+function desenharGraficoSituacao(){
+  const contagem = { atrasado: 0, quase_vencendo: 0, no_prazo: 0, concluido: 0, cancelado: 0 };
+  atvRegistros.forEach(r => { contagem[bucketSituacao(r)]++; });
+  const chaves = Object.keys(ATV_SITUACAO_CFG).filter(k => contagem[k] > 0);
+
+  document.getElementById('atv-chart-badge').textContent = `${fmtNum(atvRegistros.length)} ticket(s)`;
+  document.getElementById('atv-chart-legenda').innerHTML = chaves.length
+    ? Object.keys(ATV_SITUACAO_CFG).map(k => `
+        <div style="display:flex;align-items:center;gap:8px;${contagem[k] ? '' : 'opacity:.4'}">
+          <span style="width:10px;height:10px;border-radius:50%;background:${ATV_SITUACAO_CFG[k].cor};flex-shrink:0"></span>
+          <span style="flex:1">${ATV_SITUACAO_CFG[k].label}</span>
+          <b>${fmtNum(contagem[k])}</b>
+        </div>`).join('')
+    : `<span style="color:var(--ink-faint)">Nenhum ticket ainda.</span>`;
+
+  if (atvChartSituacao) atvChartSituacao.destroy();
+  if (!chaves.length) return;
+  atvChartSituacao = new Chart(document.getElementById('atv-chart-situacao'), {
+    type: 'doughnut',
+    data: {
+      labels: chaves.map(k => ATV_SITUACAO_CFG[k].label),
+      datasets: [{ data: chaves.map(k => contagem[k]), backgroundColor: chaves.map(k => ATV_SITUACAO_CFG[k].cor), borderWidth: 0 }],
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        datalabels: { color: '#0b1220', font: { weight: '700', size: 12 }, formatter: v => v },
+      },
+    },
+  });
+}
+
 // compressão de foto client-side (mesmo padrão do mundo-jira.html /
 // auditorias de gestao-operacional.html) - reduz pra um base64 pequeno
 // antes de guardar no jsonb do registro.
@@ -294,6 +360,8 @@ function desenharAtividades(){
     <div class="stat-card ${atrasados ? 'crit' : 'ok'}"><div class="label">Atrasados</div><div class="value">${fmtNum(atrasados)}</div></div>
     <div class="stat-card ok"><div class="label">Concluídos no mês</div><div class="value">${fmtNum(concluidosMes)}</div></div>
   `;
+
+  desenharGraficoSituacao();
 
   document.getElementById('atv-badge').textContent = `${fmtNum(lista.length)} ticket(s)`;
   document.getElementById('atv-tbody').innerHTML = lista.map(r => {
