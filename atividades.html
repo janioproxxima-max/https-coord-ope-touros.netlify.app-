@@ -46,7 +46,8 @@
         <option value="elaboracao">Em elaboração</option>
         <option value="campo">Encaminhado ao campo</option>
         <option value="atrasado">Atrasados</option>
-        <option value="concluido">Concluído</option>
+        <option value="concluido">Concluído (aguardando validação)</option>
+        <option value="validado">Validado</option>
         <option value="cancelado">Cancelado</option>
       </select>
     </div>
@@ -173,8 +174,18 @@ requireAuthThenInit('atividades.html', 'Atividades');
 // ================= dados / config =================
 const ATV_TIPOS = ['Atividade', 'Tarefa', 'Treinamento', 'Plano de Ação', 'Outro'];
 const ATV_FREQ_LABEL = { semanal: '🔁 Toda semana', mensal: '🔁 Todo mês' };
-const ATV_STATUS_LABEL = { elaboracao: '🟡 Em elaboração', campo: '🔵 Encaminhado ao campo', concluido: '🟢 Concluído', cancelado: '⚫ Cancelado' };
-const ATV_STATUS_COR = { elaboracao: 'warn', campo: 'brand', concluido: 'ok', cancelado: 'neutral' };
+const ATV_STATUS_LABEL = { elaboracao: '🟡 Em elaboração', campo: '🔵 Encaminhado ao campo', concluido: '🟢 Concluído', validado: '✅ Validado', cancelado: '⚫ Cancelado' };
+const ATV_STATUS_COR = { elaboracao: 'warn', campo: 'brand', concluido: 'ok', validado: 'ok', cancelado: 'neutral' };
+const ATV_EFICACIA_LABEL = { sim: 'Sim, foi eficaz', parcial: 'Parcialmente eficaz', nao: 'Não foi eficaz' };
+// Tipos que passam pela validação do solicitante depois de concluídos -
+// Tarefa fica de fora (é coisa rápida/pessoal, não precisa desse ciclo).
+function precisaValidacao(tipo){ return tipo !== 'Tarefa'; }
+// "concluído" sozinho é ambíguo pra quem precisa de validação - deixa
+// claro que ainda falta o solicitante confirmar a eficácia.
+function labelStatusTicket(r){
+  if (r.status === 'concluido' && precisaValidacao(r.tipo)) return '🟣 Aguardando validação';
+  return ATV_STATUS_LABEL[r.status] || r.status;
+}
 const ATV_RESULTADO_LABEL = { sucesso: 'Concluído com sucesso', parcial: 'Concluído parcialmente', nova_acao: 'Necessita nova ação', nao_realizado: 'Não realizado' };
 
 let atvRegistros = [];
@@ -313,7 +324,7 @@ function gerarCodigoAtividade(tipo){
 // ainda não terminou), pro mesmo jeito que SLA é calculado no resto do
 // site, em vez de depender de alguém marcar manualmente.
 function estaAtrasado(reg){
-  if (!reg.prazo || reg.status === 'concluido' || reg.status === 'cancelado') return false;
+  if (!reg.prazo || reg.status === 'concluido' || reg.status === 'validado' || reg.status === 'cancelado') return false;
   return reg.prazo < hojeStr();
 }
 
@@ -322,7 +333,8 @@ function estaAtrasado(reg){
 // (prazo nos próximos 3 dias), senão "no prazo".
 const ATV_SITUACAO_PRAZO_LIMITE_DIAS = 3;
 function bucketSituacao(reg){
-  if (reg.status === 'concluido') return 'concluido';
+  if (reg.status === 'validado') return 'validado';
+  if (reg.status === 'concluido') return precisaValidacao(reg.tipo) ? 'aguardando_validacao' : 'concluido';
   if (reg.status === 'cancelado') return 'cancelado';
   if (estaAtrasado(reg)) return 'atrasado';
   if (reg.prazo){
@@ -335,7 +347,9 @@ const ATV_SITUACAO_CFG = {
   atrasado:       { label: '🔴 Atrasado',        cor: '#ff4d6d' },
   quase_vencendo: { label: '🟠 Quase vencendo',   cor: '#ff9a3c' },
   no_prazo:       { label: '🟢 No prazo',         cor: '#00e5a0' },
+  aguardando_validacao: { label: '🟣 Aguardando validação', cor: '#a78bfa' },
   concluido:      { label: '🔵 Concluído',        cor: '#00d4ff' },
+  validado:       { label: '✅ Validado',         cor: '#5eead4' },
   cancelado:      { label: '⚫ Cancelado',        cor: '#5a6b85' },
 };
 let atvChartSituacao = null;
@@ -378,7 +392,7 @@ function desenharGraficoSituacao(){
 // pra dar uma visão rápida do que falta fazer em cada frente sem precisar
 // filtrar a tabela toda vez.
 function desenharQuadroPorTipo(){
-  const abertos = atvRegistros.filter(r => r.status === 'elaboracao' || r.status === 'campo');
+  const abertos = atvRegistros.filter(r => r.status === 'elaboracao' || r.status === 'campo' || (r.status === 'concluido' && precisaValidacao(r.tipo)));
   document.getElementById('atv-quadro-badge').textContent = `${fmtNum(abertos.length)} em aberto`;
   const porTipo = {};
   ATV_TIPOS.forEach(t => { porTipo[t] = []; });
@@ -395,7 +409,7 @@ function desenharQuadroPorTipo(){
       return `<div class="atv-quadro-card" data-id="${r.id}" style="cursor:pointer;background:var(--bg-raised);border-left:3px solid ${cor};border-radius:6px;padding:8px 10px;margin-bottom:8px">
         <div style="font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:4px">${r.atividade || '—'}</div>
         <div style="font-size:11.5px;color:var(--ink-faint)">${(r.responsaveis || []).map(tituloCase).join(', ') || '—'}</div>
-        <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">${r.prazo ? fmtDataBR(r.prazo) : 'sem prazo'}${r.recorrencia ? ' · 🔁' : ''} · ${ATV_STATUS_LABEL[r.status]}</div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">${r.prazo ? fmtDataBR(r.prazo) : 'sem prazo'}${r.recorrencia ? ' · 🔁' : ''} · ${labelStatusTicket(r)}</div>
       </div>`;
     }).join('');
     return `<div>
@@ -505,7 +519,7 @@ function desenharAtividades(){
   const noCampo = atvRegistros.filter(r => r.status === 'campo').length;
   const atrasados = atvRegistros.filter(r => estaAtrasado(r)).length;
   const mesAtual = hojeStr().slice(0,7);
-  const concluidosMes = atvRegistros.filter(r => r.status === 'concluido' && (r.data_execucao_campo || '').slice(0,7) === mesAtual).length;
+  const concluidosMes = atvRegistros.filter(r => (r.status === 'concluido' || r.status === 'validado') && (r.data_execucao_campo || '').slice(0,7) === mesAtual).length;
   document.getElementById('atv-stat-row').innerHTML = `
     <div class="stat-card brand"><div class="label">Total de tickets</div><div class="value">${fmtNum(atvRegistros.length)}</div></div>
     <div class="stat-card warn"><div class="label">Em elaboração</div><div class="value">${fmtNum(emElaboracao)}</div></div>
@@ -522,7 +536,7 @@ function desenharAtividades(){
     const atrasado = estaAtrasado(r);
     const statusHtml = atrasado
       ? `<span class="badge crit"><span class="dot"></span>🔴 Atrasado</span>`
-      : `<span class="badge ${ATV_STATUS_COR[r.status] || 'neutral'}"><span class="dot"></span>${ATV_STATUS_LABEL[r.status] || r.status}</span>`;
+      : `<span class="badge ${r.status === 'concluido' && precisaValidacao(r.tipo) ? 'warn' : (ATV_STATUS_COR[r.status] || 'neutral')}"><span class="dot"></span>${labelStatusTicket(r)}</span>`;
     return `<tr data-id="${r.id}" style="cursor:pointer">
       <td style="font-family:monospace;white-space:nowrap">${r.codigo || '—'}</td>
       <td>${r.tipo || '—'}${r.recorrencia ? ' 🔁' : ''}</td>
@@ -645,11 +659,12 @@ function flowHtml(reg){
         { chave: 'elaboracao', label: 'Elaboração' },
         { chave: 'campo', label: 'Campo' },
         { chave: 'concluido', label: 'Conclusão' },
+        { chave: 'validado', label: 'Validação' },
       ];
   if (reg.status === 'cancelado'){
     return `<div class="atv-flow-cancelado">⚫ Ticket cancelado</div>`;
   }
-  const ordem = reg.tipo === 'Tarefa' ? { elaboracao: 1, concluido: 2 } : { elaboracao: 1, campo: 2, concluido: 3 };
+  const ordem = reg.tipo === 'Tarefa' ? { elaboracao: 1, concluido: 2 } : { elaboracao: 1, campo: 2, concluido: 3, validado: 4 };
   const atual = ordem[reg.status] || 1;
   return etapas.map((e, i) => {
     const passo = i === 0 ? 0 : ordem[e.chave];
@@ -672,7 +687,7 @@ function abrirDetalheAtividade(id){
   const atrasado = estaAtrasado(reg);
   document.getElementById('atv-d-status-badge').innerHTML = atrasado
     ? `<span class="badge crit"><span class="dot"></span>🔴 Atrasado</span>`
-    : `<span class="badge ${ATV_STATUS_COR[reg.status] || 'neutral'}"><span class="dot"></span>${ATV_STATUS_LABEL[reg.status] || reg.status}</span>`;
+    : `<span class="badge ${reg.status === 'concluido' && precisaValidacao(reg.tipo) ? 'warn' : (ATV_STATUS_COR[reg.status] || 'neutral')}"><span class="dot"></span>${labelStatusTicket(reg)}</span>`;
   document.getElementById('atv-d-flow').innerHTML = flowHtml(reg);
 
   const historicoHtml = (reg.historico || []).slice().reverse().map(h => `
@@ -775,10 +790,10 @@ function abrirDetalheAtividade(id){
           <div><b>Observações:</b> ${reg.observacoes || '—'}</div>
         </div>
       </div>`;
-  } else if (reg.status === 'concluido'){
-    blocoEtapa = `
+  } else if (reg.status === 'concluido' || reg.status === 'validado'){
+    const resumoConcluido = `
       <div class="card" style="margin:0;border-color:var(--ok)">
-        <div class="card-head"><h3>✅ Concluído</h3></div>
+        <div class="card-head"><h3>✅ Concluído (relatado pelo responsável)</h3></div>
         <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
           <div><b>Resultado:</b> ${ATV_RESULTADO_LABEL[reg.resultado] || '—'}</div>
           <div><b>Data de realização:</b> ${fmtDataBR(reg.data_execucao_campo)}</div>
@@ -790,6 +805,43 @@ function abrirDetalheAtividade(id){
           ${(reg.evidencias || []).map(ev => `<img src="${ev.foto}" style="max-height:120px;border-radius:6px;margin-top:4px">`).join('')}
         </div>
       </div>`;
+
+    if (!precisaValidacao(reg.tipo)){
+      blocoEtapa = resumoConcluido;
+    } else if (reg.status === 'validado'){
+      blocoEtapa = resumoConcluido + `
+        <div class="card" style="margin:0;border-color:var(--ok)">
+          <div class="card-head"><h3>🧐 Validado por ${tituloCase(reg.solicitante)}</h3></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
+            <div><b>Eficácia da ação:</b> ${ATV_EFICACIA_LABEL[reg.validacao && reg.validacao.eficacia] || '—'}</div>
+            <div><b>Validado em:</b> ${OPS.formatDateTimeBR(reg.validacao && reg.validacao.validado_em)}</div>
+            <div><b>Observação:</b> ${(reg.validacao && reg.validacao.observacao) || '—'}</div>
+          </div>
+        </div>`;
+    } else {
+      // aguardando validação - o próprio solicitante que valida (é ele
+      // quem pediu, é ele quem sabe se resolveu o problema de verdade)
+      const souSolicitante = OPS.normalize(nomeDoLogin()) === OPS.normalize(reg.solicitante);
+      blocoEtapa = resumoConcluido + `
+        <div class="card" style="margin:0;border-color:var(--warn)">
+          <div class="card-head"><h3>🧐 Validação do solicitante</h3></div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+            ${souSolicitante ? `
+              <p class="page-sub" style="margin:0">O responsável marcou como concluído - confirme se a ação realmente resolveu o que motivou o pedido.</p>
+              <div class="field"><label>A ação foi eficaz?</label>
+                <select class="input" id="atv-d-valid-eficacia">
+                  <option value="">Selecione...</option>
+                  <option value="sim">Sim, foi eficaz</option>
+                  <option value="parcial">Parcialmente eficaz</option>
+                  <option value="nao">Não foi eficaz</option>
+                </select>
+              </div>
+              <div class="field"><label>Observação (opcional)</label><textarea class="input" id="atv-d-valid-obs" rows="2"></textarea></div>
+              <button type="button" class="btn primary" id="atv-d-btn-validar" style="align-self:flex-start">✅ Validar e encerrar</button>
+            ` : `<p style="color:var(--warn);font-size:13px;margin:0">⏳ Aguardando ${tituloCase(reg.solicitante)} validar a eficácia da ação.</p>`}
+          </div>
+        </div>`;
+    }
   }
 
   document.getElementById('atv-d-corpo').innerHTML = blocoPrincipal + blocoEtapa + `
@@ -836,9 +888,11 @@ function abrirDetalheAtividade(id){
       }
     });
     document.getElementById('atv-d-btn-concluir').addEventListener('click', () => concluirTicket(reg));
+  } else if (reg.status === 'concluido' && precisaValidacao(reg.tipo) && OPS.normalize(nomeDoLogin()) === OPS.normalize(reg.solicitante)){
+    document.getElementById('atv-d-btn-validar').addEventListener('click', () => validarEficacia(reg));
   }
 
-  document.getElementById('atv-d-cancelar').style.display = (reg.status === 'concluido' || reg.status === 'cancelado') ? 'none' : 'inline-flex';
+  document.getElementById('atv-d-cancelar').style.display = (reg.status === 'concluido' || reg.status === 'validado' || reg.status === 'cancelado') ? 'none' : 'inline-flex';
   document.getElementById('atv-modal-detalhe').style.display = 'flex';
 }
 document.getElementById('atv-d-fechar').addEventListener('click', () => { document.getElementById('atv-modal-detalhe').style.display = 'none'; });
@@ -937,6 +991,34 @@ async function concluirTarefaDireto(reg){
     alert('Não consegui concluir: ' + err.message);
   }finally{
     btn.disabled = false; btn.textContent = '✅ Concluir tarefa';
+  }
+}
+
+// o solicitante confirma se a ação resolveu de verdade o que motivou o
+// pedido - só depois disso o ticket vira "validado" (fim de linha de
+// verdade). Só quem abriu o ticket pode fazer essa validação (checado na
+// hora de mostrar o botão, em abrirDetalheAtividade).
+async function validarEficacia(reg){
+  const eficacia = document.getElementById('atv-d-valid-eficacia').value;
+  if (!eficacia){ alert('Selecione se a ação foi eficaz.'); return; }
+  const btn = document.getElementById('atv-d-btn-validar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    const agora = new Date().toISOString();
+    reg.validacao = {
+      eficacia, observacao: document.getElementById('atv-d-valid-obs').value.trim(),
+      validado_por: nomeDoLogin(), validado_em: agora,
+    };
+    reg.status = 'validado';
+    reg.historico = [...(reg.historico || []), { quando: agora, quem: nomeDoLogin(), texto: `Validado — ${ATV_EFICACIA_LABEL[eficacia]}.` }];
+    reg.atualizado_em = agora;
+    await OPS_SUPABASE.upsert('atividades_registros', [reg], 'id');
+    desenharAtividades();
+    abrirDetalheAtividade(reg.id);
+  }catch(err){
+    alert('Não consegui validar: ' + err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '✅ Validar e encerrar';
   }
 }
 
