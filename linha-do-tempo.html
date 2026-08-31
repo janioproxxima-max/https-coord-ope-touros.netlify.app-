@@ -59,7 +59,7 @@ const LT_STATUS_CFG = {
   deslocamento: { label: 'Deslocamento', cor: '#8b5cf6', borda: '#8b5cf6', texto: '#fff' },
   trabalhando:  { label: 'Trabalhando',  cor: '#3b82f6', borda: '#3b82f6', texto: '#fff' },
   concluida:    { label: 'Concluída',    cor: '#22c55e', borda: '#22c55e', texto: '#052e16' },
-  ocioso:       { label: 'Ocioso',       cor: '#f4c95d', borda: '#f4c95d', texto: '#3a2c05' },
+  ocioso:       { label: 'Ocioso',       cor: '#ffcc33', borda: '#ffcc33', texto: '#3a2c05' },
   interrompida: { label: 'Interrompida', cor: '#ef4444', borda: '#ef4444', texto: '#fff' },
 };
 const LT_STATUSATENDIMENTO_PARA_COR = { aguardando: 'aguardando', deslocamento: 'deslocamento', iniciado: 'trabalhando', pausado: 'interrompida', outro: 'aguardando', '': 'aguardando' };
@@ -209,7 +209,7 @@ function desenharTimeline(closed, open, diaStr){
       if (b.inicio > cursor + 0.02){
         const dur = b.inicio - cursor;
         const cfg = LT_STATUS_CFG.ocioso;
-        partes.push(`<div title="Ocioso · ${ltFmtHora(cursor)} - ${ltFmtHora(b.inicio)}" style="position:absolute;left:${(cursor-inicioJanela)/larguraTotal*100}%;width:${dur/larguraTotal*100}%;top:4px;bottom:4px;background:${cfg.cor};border-radius:4px;box-sizing:border-box;opacity:.55"></div>`);
+        partes.push(`<div title="Ocioso · ${ltFmtHora(cursor)} - ${ltFmtHora(b.inicio)}" style="position:absolute;left:${(cursor-inicioJanela)/larguraTotal*100}%;width:${dur/larguraTotal*100}%;top:4px;bottom:4px;background:${cfg.cor};border-radius:4px;box-sizing:border-box;opacity:.9"></div>`);
       }
       const dur = b.fim - b.inicio;
       const cfg = LT_STATUS_CFG[b.statusCor];
