@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linha do Tempo · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="supabase-client.js"></script>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Produtividade Tempo Real</p>
+    <h1 class="page-title">Linha do Tempo da Equipe</h1>
+    <p class="page-sub">Cada bloco é um serviço, do deslocamento até o encerramento. "Ocioso" é o intervalo entre um serviço e o próximo.</p>
+  </div>
+
+  <div class="panel toolbar" style="margin-bottom:14px">
+    <div class="field">
+      <label for="lt-f-dia">Dia</label>
+      <input class="input" type="date" id="lt-f-dia">
+    </div>
+    <div class="field" style="justify-content:flex-end">
+      <label>&nbsp;</label>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn ghost" id="lt-btn-anterior">◀</button>
+        <button type="button" class="btn ghost" id="lt-btn-hoje">Hoje</button>
+        <button type="button" class="btn ghost" id="lt-btn-proximo">▶</button>
+      </div>
+    </div>
+    <div class="field" style="margin-left:auto;align-self:flex-end;display:flex;align-items:center;gap:10px">
+      <span class="page-sub" id="lt-ultima-att" style="margin:0"></span>
+      <button type="button" class="btn ghost" id="lt-btn-atualizar">🔄 Atualizar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>📅 Linha do tempo</h3><span class="cnt-badge" id="lt-badge">—</span></div>
+    <div id="lt-legenda" style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 16px;font-size:12px;border-bottom:1px solid var(--border)"></div>
+    <div class="table-wrap" style="max-height:74vh">
+      <div id="lt-timeline" style="min-width:960px;padding:10px 16px 18px"></div>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('linha-do-tempo.html', 'Linha do Tempo');
+
+// ================= config =================
+// mesma paleta/nomes da ferramenta de alocação de recursos usada como
+// referência - "Concluída" cobre qualquer serviço já fechado (é o que a
+// gente tem histórico completo); os outros 4 status só existem pra HOJE,
+// vindos do chamado ainda aberto no Mapa de Serviços (não dá pra saber o
+// status de um dia passado, só o resultado final).
+const LT_STATUS_CFG = {
+  aguardando:   { label: 'Aguardando',   cor: 'transparent', borda: 'var(--ink-faint)', texto: 'var(--ink-dim)' },
+  deslocamento: { label: 'Deslocamento', cor: '#8b5cf6', borda: '#8b5cf6', texto: '#fff' },
+  trabalhando:  { label: 'Trabalhando',  cor: '#3b82f6', borda: '#3b82f6', texto: '#fff' },
+  concluida:    { label: 'Concluída',    cor: '#22c55e', borda: '#22c55e', texto: '#052e16' },
+  ocioso:       { label: 'Ocioso',       cor: '#f4c95d', borda: '#f4c95d', texto: '#3a2c05' },
+  interrompida: { label: 'Interrompida', cor: '#ef4444', borda: '#ef4444', texto: '#fff' },
+};
+const LT_STATUSATENDIMENTO_PARA_COR = { aguardando: 'aguardando', deslocamento: 'deslocamento', iniciado: 'trabalhando', pausado: 'interrompida', outro: 'aguardando', '': 'aguardando' };
+
+function ltHojeStr(){ return new Date().toISOString().slice(0,10); }
+function tituloCase(s){ return String(s || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+function fmtNum(n){ return new Intl.NumberFormat('pt-BR').format(n); }
+
+// mesmo "truque de fuso" do resto do site: data_criacao/data_deslocamento/
+// data_encerramento em produtividade_registros guardam a hora LOCAL
+// disfarçada de UTC - por isso getUTCHours/getUTCMinutes, nunca getHours.
+function horaDecimalRegistroFechado(v){
+  if (!v) return null;
+  const d = new Date(v);
+  if (!isFinite(d)) return null;
+  return d.getUTCHours() + d.getUTCMinutes() / 60;
+}
+// já os registros do Mapa de Serviços (criadoEm) são timestamp real - hora
+// local de verdade do navegador de quem está olhando (getHours mesmo).
+function horaDecimalAgora(){
+  const d = new Date();
+  return d.getHours() + d.getMinutes() / 60;
+}
+function ltFmtHora(horaDecimal){
+  const h = Math.floor(horaDecimal);
+  const m = Math.round((horaDecimal - h) * 60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+// mesmo critério de "Instalador/Reparador cadastrado" usado no resto do
+// site (gestao-operacional.html/atividades.html)
+function ehTecnicoDeCampo(p){
+  const c = OPS.normalize(p.cargo || '');
+  return c.includes('instalador') && c.includes('reparador');
+}
+// mesma classificação de texto livre do "Status" usada em mapa-servicos.html
+function classifyStatusAtendimento(raw){
+  const n = OPS.normalize(raw);
+  if (!n) return '';
+  if (n.includes('pausa') || n.includes('interromper')) return 'pausado';
+  if (n.includes('deslocamento')) return 'deslocamento';
+  if (n.includes('iniciado')) return 'iniciado';
+  if (n.includes('aguardando')) return 'aguardando';
+  return 'outro';
+}
+
+let ltPessoas = [];
+let ltDiaAtual = ltHojeStr();
+
+document.getElementById('lt-legenda').innerHTML = Object.entries(LT_STATUS_CFG).map(([k, cfg]) => `
+  <span style="display:flex;align-items:center;gap:6px">
+    <span style="width:12px;height:12px;border-radius:3px;background:${cfg.cor};border:1.5px solid ${cfg.borda};display:inline-block"></span>${cfg.label}
+  </span>`).join('');
+
+async function carregarLinhaDoTempo(){
+  // reforça o valor do campo aqui (não só na carga inicial do script) -
+  // como o modal de login pode renderizar por cima antes do usuário
+  // entrar, setar isso só uma vez lá embaixo às vezes não pega
+  document.getElementById('lt-f-dia').value = ltDiaAtual;
+  const badge = document.getElementById('lt-badge');
+  badge.textContent = 'Carregando...';
+  document.getElementById('lt-timeline').innerHTML = `<p style="color:var(--ink-faint);font-size:13px">Carregando...</p>`;
+  try{
+    const diaStr = ltDiaAtual;
+    const inicioStr = `${diaStr}T00:00:00`;
+    const proximoDia = new Date(diaStr + 'T12:00:00'); proximoDia.setDate(proximoDia.getDate() + 1);
+    const fimStr = `${proximoDia.toISOString().slice(0,10)}T00:00:00`;
+
+    const ehHoje = diaStr === ltHojeStr();
+    const [pessoas, closed, open] = await Promise.all([
+      OPS.syncPull('PessoasData').catch(() => []),
+      OPS_SUPABASE.select('produtividade_registros',
+        `data_encerramento=gte.${inicioStr}&data_encerramento=lt.${fimStr}`,
+        'tecnico,tipo,protocolo,area,data_criacao,data_deslocamento,data_encerramento'),
+      ehHoje ? OPS.syncPull('MapaServicosData').catch(() => []) : Promise.resolve([]),
+    ]);
+    ltPessoas = pessoas || [];
+    desenharTimeline(closed || [], open || [], diaStr);
+    document.getElementById('lt-ultima-att').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  }catch(err){
+    document.getElementById('lt-timeline').innerHTML = `<p style="color:var(--crit);font-size:13px">⚠️ Não consegui buscar os dados. ${err.message}</p>`;
+    badge.textContent = '—';
+  }
+}
+
+function desenharTimeline(closed, open, diaStr){
+  const roster = ltPessoas.filter(p => p.nome && ehTecnicoDeCampo(p) && p.status === 'ativo').sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const ehHoje = diaStr === ltHojeStr();
+  const agoraDecimal = horaDecimalAgora();
+
+  // janela do dia: 6h até o fim do último serviço (ou agora, se for hoje) -
+  // arredondado pra cima, com mínimo até as 18h
+  let fimJanela = ehHoje ? Math.max(18, agoraDecimal) : 18;
+  closed.forEach(r => {
+    const fim = horaDecimalRegistroFechado(r.data_encerramento);
+    if (fim != null && fim > fimJanela) fimJanela = fim;
+  });
+  const inicioJanela = 6;
+  fimJanela = Math.ceil(fimJanela);
+  const larguraTotal = fimJanela - inicioJanela;
+
+  const porTecnicoFechados = {};
+  closed.forEach(r => {
+    const inicio = horaDecimalRegistroFechado(r.data_deslocamento || r.data_criacao);
+    const fim = horaDecimalRegistroFechado(r.data_encerramento);
+    if (inicio == null || fim == null || fim <= inicio) return;
+    const key = OPS.normalize(r.tecnico);
+    (porTecnicoFechados[key] = porTecnicoFechados[key] || []).push({ inicio, fim, tipo: r.tipo, protocolo: r.protocolo, statusCor: 'concluida' });
+  });
+
+  const linhasComServico = roster.filter(p => (porTecnicoFechados[OPS.normalize(p.nome)] || []).length || (ehHoje && open.some(r => OPS.normalize(r.responsavel) === OPS.normalize(p.nome))));
+  document.getElementById('lt-badge').textContent = `${fmtNum(linhasComServico.length)} equipe(s) com serviço`;
+
+  const horas = [];
+  for (let h = inicioJanela; h <= fimJanela; h++) horas.push(h);
+  const regua = `<div style="display:flex;position:relative;height:20px;margin-left:190px">${horas.map(h => `
+    <div style="position:absolute;left:${(h-inicioJanela)/larguraTotal*100}%;font-size:10px;color:var(--ink-faint);font-family:monospace">${String(h).padStart(2,'0')}h</div>`).join('')}</div>`;
+
+  const linhaAgora = (ehHoje && agoraDecimal >= inicioJanela && agoraDecimal <= fimJanela)
+    ? `<div style="position:absolute;left:${(agoraDecimal-inicioJanela)/larguraTotal*100}%;top:0;bottom:0;width:2px;background:#ff9a3c;z-index:2"></div>`
+    : '';
+
+  const linhas = linhasComServico.map(p => {
+    const key = OPS.normalize(p.nome);
+    const blocosFechados = (porTecnicoFechados[key] || []).slice().sort((a,b) => a.inicio - b.inicio);
+
+    // chamado ainda aberto hoje - vira um marcador curto na posição de
+    // "agora", colorido pelo status ao vivo (não dá pra saber quando
+    // começou de verdade a trabalhar nele, só o status atual)
+    let marcadorAberto = null;
+    if (ehHoje){
+      const meuAberto = open.find(r => OPS.normalize(r.responsavel) === key);
+      if (meuAberto){
+        const cat = classifyStatusAtendimento(meuAberto.statusAtendimento);
+        const corKey = LT_STATUSATENDIMENTO_PARA_COR[cat] || 'aguardando';
+        const largura = 0.35;
+        marcadorAberto = {
+          inicio: agoraDecimal, fim: agoraDecimal + largura,
+          tipo: meuAberto.tipoCurto, protocolo: meuAberto.protocolo, statusCor: corKey,
+        };
+      }
+    }
+
+    const partes = [];
+    let cursor = inicioJanela;
+    const todosBlocos = marcadorAberto ? [...blocosFechados] : blocosFechados;
+    todosBlocos.forEach(b => {
+      if (b.inicio > cursor + 0.02){
+        const dur = b.inicio - cursor;
+        const cfg = LT_STATUS_CFG.ocioso;
+        partes.push(`<div title="Ocioso · ${ltFmtHora(cursor)} - ${ltFmtHora(b.inicio)}" style="position:absolute;left:${(cursor-inicioJanela)/larguraTotal*100}%;width:${dur/larguraTotal*100}%;top:4px;bottom:4px;background:${cfg.cor};border-radius:4px;box-sizing:border-box;opacity:.55"></div>`);
+      }
+      const dur = b.fim - b.inicio;
+      const cfg = LT_STATUS_CFG[b.statusCor];
+      partes.push(`<div title="${cfg.label} · ${b.tipo || ''}${b.protocolo ? ' · ' + b.protocolo : ''} · ${ltFmtHora(b.inicio)} - ${ltFmtHora(b.fim)}" style="position:absolute;left:${(b.inicio-inicioJanela)/larguraTotal*100}%;width:${Math.max(dur/larguraTotal*100,0.6)}%;top:4px;bottom:4px;background:${cfg.cor};border:1.5px solid ${cfg.borda};border-radius:4px;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;padding:0 4px">
+        <span style="font-size:10px;color:${cfg.texto};font-weight:700;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${b.tipo ? tituloCase(b.tipo) : cfg.label}</span>
+      </div>`);
+      cursor = Math.max(cursor, b.fim);
+    });
+    if (marcadorAberto){
+      const cfg = LT_STATUS_CFG[marcadorAberto.statusCor];
+      partes.push(`<div title="${cfg.label} (agora) · ${marcadorAberto.tipo || ''}${marcadorAberto.protocolo ? ' · ' + marcadorAberto.protocolo : ''}" style="position:absolute;left:${(marcadorAberto.inicio-inicioJanela)/larguraTotal*100}%;width:${Math.max(0.35/larguraTotal*100,0.8)}%;top:2px;bottom:2px;background:${cfg.cor};border:2px solid ${cfg.borda};border-radius:4px;box-sizing:border-box;z-index:3"></div>`);
+    }
+
+    return `<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="width:190px;flex-shrink:0;font-size:12px;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tituloCase(p.nome)}<br><span style="color:var(--ink-faint);font-size:10.5px">${tituloCase(p.cidade || '')}</span></div>
+      <div style="position:relative;flex:1;height:36px;background:var(--bg-raised);border-radius:4px">${partes.join('')}${linhaAgora}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('lt-timeline').innerHTML = regua + (linhas || `<p style="color:var(--ink-faint);font-size:13px;padding:10px 0">Ninguém teve serviço nesse dia.</p>`);
+}
+
+document.getElementById('lt-f-dia').addEventListener('change', (e) => {
+  ltDiaAtual = e.target.value || ltHojeStr();
+  carregarLinhaDoTempo();
+});
+document.getElementById('lt-btn-hoje').addEventListener('click', () => {
+  ltDiaAtual = ltHojeStr();
+  document.getElementById('lt-f-dia').value = ltDiaAtual;
+  carregarLinhaDoTempo();
+});
+document.getElementById('lt-btn-anterior').addEventListener('click', () => {
+  const d = new Date(ltDiaAtual + 'T12:00:00'); d.setDate(d.getDate() - 1);
+  ltDiaAtual = d.toISOString().slice(0,10);
+  document.getElementById('lt-f-dia').value = ltDiaAtual;
+  carregarLinhaDoTempo();
+});
+document.getElementById('lt-btn-proximo').addEventListener('click', () => {
+  const d = new Date(ltDiaAtual + 'T12:00:00'); d.setDate(d.getDate() + 1);
+  ltDiaAtual = d.toISOString().slice(0,10);
+  document.getElementById('lt-f-dia').value = ltDiaAtual;
+  carregarLinhaDoTempo();
+});
+document.getElementById('lt-btn-atualizar').addEventListener('click', carregarLinhaDoTempo);
+
+window.OPS_ON_REFRESH = carregarLinhaDoTempo;
+document.getElementById('lt-f-dia').value = ltDiaAtual;
+carregarLinhaDoTempo();
+setInterval(() => {
+  if (document.visibilityState === 'visible' && ltDiaAtual === ltHojeStr()) carregarLinhaDoTempo();
+}, 3 * 60 * 1000);
+</script>
+</body>
+</html>

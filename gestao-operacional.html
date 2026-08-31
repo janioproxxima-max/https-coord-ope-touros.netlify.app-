@@ -533,16 +533,10 @@
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-head">
-        <h3>📅 Linha do tempo do dia (por equipe)</h3><span class="cnt-badge" id="go-ptr-timeline-badge">—</span>
-        <button type="button" class="btn ghost" id="go-ptr-timeline-toggle" style="margin-left:auto;font-size:11px;padding:4px 8px">Mostrar</button>
+        <h3>📅 Linha do tempo do dia (por equipe)</h3>
+        <button type="button" class="btn primary" id="go-ptr-timeline-abrir" style="margin-left:auto;font-size:12px;padding:6px 12px">↗ Abrir linha do tempo</button>
       </div>
-      <div id="go-ptr-timeline-corpo" style="display:none">
-        <p class="page-sub" style="padding:0 16px;margin:10px 0">Cada bloco é um serviço fechado hoje (do deslocamento até o encerramento) — "tempo ocioso" é o intervalo entre um serviço e o próximo. Passe o mouse num bloco pra ver o protocolo.</p>
-        <div id="go-ptr-timeline-legenda" style="display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 12px;font-size:11.5px"></div>
-        <div class="table-wrap" style="max-height:600px">
-          <div id="go-ptr-timeline" style="min-width:900px;padding:0 16px 16px"></div>
-        </div>
-      </div>
+      <p class="page-sub" style="padding:0 16px 16px;margin:0">Abre numa aba separada — mostra o dia de cada equipe (qualquer data), com status ao vivo pra hoje.</p>
     </div>
 
     <div class="card">
@@ -3712,116 +3706,10 @@ async function desenharProdutividadeTempoReal(){
   </tr>`).join('') || `<tr><td colspan="15" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
 
   document.getElementById('go-ptr-ultima-att').textContent = `Atualizado às ${fmtHoraCurtaLocal(new Date())}`;
-
-  if (document.getElementById('go-ptr-timeline-corpo').style.display !== 'none'){
-    desenharLinhaDoTempoDia(roster, registrosHojeDoTime);
-  }
 }
-
-// ================= Linha do tempo do dia (por equipe) =================
-// Bloco por serviço fechado hoje: do deslocamento (ou criação, se não tiver
-// deslocamento registrado) até o encerramento - mesmo horário "disfarçado"
-// (UTC guardando hora local) usado no resto do site, por isso getUTCHours/
-// getUTCMinutes, não getHours/getMinutes. "Tempo ocioso" é só o espaço
-// entre um bloco e o próximo, calculado aqui (não é um dado da planilha).
-const TIMELINE_GRUPO_COR = {
-  reparo: '#00d4ff', ativacao: '#ff4d6d', sa: '#a78bfa', mde: '#00e5a0',
-  recolhimento: '#ffd166', outro: '#8a97ab',
-};
-const TIMELINE_GRUPO_LABEL = {
-  reparo: 'Reparo (VT)', ativacao: 'Ativação', sa: 'Serviço Adicional', mde: 'Mudança de Endereço',
-  recolhimento: 'Recolhimento', outro: 'Outro',
-};
-function timelineHoraDecimal(v){
-  if (!v) return null;
-  const d = new Date(v);
-  if (!isFinite(d)) return null;
-  return d.getUTCHours() + d.getUTCMinutes() / 60;
-}
-function timelineFmtHora(horaDecimal){
-  const h = Math.floor(horaDecimal);
-  const m = Math.round((horaDecimal - h) * 60);
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-}
-document.getElementById('go-ptr-timeline-toggle').addEventListener('click', () => {
-  const corpo = document.getElementById('go-ptr-timeline-corpo');
-  const abrir = corpo.style.display === 'none';
-  corpo.style.display = abrir ? 'block' : 'none';
-  document.getElementById('go-ptr-timeline-toggle').textContent = abrir ? 'Esconder' : 'Mostrar';
-  if (abrir) desenharProdutividadeTempoReal();
+document.getElementById('go-ptr-timeline-abrir').addEventListener('click', () => {
+  window.open('linha-do-tempo.html', '_blank');
 });
-function desenharLinhaDoTempoDia(roster, registrosHojeDoTime){
-  const agora = new Date();
-  const agoraDecimal = agora.getHours() + agora.getMinutes() / 60;
-
-  // janela do dia: das 6h até a última coisa que aconteceu (ou agora, o
-  // que for maior) - arredondado pra hora cheia, com mínimo até as 18h pra
-  // não ficar uma janela minúscula num dia ainda começando
-  let fimJanela = Math.max(18, agoraDecimal);
-  registrosHojeDoTime.forEach(r => {
-    const fim = timelineHoraDecimal(r.data_encerramento);
-    if (fim != null && fim > fimJanela) fimJanela = fim;
-  });
-  const inicioJanela = 6;
-  fimJanela = Math.ceil(fimJanela);
-  const larguraTotal = fimJanela - inicioJanela;
-
-  const porTecnico = {};
-  registrosHojeDoTime.forEach(r => {
-    const inicio = timelineHoraDecimal(r.data_deslocamento || r.data_criacao);
-    const fim = timelineHoraDecimal(r.data_encerramento);
-    if (inicio == null || fim == null || fim <= inicio) return;
-    const key = OPS.normalize(r.tecnico);
-    // grupoSlaDoTipo() devolve null pra Recolhimento de propósito (fica fora
-    // do SLA) - aqui na timeline ele ainda merece cor própria, então detecta
-    // à parte em vez de cair genérico em "outro"
-    const grupo = (r.tipo || '').toUpperCase() === 'RECOLHIMENTO' ? 'recolhimento' : (grupoSlaDoTipo(r.tipo) || 'outro');
-    (porTecnico[key] = porTecnico[key] || []).push({ inicio, fim, tipo: r.tipo, protocolo: r.protocolo, grupo });
-  });
-
-  const linhasComServico = roster.filter(p => (porTecnico[OPS.normalize(p.nome)] || []).length);
-  document.getElementById('go-ptr-timeline-badge').textContent = `${fmtNum(linhasComServico.length)} equipe(s) com serviço hoje`;
-
-  // legenda
-  document.getElementById('go-ptr-timeline-legenda').innerHTML = Object.keys(TIMELINE_GRUPO_LABEL).map(g => `
-    <span style="display:flex;align-items:center;gap:5px">
-      <span style="width:10px;height:10px;border-radius:3px;background:${TIMELINE_GRUPO_COR[g]};display:inline-block"></span>${TIMELINE_GRUPO_LABEL[g]}
-    </span>`).join('') + `<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;border:1px dashed var(--ink-faint);display:inline-block"></span>Tempo ocioso</span>`;
-
-  // régua de horas
-  const horas = [];
-  for (let h = inicioJanela; h <= fimJanela; h++) horas.push(h);
-  const regua = `<div style="display:flex;position:relative;height:20px;margin-left:180px">${horas.map(h => `
-    <div style="position:absolute;left:${(h-inicioJanela)/larguraTotal*100}%;font-size:10px;color:var(--ink-faint);font-family:monospace">${String(h).padStart(2,'0')}h</div>`).join('')}</div>`;
-
-  const linhaAgora = agoraDecimal >= inicioJanela && agoraDecimal <= fimJanela
-    ? `<div style="position:absolute;left:${(agoraDecimal-inicioJanela)/larguraTotal*100}%;top:0;bottom:0;width:2px;background:#ff9a3c;z-index:2"></div>`
-    : '';
-
-  const linhas = linhasComServico.map(p => {
-    const key = OPS.normalize(p.nome);
-    const blocos = (porTecnico[key] || []).slice().sort((a,b) => a.inicio - b.inicio);
-    const partes = [];
-    let cursor = inicioJanela;
-    blocos.forEach(b => {
-      if (b.inicio > cursor + 0.02){
-        const dur = b.inicio - cursor;
-        partes.push(`<div title="Tempo ocioso · ${timelineFmtHora(cursor)} - ${timelineFmtHora(b.inicio)}" style="position:absolute;left:${(cursor-inicioJanela)/larguraTotal*100}%;width:${dur/larguraTotal*100}%;top:4px;bottom:4px;border:1px dashed var(--ink-faint);border-radius:4px;box-sizing:border-box"></div>`);
-      }
-      const dur = b.fim - b.inicio;
-      partes.push(`<div title="${b.tipo}${b.protocolo ? ' · ' + b.protocolo : ''} · ${timelineFmtHora(b.inicio)} - ${timelineFmtHora(b.fim)}" style="position:absolute;left:${(b.inicio-inicioJanela)/larguraTotal*100}%;width:${Math.max(dur/larguraTotal*100,0.6)}%;top:4px;bottom:4px;background:${TIMELINE_GRUPO_COR[b.grupo]};border-radius:4px;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;padding:0 4px">
-        <span style="font-size:10px;color:#08111d;font-weight:700;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${TIMELINE_GRUPO_LABEL[b.grupo]}</span>
-      </div>`);
-      cursor = Math.max(cursor, b.fim);
-    });
-    return `<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-      <div style="width:180px;flex-shrink:0;font-size:12px;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tituloCase(p.nome)}</div>
-      <div style="position:relative;flex:1;height:32px;background:var(--bg-raised);border-radius:4px">${partes.join('')}${linhaAgora}</div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('go-ptr-timeline').innerHTML = regua + (linhas || `<p style="color:var(--ink-faint);font-size:13px;padding:10px 0">Ninguém fechou serviço hoje ainda.</p>`);
-}
 // horário local de verdade (hora do navegador de quem tá olhando o painel,
 // não o "truque de fuso" dos dados importados) - usado só pro rótulo de
 // "última atualização"
