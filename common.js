@@ -478,20 +478,40 @@ const OPS = (() => {
     return dp[m][n];
   }
 
-  const DISTRICT_REGISTRY_NORM = DISTRICT_REGISTRY.map(d => ({ ...d, norm: normalize(d.nome) }));
+  // DISTRICT_REGISTRY não vem com a cidade de cada localidade marcada (só
+  // nome+coordenada) - infere pela cidade da Unidade Touros mais próxima,
+  // pra bairro_divergente (e as outras buscas por bairro) não confundirem
+  // duas localidades homônimas de cidades bem diferentes dentro da própria
+  // unidade (ex: um "São Francisco" perto de São Miguel do Gostoso sendo
+  // usado por engano num registro de João Câmara, ~45km de distância).
+  function nearestTourosCity(lat, lng){
+    let melhor = null, melhorDist = Infinity;
+    TOUROS_UNIT_CITIES.forEach(c => {
+      const centro = CITY_REGISTRY[c];
+      if (!centro) return;
+      const d = haversineKm(centro, { lat, lng });
+      if (d < melhorDist){ melhorDist = d; melhor = c; }
+    });
+    return melhor;
+  }
+  const DISTRICT_REGISTRY_NORM = DISTRICT_REGISTRY.map(d => ({ ...d, norm: normalize(d.nome), cidade: nearestTourosCity(d.lat, d.lng) }));
 
   // acha um distrito conhecido pelo nome do bairro do registro — igual,
   // contido, ou parecido (poucos caracteres de diferença, cobre erro de
-  // digitação tipo "Arizona" vs "Arisona").
-  function findDistrictByBairro(bairroTexto){
+  // digitação tipo "Arizona" vs "Arisona"). Prioriza localidades da mesma
+  // cidade do registro (cidadeNorm) quando informada; só usa o cadastro
+  // inteiro como rede de segurança se não achar nenhuma candidata lá.
+  function findDistrictByBairro(bairroTexto, cidadeNorm){
     const alvo = normalize(bairroTexto);
     if (!alvo) return null;
-    let exato = DISTRICT_REGISTRY_NORM.find(d => d.norm === alvo);
+    const daCidade = cidadeNorm ? DISTRICT_REGISTRY_NORM.filter(d => d.cidade === cidadeNorm) : [];
+    const pool = daCidade.length ? daCidade : DISTRICT_REGISTRY_NORM;
+    let exato = pool.find(d => d.norm === alvo);
     if (exato) return exato;
-    let contido = DISTRICT_REGISTRY_NORM.find(d => alvo.includes(d.norm) || d.norm.includes(alvo));
+    let contido = pool.find(d => alvo.includes(d.norm) || d.norm.includes(alvo));
     if (contido) return contido;
     let melhor = null, melhorDist = Infinity;
-    DISTRICT_REGISTRY_NORM.forEach(d => {
+    pool.forEach(d => {
       const limite = Math.max(2, Math.round(Math.max(d.norm.length, alvo.length) * 0.2));
       const dist = levenshtein(alvo, d.norm);
       if (dist <= limite && dist < melhorDist){ melhor = d; melhorDist = dist; }
@@ -499,15 +519,35 @@ const OPS = (() => {
     return melhor;
   }
 
+  // se a coordenada própria do registro cair mais longe que isso do
+  // distrito/bairro reconhecido, prefere o distrito - a coordenada da
+  // planilha pode estar tecnicamente "dentro do município" (raio de 70km,
+  // ou dentro do polígono) mas ainda assim em outra localidade. Ex real:
+  // protocolo de Carnaubinha caindo perto de Cajueiro, ~11,5km de
+  // distância, os dois dentro de Touros - o check antigo não pegava isso
+  // porque só corrigia quando a coordenada estava fora da cidade inteira.
+  const MAX_BAIRRO_DIVERGENCIA_KM = 5;
+
   function resolveCoords(record){
     const center = cityCenter(record.cidade) || DEFAULT_CENTER;
     const hasOwn = typeof record.lat === 'number' && typeof record.lng === 'number'
       && !isNaN(record.lat) && !isNaN(record.lng);
+    // DISTRICT_REGISTRY só cobre localidades da Unidade Touros - buscar por
+    // nome de bairro sem checar a cidade batia nomes comuns (ex: "São
+    // José", "Santo Antônio") em cidades de outras unidades/estados
+    // completamente sem relação, corrigindo coordenadas boas pra erradas.
+    const distrito = isTourosUnitCity(record.cidade) ? findDistrictByBairro(record.bairro, normalize(record.cidade)) : null;
 
     if (!hasOwn){
-      const distrito = findDistrictByBairro(record.bairro);
       if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'missing' };
+    }
+
+    if (distrito){
+      const distBairro = haversineKm(distrito, { lat: record.lat, lng: record.lng });
+      if (distBairro > MAX_BAIRRO_DIVERGENCIA_KM){
+        return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro_divergente' };
+      }
     }
 
     const dentro = isPointInMunicipio(record.lat, record.lng, record.cidade);
@@ -515,7 +555,6 @@ const OPS = (() => {
       return { lat: record.lat, lng: record.lng, approx: false, reason: null };
     }
     if (dentro === false){
-      const distrito = findDistrictByBairro(record.bairro);
       if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
     }
@@ -523,10 +562,8 @@ const OPS = (() => {
     // respaldo pelo método antigo (raio de distância)
     const dist = haversineKm(center, { lat: record.lat, lng: record.lng });
     if (dist > MAX_CITY_RADIUS_KM){
-      const distrito = findDistrictByBairro(record.bairro);
       if (distrito) return { lat: distrito.lat, lng: distrito.lng, approx: true, reason: 'bairro' };
       return { lat: center.lat, lng: center.lng, approx: true, reason: 'out_of_area' };
-
     }
     return { lat: record.lat, lng: record.lng, approx: false, reason: null };
   }
