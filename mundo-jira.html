@@ -1984,6 +1984,17 @@ async function aplicarResultadoProdutividade(resultado){
       await inserirEmLotes('produtividade_registros', resultado.detalhesRegistros.map(detalheRegistroParaSupabase), 500);
       await inserirEmLotes('produtividade_pares_recorrencia', resultado.paresRecorrencia.map(parRecorrenciaParaSupabase), 500);
     })(),
+    // registra quem/quando importou pro "Última Atualização (Indicadores e
+    // Produtividade)" do rodapé (ver stampUltimaProdutividade em common.js)
+    // - fica nesse mesmo allSettled de propósito, pra produtividadeSyncPendente
+    // só virar false depois que isso também terminar (senão a automação
+    // fecha a página antes dessa gravação completar, igual já aconteceu
+    // com o Mapa de Serviços)
+    (async () => {
+      const meta = { data: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || 'desconhecido' };
+      const ok = await OPS.syncPush('ProdutividadeImportMetaData', [meta]);
+      if (ok && typeof window.OPS_STAMP_PRODUTIVIDADE === 'function') window.OPS_STAMP_PRODUTIVIDADE();
+    })(),
   ]).then((resultados) => {
     toast.remove();
     const falhas = resultados.filter(r => r.status === 'rejected');

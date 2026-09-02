@@ -1680,10 +1680,10 @@ function initShell(active, pageTitle){
     <div class="sb-section">Painéis</div>
     ${visibleLinks.map(l => `<a class="sb-item ${l.href === active ? 'active' : ''}" href="${l.href}"><span class="ico">${l.icon}</span><span>${l.label}</span></a>`).join('')}
     <div class="sb-footer">
-      <div class="sb-update">Última atualização</div>
-      <div class="sb-date" id="sb-date">--/--/----</div>
-      <div class="sb-update" id="sb-import-label" style="margin-top:8px;display:none">Última importação</div>
+      <div class="sb-update" id="sb-import-label" style="display:none">Última Atualização (Mapa)</div>
       <div class="sb-date" id="sb-import-info" style="font-size:11px;display:none"></div>
+      <div class="sb-update" id="sb-produtividade-label" style="margin-top:8px;display:none">Última Atualização (Indicadores e Produtividade)</div>
+      <div class="sb-date" id="sb-produtividade-info" style="font-size:11px;display:none"></div>
       <button class="btn-refresh" id="sb-refresh">↻ Atualizar</button>
     </div>
   `;
@@ -1747,34 +1747,48 @@ function initShell(active, pageTitle){
   }
   tick(); setInterval(tick, 1000);
 
-  function stampUltimaAtualizacao(){
-    const now = new Date();
-    sidebar.querySelector('#sb-date').textContent =
-      `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} · ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  }
-  stampUltimaAtualizacao();
-  window.OPS_STAMP_UPDATE = stampUltimaAtualizacao;
+  // não mostra mais "quando essa aba foi renderizada" (pouco útil) - as duas
+  // funções abaixo mostram algo real: quando os dados de verdade (Mapa /
+  // Indicadores e Produtividade) foram sincronizados pela última vez.
+  // OPS_STAMP_UPDATE fica de propósito como no-op: várias páginas já
+  // chamam window.OPS_STAMP_UPDATE() depois de atualizar a tela, e trocar
+  // pra apagar essas chamadas uma a uma não vale o risco.
+  window.OPS_STAMP_UPDATE = function(){};
 
-  // "Última importação" (Mapa de Serviços) — lê o mesmo registro que a
-  // página do Mapa de Serviços salva ao importar uma planilha.
-  async function stampUltimaImportacao(){
-    const labelEl = sidebar.querySelector('#sb-import-label');
-    const infoEl = sidebar.querySelector('#sb-import-info');
+  // lê um registro { data, usuario } de uma "collection" compartilhada e
+  // mostra num par label/info do rodapé - usado tanto pro Mapa quanto pra
+  // Indicadores e Produtividade (ver chamadas logo abaixo)
+  async function stampUltimaSincronizacao(collection, localStorageKey, labelId, infoId){
+    const labelEl = sidebar.querySelector('#' + labelId);
+    const infoEl = sidebar.querySelector('#' + infoId);
     let meta = null;
-    const shared = await OPS.syncPull('MapaServicosImportMetaData');
+    const shared = await OPS.syncPull(collection);
     if (shared && shared[0]){
       meta = shared[0];
-      localStorage.setItem('ops_touros_mapa_servicos_import_meta_v1', JSON.stringify(meta));
+      localStorage.setItem(localStorageKey, JSON.stringify(meta));
     } else {
-      try{ meta = JSON.parse(localStorage.getItem('ops_touros_mapa_servicos_import_meta_v1') || 'null'); }catch(e){}
+      try{ meta = JSON.parse(localStorage.getItem(localStorageKey) || 'null'); }catch(e){}
     }
     if (!meta){ labelEl.style.display = 'none'; infoEl.style.display = 'none'; return; }
     labelEl.style.display = 'block';
     infoEl.style.display = 'block';
     infoEl.textContent = `${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario}`;
   }
+  // "Última Atualização (Mapa)" — lê o mesmo registro que o Mapa de
+  // Serviços salva ao importar uma planilha (manual ou pela automação).
+  function stampUltimaImportacao(){
+    return stampUltimaSincronizacao('MapaServicosImportMetaData', 'ops_touros_mapa_servicos_import_meta_v1', 'sb-import-label', 'sb-import-info');
+  }
+  // "Última Atualização (Indicadores e Produtividade)" — mesma ideia, lida
+  // pelo Painel do Colaborador (Mundo Jira) ao importar a planilha de
+  // produtividade (manual ou pela automação).
+  function stampUltimaProdutividade(){
+    return stampUltimaSincronizacao('ProdutividadeImportMetaData', 'ops_touros_produtividade_import_meta_v1', 'sb-produtividade-label', 'sb-produtividade-info');
+  }
   stampUltimaImportacao();
+  stampUltimaProdutividade();
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
+  window.OPS_STAMP_PRODUTIVIDADE = stampUltimaProdutividade;
 
   sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
     const btn = sidebar.querySelector('#sb-refresh');
@@ -1793,8 +1807,8 @@ function initShell(active, pageTitle){
         ok = false;
       }
     }
-    await stampUltimaAtualizacao();
     await stampUltimaImportacao();
+    await stampUltimaProdutividade();
     btn.disabled = false;
     btn.textContent = textoOriginal;
     if (!ok){
