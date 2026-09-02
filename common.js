@@ -1171,11 +1171,39 @@ const OPS = (() => {
     }
   }
 
+  // O Apps Script (Google) que atende OPS_SYNC_BASE_URL responde com um 404
+  // esporádico quando tem várias chamadas concorrentes (os scripts
+  // automáticos de sincronização rodam a cada 30min o dia todo, além do uso
+  // normal do site) - não é sinal de collection inexistente nem de erro de
+  // verdade, é limite de concorrência/quota do lado do Google. Retenta
+  // algumas vezes com um pequeno intervalo antes de desistir.
+  async function fetchComRetry(url, options, tentativas){
+    tentativas = tentativas || 3;
+    let ultimoErro;
+    for (let i = 0; i < tentativas; i++){
+      // timeout por tentativa - sem isso, uma chamada que trava (em vez de
+      // falhar rápido com 404) nunca chega a tentar de novo, trava o
+      // fluxo inteiro esperando indefinidamente
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try{
+        const res = await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+        if (res.ok) return res;
+        ultimoErro = new Error(`HTTP ${res.status}`);
+      }catch(e){
+        ultimoErro = e;
+      }finally{
+        clearTimeout(timeoutId);
+      }
+      if (i < tentativas - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+    throw ultimoErro;
+  }
+
   async function syncPull(collection){
     if (collection === 'MapaServicosData') return mapaSupabasePull();
     try{
-      const res = await fetch(`${OPS_SYNC_BASE_URL}?collection=${encodeURIComponent(collection)}&cachebust=${Date.now()}`);
-      if (!res.ok) return null;
+      const res = await fetchComRetry(`${OPS_SYNC_BASE_URL}?collection=${encodeURIComponent(collection)}&cachebust=${Date.now()}`);
       const data = await res.json();
       return Array.isArray(data) ? data : null;
     }catch(e){
@@ -1187,7 +1215,7 @@ const OPS = (() => {
   async function syncPush(collection, records){
     if (collection === 'MapaServicosData') return mapaSupabasePush(records);
     try{
-      const res = await fetch(OPS_SYNC_BASE_URL, {
+      const res = await fetchComRetry(OPS_SYNC_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ collection, records }),
