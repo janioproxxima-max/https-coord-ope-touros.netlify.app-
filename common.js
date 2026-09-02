@@ -1828,11 +1828,37 @@ function initShell(active, pageTitle){
   window.OPS_STAMP_IMPORT = stampUltimaImportacao;
   window.OPS_STAMP_PRODUTIVIDADE = stampUltimaProdutividade;
 
+  // "sync_requests" é a caixa de pedidos que a automação local (sync.js)
+  // fica olhando a cada 1min - clicar em "Atualizar" no site não consegue
+  // rodar o script na máquina local diretamente (o site é estático, sem
+  // servidor próprio), então só grava o pedido aqui; quem de fato dispara o
+  // sync.js é o watch-forcar-mapa.js, do lado de lá. Fetch direto (não usa
+  // OPS_SUPABASE) porque supabase-client.js não é carregado em toda página,
+  // e o botão "Atualizar" existe em todas.
+  function solicitarSincronizacaoMapaForcada(){
+    fetch('https://hkopoafzceczmmbjvogi.supabase.co/rest/v1/sync_requests?on_conflict=tipo', {
+      method: 'POST',
+      headers: {
+        apikey: 'sb_publishable_pxL9kT16nTgq_UBcF3QQKg_YOqMiVxm',
+        Authorization: 'Bearer sb_publishable_pxL9kT16nTgq_UBcF3QQKg_YOqMiVxm',
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify([{
+        tipo: 'mapa',
+        solicitado_em: new Date().toISOString(),
+        solicitado_por: sessionStorage.getItem('ops_user') || 'desconhecido',
+        atendido_em: null,
+      }]),
+    }).catch((e) => console.error('Falha ao solicitar sincronização forçada do mapa', e));
+  }
+
   sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
     const btn = sidebar.querySelector('#sb-refresh');
     const textoOriginal = btn.textContent;
     btn.disabled = true;
     btn.textContent = '↻ Atualizando...';
+    solicitarSincronizacaoMapaForcada();
     let ok = true;
     if (typeof window.OPS_ON_REFRESH === 'function'){
       try{
