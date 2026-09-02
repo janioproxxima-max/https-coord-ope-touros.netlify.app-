@@ -2943,9 +2943,10 @@ const PREMIACAO_COORDENACAO = {
   recolhimentoValorOS: { Bronze:1.00, Prata:1.30, Ouro:2.20 },
 };
 const PREMIACAO_RECOLHIMENTO_FAIXAS = [{min:40,nome:'Bronze'},{min:55,nome:'Prata'},{min:70,nome:'Ouro'}];
-// seg-sex 13/dia + sáb 7/dia = 72/semana. Domingo é "extra": soma no
-// numerador (ativações feitas), mas não tem meta própria (não entra aqui).
-const PREMIACAO_META_SEMANAL_ATIVACAO = 5 * 13 + 7;
+// meta de setembro/2026: seg-sex 14/dia + sáb 7/dia = 77/semana. Domingo é
+// "extra": soma no numerador (ativações feitas), mas não tem meta própria
+// (não entra aqui).
+const PREMIACAO_META_SEMANAL_ATIVACAO = 5 * 14 + 7;
 
 function bandaPremiacao(pct, faixas){
   let atual = null;
