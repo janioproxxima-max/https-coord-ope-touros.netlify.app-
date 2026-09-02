@@ -1806,10 +1806,11 @@ function initShell(active, pageTitle){
     } else {
       try{ meta = JSON.parse(localStorage.getItem(localStorageKey) || 'null'); }catch(e){}
     }
-    if (!meta){ labelEl.style.display = 'none'; infoEl.style.display = 'none'; return; }
     labelEl.style.display = 'block';
     infoEl.style.display = 'block';
-    infoEl.textContent = `${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario}`;
+    // antes ficava escondido de vez quando não tinha registro ainda - dava
+    // pra confundir "nunca sincronizou" com "não estou vendo se atualizou"
+    infoEl.textContent = meta ? `${OPS.formatDateTimeBR(meta.data)} · ${meta.usuario}` : 'Nenhum registro ainda';
   }
   // "Última Atualização (Mapa)" — lê o mesmo registro que o Mapa de
   // Serviços salva ao importar uma planilha (manual ou pela automação).
