@@ -1130,23 +1130,18 @@ const OPS = (() => {
     apikey: MAPA_SUPABASE_KEY,
     Authorization: `Bearer ${MAPA_SUPABASE_KEY}`,
   };
-  // mapa_servicos_registros vem de uma fonte que cobre bem mais cidade do
-  // que só a Unidade Touros (achamos isso investigando uma coordenada
-  // errada - tinha protocolo de Campina Grande, Garanhuns etc. nessa
-  // tabela). Esse site só mostra/usa a Unidade Touros, então filtrar por
-  // cidade no servidor evita baixar (e pagar egress do Supabase por) todo
-  // o resto que nunca aparece na tela de qualquer forma - confirmado com
-  // o usuário que esse Mapa é só da Unidade Touros mesmo.
-  const MAPA_FILTRO_CIDADES = TOUROS_UNIT_CITIES
-    .map(c => CITY_REGISTRY[c] && CITY_REGISTRY[c].name)
-    .filter(Boolean)
-    .map(nome => encodeURIComponent(nome))
-    .join(',');
-
+  // mapa_servicos_registros já vinha cobrindo bem mais cidade do que só a
+  // Unidade Touros (achamos isso investigando uma coordenada errada - tinha
+  // protocolo de Campina Grande, Garanhuns etc. nessa tabela) - por isso um
+  // filtro por cidade (MAPA_FILTRO_CIDADES) foi adicionado aqui pra mostrar
+  // só Touros. Removido de novo: a equipe também atende em outras cidades/
+  // unidades do RN, e a busca no Aniel (sync.js) já ficou restrita a
+  // UF=RN - a tabela é substituída inteira a cada sincronização, então não
+  // acumula lixo de fora do RN mesmo sem filtro nenhum aqui.
   async function mapaSupabasePull(){
     try{
       const TAMANHO_PAGINA = 1000;
-      const buscarPagina = (inicio) => fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?select=dados&dados->>cidade=in.(${MAPA_FILTRO_CIDADES})`, {
+      const buscarPagina = (inicio) => fetch(`${MAPA_SUPABASE_URL}/rest/v1/${MAPA_SUPABASE_TABLE}?select=dados`, {
         headers: Object.assign({ 'Range-Unit': 'items', Range: `${inicio}-${inicio + TAMANHO_PAGINA - 1}`, Prefer: 'count=exact' }, MAPA_SUPABASE_HEADERS),
       });
       // 1ª página já pede a contagem exata (Prefer: count=exact) - com ela dá
