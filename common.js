@@ -1234,7 +1234,7 @@ const OPS = (() => {
       // falhar rápido com 404) nunca chega a tentar de novo, trava o
       // fluxo inteiro esperando indefinidamente
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       try{
         const res = await fetch(url, Object.assign({}, options, { signal: controller.signal }));
         if (res.ok) return res;
