@@ -332,7 +332,7 @@ const els = {
   statRow: document.getElementById('stat-row'),
   emptyState: document.getElementById('empty-state'),
 };
-let selectedCities = new Set(); // vazio = todas as cidades
+let selectedCities = new Set(); // vazio = nada selecionado (nenhum serviço aparece até escolher)
 let selectedResponsaveis = new Set(); // vazio = todos os responsáveis
 // já filtra pra Unidade Touros aqui, síncrono, usando o cache local (records
 // = OPS.load(), de uma sincronização anterior) - sem isso, qualquer render
@@ -341,7 +341,7 @@ let selectedResponsaveis = new Set(); // vazio = todos os responsáveis
 // segundos até o filtro real (dentro de initPage, só depois do fetch)
 // entrar. Uma vez que isso roda, initPage não mexe mais nisso (só entra se
 // ainda estiver vazio - cache vazio, primeiro acesso etc).
-selectedCities = new Set([...new Set(records.map(r => r.cidade).filter(Boolean))].filter(c => OPS.isUnitCity(c, 'TOUROS')));
+// Não pré-seleciona nenhuma unidade/cidade: só mostra atendimentos depois que a pessoa escolher uma cidade ou unidade no filtro acima (selectedCities vazio = nada selecionado).
 
 // -------- cálculo dinâmico (tempo real) --------
 function getElapsedHours(r){
@@ -619,7 +619,7 @@ function populateFilterOptions(){
 }
 
 function updateCityButtonLabel(total){
-  if (selectedCities.size === 0) els.cidadeBtn.textContent = 'Todas as cidades ▾';
+  if (selectedCities.size === 0) els.cidadeBtn.textContent = 'Selecione cidade/unidade ▾';
   else if (selectedCities.size === total) els.cidadeBtn.textContent = 'Todas as cidades ▾';
   else {
     const unidadeCorrespondente = Object.keys(OPS.UNIT_CITIES).find(u =>
@@ -677,7 +677,7 @@ function matchesActiveFilters(r, { skipStatusChamado = false } = {}){
 
   if (isAlwaysHidden(r)) return false;
   if (isDefaultHiddenRecolhimento(r) && tipo !== 'RECOLHIMENTO') return false;
-  if (selectedCities.size > 0 && !selectedCities.has(r.cidade)) return false;
+  if (selectedCities.size === 0 || !selectedCities.has(r.cidade)) return false;
   if (tipo && r.tipoCurto !== tipo) return false;
   if (selectedResponsaveis.size > 0 && !selectedResponsaveis.has(r.responsavel)) return false;
   if (supervisor && OPS.supervisorForCity(r.cidade) !== supervisor) return false;
@@ -1472,7 +1472,7 @@ async function initPage(){
     setTimeout(() => warn.remove(), 4000);
   }
   // ao abrir o mapa, já vem filtrado pela Unidade Touros por padrão
-  if (selectedCities.size === 0){
+  if (false && selectedCities.size === 0){
     const todasAsCidades = [...new Set(records.map(r => r.cidade).filter(Boolean))];
     selectedCities = new Set(todasAsCidades.filter(c => OPS.isUnitCity(c, 'TOUROS')));
   }
