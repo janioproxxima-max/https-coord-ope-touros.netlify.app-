@@ -564,8 +564,8 @@ function populateFilterOptions(){
   };
 
   const tipos = [...new Set(records.filter(r => !isAlwaysHidden(r)).map(r => r.tipoCurto).filter(Boolean))].sort();
-  els.tipo.innerHTML = '<option value="">Todos</option>' +
-    tipos.map(t => `<option value="${t}">${t}</option>`).join('');
+  const tipoAtual = els.tipo.value; els.tipo.innerHTML = '<option value="">Todos</option>' +
+    tipos.map(t => `<option value="${t}">${t}</option>`).join(''); if (tipoAtual && tipos.includes(tipoAtual)) els.tipo.value = tipoAtual;
 
   const responsaveis = [...new Set(records.filter(r => !isAlwaysHidden(r)).map(r => r.responsavel).filter(Boolean))].sort();
   selectedResponsaveis = new Set([...selectedResponsaveis].filter(n => responsaveis.includes(n)));
@@ -614,8 +614,8 @@ function populateFilterOptions(){
   const siglas = [...new Set(
     records.filter(r => !isAlwaysHidden(r) && (!isDefaultHiddenRecolhimento(r))).map(r => getMapLabel(r))
   )].sort();
-  els.sigla.innerHTML = '<option value="">Todas</option>' +
-    siglas.map(s => `<option value="${s}">${s}</option>`).join('');
+  const siglaAtual = els.sigla.value; els.sigla.innerHTML = '<option value="">Todas</option>' +
+    siglas.map(s => `<option value="${s}">${s}</option>`).join(''); if (siglaAtual && siglas.includes(siglaAtual)) els.sigla.value = siglaAtual;
 }
 
 function updateCityButtonLabel(total){
@@ -840,7 +840,7 @@ function initMap(){
   markerLayer = L.layerGroup().addTo(leafletMap);
 }
 
-let markerRegistry = {}; // id do registro -> marcador Leaflet (pra destacar ao clicar na lista)
+let markerRegistry = {}; let activePulseEl = null; // id do registro -> marcador Leaflet (pra destacar ao clicar na lista) e elemento do marcador piscando (removido ao fechar a janela de detalhes)
 
 function renderMap(fitView = true){
   markerLayer.clearLayers();
@@ -952,7 +952,7 @@ function renderMap(fitView = true){
     });
     marker.on('click', () => {
       highlightListRow(r.id);
-      openDetail(r); const el955pulse = marker.getElement(); if (el955pulse){ el955pulse.classList.add('marker-pulse'); setTimeout(() => el955pulse.classList.remove('marker-pulse'), 1600); }
+      openDetail(r); if (activePulseEl) activePulseEl.classList.remove('marker-pulse'); const el955pulse = marker.getElement(); if (el955pulse){ el955pulse.classList.add('marker-pulse'); activePulseEl = el955pulse; }
     });
     markerRegistry[r.id] = marker;
     bounds.push([coords.lat, coords.lng]);
@@ -1133,15 +1133,15 @@ function openDetail(rec){
   modalBox.style.margin = '';
   detailModal.style.display = 'flex';
 }
-document.getElementById('btn-detail-close').onclick = () => detailModal.style.display = 'none';
-document.getElementById('btn-detail-close-x').onclick = () => detailModal.style.display = 'none';
+document.getElementById('btn-detail-close').onclick = () => { detailModal.style.display = 'none'; if (activePulseEl){ activePulseEl.classList.remove('marker-pulse'); activePulseEl = null; } };
+document.getElementById('btn-detail-close-x').onclick = () => { detailModal.style.display = 'none'; if (activePulseEl){ activePulseEl.classList.remove('marker-pulse'); activePulseEl = null; } };
 document.getElementById('btn-detail-resize').onclick = (e) => {
   e.stopPropagation();
   const minimizado = detailModal.classList.toggle('minimized');
   document.getElementById('btn-detail-resize').textContent = minimizado ? '+' : '–';
   document.getElementById('btn-detail-resize').title = minimizado ? 'Aumentar' : 'Diminuir';
 };
-detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.style.display = 'none'; });
+detailModal.addEventListener('click', e => { if (e.target === detailModal){ detailModal.style.display = 'none'; if (activePulseEl){ activePulseEl.classList.remove('marker-pulse'); activePulseEl = null; } } });
 
 // ---------- arrastar o painel de detalhes (pra não ficar tampando o mapa) ----------
 (function makeDetailModalDraggable(){
