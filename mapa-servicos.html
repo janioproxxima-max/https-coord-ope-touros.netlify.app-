@@ -689,7 +689,7 @@ function matchesActiveFilters(r, { skipStatusChamado = false } = {}){
   if (projetoFiltro === 'erro' && !OPS.checkProjectError(r)) return false;
   if (somenteProblema && !(OPS.resolveCoords(r).approx || OPS.checkProjectError(r))) return false;
   if (q){
-    const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||'') + ' ' + (r.responsavel||''));
+    const hay = OPS.normalize(r.protocolo + ' ' + (r.tituloCompleto||'') + ' ' + (r.bairro||'') + ' ' + (r.cidade||'') + ' ' + (r.responsavel||'') + ' ' + (r.nomeCliente||''));
     if (!hay.includes(q)) return false;
   }
   return true;
@@ -952,7 +952,7 @@ function renderMap(fitView = true){
     });
     marker.on('click', () => {
       highlightListRow(r.id);
-      openDetail(r);
+      openDetail(r); const el955pulse = marker.getElement(); if (el955pulse){ el955pulse.classList.add('marker-pulse'); setTimeout(() => el955pulse.classList.remove('marker-pulse'), 1600); }
     });
     markerRegistry[r.id] = marker;
     bounds.push([coords.lat, coords.lng]);
@@ -1089,7 +1089,7 @@ document.querySelectorAll('th[data-sort]').forEach(th => {
 const detailModal = document.getElementById('detail-modal');
 function openDetail(rec){
   const icon = getIcon(rec);
-  document.getElementById('detail-title').textContent = `${icon} ${rec.protocolo}`;
+  document.getElementById('detail-title').innerHTML = `${icon} <span id="detail-protocolo-text">${rec.protocolo}</span> <button type="button" id="detail-protocolo-copy" title="Copiar protocolo" style="cursor:pointer;border:none;background:var(--brand,#2563eb);color:#fff;border-radius:4px;font-size:11px;padding:2px 6px;margin-left:6px">Copiar</button>`; const btnCopyProto = document.getElementById('detail-protocolo-copy'); if (btnCopyProto){ btnCopyProto.onclick = (e) => { e.stopPropagation(); navigator.clipboard.writeText(rec.protocolo); btnCopyProto.textContent = 'Copiado!'; setTimeout(() => { btnCopyProto.textContent = 'Copiar'; }, 1200); }; }
   document.getElementById('detail-sub').textContent = rec.tituloCompleto || rec.tipoCurto || '';
   const abertura = rec.criadoEm ? new Date(rec.criadoEm).toLocaleString('pt-BR') : '—';
   const err = OPS.checkProjectError(rec);
@@ -1105,7 +1105,7 @@ function openDetail(rec){
     </div>
     <div class="status-row"><span class="status-name">Cliente</span><span class="status-val">${rec.nomeCliente || '—'}</span></div>
     <div class="status-row"><span class="status-name">Responsável</span><span class="status-val">${rec.responsavel || '—'}</span></div>
-    <div class="status-row"><span class="status-name">Telefone</span><span class="status-val">${rec.telefone || '—'}</span></div>
+    <div class="status-row"><span class="status-name">Telefone principal</span><span class="status-val">${rec.telefone || rec.telefonePrincipal || '—'}</span></div><div class="status-row"><span class="status-name">Telefone celular</span><span class="status-val">${rec.telefoneCelular || rec.celular || '—'}</span></div>
     <div class="status-row"><span class="status-name">Projeto</span><span class="status-val">${rec.projeto || '—'}</span></div>
     <div class="status-row">
       <span class="status-name">Latitude/Longitude</span>
