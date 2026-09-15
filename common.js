@@ -102,7 +102,7 @@ const OPS = (() => {
         'sao jose do serido', 'timbauba dos batistas', 'sao fernando', 'ipueira', 'cruzeta',
         ];
   // Registro de unidades — facilita adicionar mais unidades no futuro.
-  const PARELHAS_UNIT_CITIES = ['parelhas', 'acari', 'carnauba dos dantas', 'jardim do serido', 'santana do serido']; const UNIT_CITIES = { TOUROS = { TOUROS: TOUROS_UNIT_CITIES, NATAL: NATAL_UNIT_CITIES, CAICO: CAICO_UNIT_CITIES, PARELHAS: PARELHAS_UNIT_CITIES };
+  const PARELHAS_UNIT_CITIES = ['parelhas', 'acari', 'carnauba dos dantas', 'jardim do serido', 'santana do serido']; const UNIT_CITIES = { TOUROS: TOUROS_UNIT_CITIES, NATAL: NATAL_UNIT_CITIES, CAICO: CAICO_UNIT_CITIES, PARELHAS: PARELHAS_UNIT_CITIES };
   function isTourosUnitCity(cidade){
     return TOUROS_UNIT_CITIES.includes(normalize(cidade));
   }
