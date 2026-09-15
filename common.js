@@ -1313,7 +1313,7 @@ const OPS = (() => {
     if (n === 'endereco') return 'endereco';
     if (n === 'numero') return 'numero';
     if (n === 'complemento') return 'complemento';
-    if (n.includes('telefone principal')) return 'telefone';
+    if (n.includes('telefone principal')) return 'telefone'; if (n.includes('celular') || n.includes('whatsapp') || (n.includes('telefone') && n.includes('movel'))) return 'telefoneCelular';
     if (n === 'supervisor') return 'supervisor';
     if (n === 'status') return 'statusAtendimento';
     if (n.includes('data') && n.includes('agendamento')) return 'dataAgendamento';
@@ -1423,7 +1423,7 @@ const OPS = (() => {
             slaHoras,
             catalogado: svc.catalogado,
             cidade, bairro,
-            telefone: row.telefone || '',
+            telefone: row.telefone || '', telefoneCelular: row.telefoneCelular || '',
             supervisor: row.supervisor || '',
             statusAtendimento: row.statusAtendimento || '',
             dataAgendamento: (() => {
