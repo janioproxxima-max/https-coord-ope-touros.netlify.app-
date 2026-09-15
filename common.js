@@ -102,7 +102,7 @@ const OPS = (() => {
         'sao jose do serido', 'timbauba dos batistas', 'sao fernando', 'ipueira', 'cruzeta',
         ];
   // Registro de unidades — facilita adicionar mais unidades no futuro.
-  const UNIT_CITIES = { TOUROS: TOUROS_UNIT_CITIES, NATAL: NATAL_UNIT_CITIES, CAICO: CAICO_UNIT_CITIES };
+  const PARELHAS_UNIT_CITIES = ['parelhas', 'acari', 'carnauba dos dantas', 'jardim do serido', 'santana do serido']; const UNIT_CITIES = { TOUROS = { TOUROS: TOUROS_UNIT_CITIES, NATAL: NATAL_UNIT_CITIES, CAICO: CAICO_UNIT_CITIES, PARELHAS: PARELHAS_UNIT_CITIES };
   function isTourosUnitCity(cidade){
     return TOUROS_UNIT_CITIES.includes(normalize(cidade));
   }
@@ -1548,7 +1548,7 @@ const OPS = (() => {
     loadData, saveData, loadDataFallbackFromIdb, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
-    TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, CAICO_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
+    TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, CAICO_UNIT_CITIES, PARELHAS_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,
     loadMunicipioPolygons, isPointInMunicipio,
     SUPERVISOR_BY_CITY, supervisorForCity,
