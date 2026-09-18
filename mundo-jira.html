@@ -1508,7 +1508,7 @@ function segundaDaSemana(dt){ // devolve a data (só dia) da segunda-feira daque
   return d;
 }
 
-function processarLinhasProdutividade(rows){
+async function processarLinhasProdutividade(rows){
       let headerRowIdx = -1;
       for (let i = 0; i < Math.min(rows.length, 5); i++){
         if (rows[i].some(c => OPS.normalize(c) === 'responsavel')) { headerRowIdx = i; break; }
@@ -1701,6 +1701,57 @@ function processarLinhasProdutividade(rows){
       }
 
       if (!Object.keys(agregado).length){ alert('Li a planilha, mas não achei nenhum serviço produtivo com técnico e data de fechamento válidos.'); return null; }
+      // Completa ocorrenciasReparo com o que já está salvo na nuvem, pros
+      // clientes que aparecem nessa planilha - IMPORTANTE quando a planilha
+      // importada é só uma fatia recente (ex: só a semana atual até o
+      // domingo anterior, em vez do histórico inteiro): sem isso, uma
+      // recorrência só é detectada se as DUAS visitas (a original e o
+      // retorno em até 30 dias) estiverem dentro da MESMA planilha
+      // importada - uma visita antiga que já foi importada antes (e não
+      // está nessa planilha nova) ficava invisível pro pareamento, e a
+      // recorrência sumia silenciosamente. Busca só os clientes/tipos que
+      // interessam (candidatos a recorrência desta planilha), numa janela
+      // de 30 dias antes da ocorrência mais antiga do arquivo até a mais
+      // recente - cobre qualquer par possível sem trazer a base inteira.
+      // Se a busca falhar (rede, Supabase fora do ar etc), segue só com o
+      // que veio na planilha - não trava a importação por causa disso.
+      const clientesComCandidato = Object.keys(ocorrenciasReparo);
+      if (clientesComCandidato.length && typeof OPS_SUPABASE !== 'undefined'){
+        try{
+          let dataMaisAntiga = null, dataMaisRecente = null;
+          const protocolosNaPlanilha = new Set();
+          Object.values(ocorrenciasReparo).forEach(lista => lista.forEach(o => {
+            if (!dataMaisAntiga || o.data < dataMaisAntiga) dataMaisAntiga = o.data;
+            if (!dataMaisRecente || o.data > dataMaisRecente) dataMaisRecente = o.data;
+            if (o.protocolo) protocolosNaPlanilha.add(o.protocolo);
+          }));
+          const inicioJanela = new Date(dataMaisAntiga); inicioJanela.setDate(inicioJanela.getDate() - 30);
+          const TAMANHO_LOTE_CLIENTES = 150; // evita URL longa demais no filtro "in.(...)"
+          const filtroTipos = TIPOS_REPARO_VT.map(t => encodeURIComponent(t)).join(',');
+          for (let i = 0; i < clientesComCandidato.length; i += TAMANHO_LOTE_CLIENTES){
+            const lote = clientesComCandidato.slice(i, i + TAMANHO_LOTE_CLIENTES);
+            const filtroClientes = lote.map(c => encodeURIComponent(c)).join(',');
+            const filtro = `cliente_id=in.(${filtroClientes})&produtivo=eq.true&tipo=in.(${filtroTipos})` +
+              `&data_encerramento=gte.${inicioJanela.toISOString()}&data_encerramento=lte.${dataMaisRecente.toISOString()}`;
+            const doNuvem = await OPS_SUPABASE.select('produtividade_registros', filtro,
+              'protocolo,cliente_id,tecnico,tipo,mes_key,area,localidade,descricao,data_encerramento');
+            (doNuvem || []).forEach(r => {
+              // já veio na planilha (mesmo protocolo) - não duplica, o dado da planilha nova prevalece
+              if (!r.cliente_id || !r.protocolo || protocolosNaPlanilha.has(r.protocolo)) return;
+              const dataDaNuvem = new Date(r.data_encerramento);
+              if (!isFinite(dataDaNuvem)) return;
+              (ocorrenciasReparo[r.cliente_id] = ocorrenciasReparo[r.cliente_id] || []).push({
+                data: dataDaNuvem, mesKey: r.mes_key, tipo: r.tipo, clienteId: r.cliente_id, tecnico: r.tecnico,
+                protocolo: r.protocolo, area: r.area, localidade: r.localidade, descricao: r.descricao,
+              });
+            });
+          }
+        }catch(err){
+          console.error('Falha ao buscar histórico de recorrência já sincronizado (seguindo só com o que veio na planilha)', err);
+        }
+      }
+
+
 
       // detecta recorrência: MESMO CLIENTE tem outro reparo produtivo em até
       // 30 dias - não precisa ser o mesmo técnico. Quem "leva" a recorrência
