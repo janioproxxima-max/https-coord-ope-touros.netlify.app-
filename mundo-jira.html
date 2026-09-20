@@ -45,6 +45,13 @@
         <p>Acesso rápido aos sistemas usados pela equipe.</p>
       </div>
     </div>
+    <div class="mj-portal-card" id="mj-card-execucao">
+      <div class="mj-portal-card-ico">🛠️</div>
+      <div>
+        <h3>Execução de Serviços</h3>
+        <p>Cole uma base de protocolos, atribua a um técnico e acompanhe deslocamento, atendimento e finalização com fotos.</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -196,6 +203,107 @@
 
   <div id="mj-prod-conteudo"></div>
   <div id="mj-prod-tempo-real" style="display:none"></div>
+</div>
+
+<div class="page" id="mj-view-execucao" style="display:none">
+  <button type="button" class="btn ghost" id="mj-btn-voltar-portal-4" style="margin-bottom:14px">← Voltar aos portais</button>
+  <div class="page-head">
+    <p class="eyebrow">Painel do Colaborador</p>
+    <h1 class="page-title">Execução de Serviços</h1>
+    <p class="page-sub">Cole uma base de protocolos, atribua a um técnico e acompanhe deslocamento, atendimento e finalização com fotos.</p>
+  </div>
+
+  <div class="panel" id="mj-exec-painel-colar" style="display:none">
+    <p style="font-weight:700;margin-bottom:8px">⇪ Colar nova base de protocolos</p>
+    <p style="font-size:12.5px;color:var(--ink-dim);margin-bottom:10px">Cole abaixo as linhas exportadas (com a linha de cabeçalho), escolha o técnico responsável e clique em Criar. Protocolos que já existirem por aqui são só atualizados (não duplicam).</p>
+    <textarea id="mj-exec-colar-texto" class="input" style="width:100%;min-height:140px;font-family:'JetBrains Mono',monospace;font-size:11.5px" placeholder="Cole aqui as linhas copiadas da planilha/exportação, incluindo o cabeçalho..."></textarea>
+    <div class="toolbar" style="margin-top:10px;padding:0">
+      <div class="field" style="flex:1">
+        <label for="mj-exec-colar-tecnico">Técnico responsável</label>
+        <select id="mj-exec-colar-tecnico"><option value="">Selecione…</option></select>
+      </div>
+      <div style="flex:2"></div>
+      <button type="button" class="btn primary" id="mj-btn-exec-processar-colagem">Criar execuções</button>
+    </div>
+    <p id="mj-exec-colar-status" style="font-size:12.5px;margin-top:8px"></p>
+  </div>
+
+  <div class="panel toolbar" id="mj-exec-toolbar">
+    <div class="field" style="flex:2">
+      <label for="mj-exec-search">Buscar</label>
+      <input class="input" id="mj-exec-search" placeholder="Protocolo, cliente, cidade...">
+    </div>
+    <div class="field" id="mj-exec-f-tecnico-wrap" style="display:none">
+      <label for="mj-exec-f-tecnico">Técnico</label>
+      <select id="mj-exec-f-tecnico"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="mj-exec-f-status">Status</label>
+      <select id="mj-exec-f-status">
+        <option value="">Todos</option>
+        <option value="aguardando">Aguardando</option>
+        <option value="deslocamento">Em deslocamento</option>
+        <option value="atendimento">Em atendimento</option>
+        <option value="finalizado">Finalizado</option>
+      </select>
+    </div>
+    <div style="flex:1"></div>
+    <button type="button" class="btn ghost" id="mj-btn-exec-nova-base" style="display:none">⇪ Colar nova base</button>
+  </div>
+
+  <div id="mj-exec-lista"></div>
+</div>
+
+<!-- Modal: finalizar execução de serviço -->
+<div class="modal-backdrop" id="mj-modal-exec-finalizar" style="display:none">
+  <div class="modal" style="max-width:520px">
+    <h3>Finalizar atendimento</h3>
+    <p class="modal-sub" id="mj-exec-fin-subtitulo"></p>
+
+    <div class="field">
+      <label>Classificação</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" class="btn ghost" id="mj-exec-fin-btn-produtivo" style="flex:1">✅ Produtivo</button>
+        <button type="button" class="btn ghost" id="mj-exec-fin-btn-improdutivo" style="flex:1">🚫 Improdutivo</button>
+      </div>
+    </div>
+
+    <div id="mj-exec-fin-bloco-produtivo" style="display:none">
+      <div class="field" style="margin-top:10px">
+        <label for="mj-exec-fin-equipamento">Equipamento (modelo/serial)</label>
+        <input class="input" id="mj-exec-fin-equipamento" placeholder="Ex: ONU Fiberhome, SN 123456...">
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>Fotos do serviço (equipamento/trabalho realizado)</label>
+        <div id="mj-exec-fin-fotos-preview" style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"></div>
+        <button type="button" class="btn ghost" id="mj-exec-fin-btn-add-foto">📷 Adicionar foto</button>
+        <input type="file" id="mj-exec-fin-input-foto-produtivo" accept="image/*" style="display:none">
+      </div>
+    </div>
+
+    <div id="mj-exec-fin-bloco-improdutivo" style="display:none">
+      <div class="field" style="margin-top:10px">
+        <label>Foto da frente da casa</label>
+        <div id="mj-exec-fin-foto-casa-preview" style="margin:6px 0"></div>
+        <button type="button" class="btn ghost" id="mj-exec-fin-btn-foto-casa">📷 Anexar foto da frente da casa</button>
+        <input type="file" id="mj-exec-fin-input-foto-casa" accept="image/*" style="display:none">
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>Validou com a gestão?</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="btn ghost" id="mj-exec-fin-validou-sim" style="flex:1">Sim</button>
+          <button type="button" class="btn ghost" id="mj-exec-fin-validou-nao" style="flex:1">Não</button>
+        </div>
+      </div>
+    </div>
+
+    <p id="mj-exec-fin-erro" style="color:var(--crit);font-size:12.5px;margin-top:10px;display:none"></p>
+
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="mj-exec-fin-btn-cancelar">Cancelar</button>
+      <button type="button" class="btn primary" id="mj-exec-fin-btn-confirmar">Confirmar finalização</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: gráfico por tipo de serviço (abre ao clicar num mês) -->
@@ -580,6 +688,8 @@ let comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
 let historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
 let pessoas = OPS.loadData('ops_touros_pessoas_v1') || [];
 let veiculos = OPS.loadData('ops_touros_frotas_v1') || [];
+const STORAGE_KEY_EXECUCOES = 'ops_touros_execucao_servicos_v1';
+let execucoes = OPS.loadData(STORAGE_KEY_EXECUCOES) || [];
 // carregados no initPage() — usados só pra marcar dia de folga na tabela
 // de Produtividade Tempo Real (mesma lógica que a Gestão de Pessoas já usa)
 let ausencias = [];
@@ -1408,18 +1518,431 @@ document.getElementById('mj-d-novo-comentario').addEventListener('keydown', e =>
   document.getElementById(id).addEventListener('change', renderTable);
 });
 
+// ============================================================
+// Execução de Serviços — a coordenação cola uma base de protocolos,
+// atribui a um técnico, e o técnico registra o andamento (deslocamento
+// → atendimento → finalização com fotos) até o serviço ser encerrado.
+// ============================================================
+const TABELA_EXECUCOES = 'execucao_servicos';
+const MESES_ABREV_EXEC = { jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12 };
+
+// Aceita tanto "DD/MM/AAAA HH:mm" (formato padrão do site) quanto
+// "DD-mmm-AAAA HH:mm:ss" (mês abreviado em português) — essa exportação
+// específica mistura os dois formatos na mesma coluna.
+function parseDataExecucao(str){
+  if (!str) return null;
+  const s = String(str).trim();
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (m){
+    const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]), h = Number(m[4]), mi = Number(m[5]);
+    if (y <= 1) return null;
+    const dt = new Date(y, mo - 1, d, h, mi);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  }
+  m = s.toLowerCase().match(/^(\d{1,2})-([a-zç]{3})-(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (m){
+    const d = Number(m[1]), mo = MESES_ABREV_EXEC[m[2]], y = Number(m[3]), h = Number(m[4]), mi = Number(m[5]);
+    if (!mo) return null;
+    const dt = new Date(y, mo - 1, d, h, mi);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  }
+  return null;
+}
+
+// Divide uma linha colada em colunas — tenta tab primeiro (padrão ao
+// colar de planilha/tabela web), cai pra "2+ espaços" se não achar tab.
+function dividirColunasExec(linha){
+  if (linha.includes('\t')) return linha.split('\t');
+  return linha.split(/ {2,}/);
+}
+
+// Mapeia o cabeçalho colado (nomes variam um pouco entre exportações)
+// pras colunas que a gente precisa, por substring — funciona mesmo que
+// o nome exato da coluna mude um pouco de uma exportação pra outra.
+function mapearCabecalhoExec(headerCols){
+  const idx = {};
+  headerCols.forEach((h, i) => {
+    const n = OPS.normalize(h).replace(/\|/g, ' ');
+    if (n.includes('protocolo')) idx.protocolo = i;
+    else if (n.includes('tipo') && n.includes('solicit')) idx.tipoSolicitacao = i;
+    else if (n.includes('inicio') && n.includes('operac')) idx.dataInicioOperacoes = i;
+    else if (n.includes('agendamento') && n.includes('data')) idx.dataAgendamento = i;
+    else if (n.includes('bairro')) idx.bairro = i;
+    else if (n.includes('cliente') && n.includes('nome')) idx.cliente = i;
+    else if (n.includes('pppoe')) idx.pppoe = i;
+    else if (n.includes('ponto') && n.includes('acesso')) idx.pontoAcesso = i;
+    else if (n.includes('porta') && n.includes('olt')) idx.portaOlt = i;
+    else if (n.includes('slot')) idx.slotOlt = i;
+    else if (n === 'cidade' || (n.includes('cidade') && idx.cidade === undefined)) idx.cidade = i;
+  });
+  return idx;
+}
+
+// Recebe o texto colado (cabeçalho + linhas) e devolve os registros
+// prontos pra virar execuções — já com tipo curto/SLA resolvidos via o
+// mesmo catálogo usado no resto do site (OPS.lookupService).
+function parseColagemExecucao(texto){
+  const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
+  if (linhas.length < 2) return { registros: [], erro: 'Cole o cabeçalho e pelo menos uma linha de dado.' };
+  const cols = mapearCabecalhoExec(dividirColunasExec(linhas[0]));
+  if (cols.protocolo === undefined || cols.tipoSolicitacao === undefined){
+    return { registros: [], erro: 'Não achei as colunas "ID Protocolo" e/ou "Tipo Solicitação" no cabeçalho colado.' };
+  }
+  const registros = [];
+  for (let i = 1; i < linhas.length; i++){
+    const partes = dividirColunasExec(linhas[i]);
+    const protocolo = (partes[cols.protocolo] || '').trim();
+    if (!protocolo) continue;
+    const tipoSolicitacao = (partes[cols.tipoSolicitacao] || '').trim();
+    const svc = OPS.lookupService(tipoSolicitacao);
+    registros.push({
+      protocolo, tipoSolicitacao, tipoCurto: svc.tipoCurto, slaHoras: svc.slaHoras,
+      cidade: cols.cidade !== undefined ? (partes[cols.cidade] || '').trim() : '',
+      bairro: cols.bairro !== undefined ? (partes[cols.bairro] || '').trim() : '',
+      cliente: cols.cliente !== undefined ? (partes[cols.cliente] || '').trim() : '',
+      pppoe: cols.pppoe !== undefined ? (partes[cols.pppoe] || '').trim() : '',
+      pontoAcesso: cols.pontoAcesso !== undefined ? (partes[cols.pontoAcesso] || '').trim() : '',
+      portaOlt: cols.portaOlt !== undefined ? (partes[cols.portaOlt] || '').trim() : '',
+      slotOlt: cols.slotOlt !== undefined ? (partes[cols.slotOlt] || '').trim() : '',
+      dataInicioOperacoes: cols.dataInicioOperacoes !== undefined ? parseDataExecucao(partes[cols.dataInicioOperacoes]) : null,
+      dataAgendamento: cols.dataAgendamento !== undefined ? parseDataExecucao(partes[cols.dataAgendamento]) : null,
+    });
+  }
+  return { registros, erro: null };
+}
+
+function execucaoParaSupabase(e){
+  return {
+    protocolo: e.protocolo, tipo_solicitacao: e.tipoSolicitacao, tipo_curto: e.tipoCurto,
+    sla_horas: e.slaHoras, cidade: e.cidade, bairro: e.bairro, cliente: e.cliente,
+    pppoe: e.pppoe, ponto_acesso: e.pontoAcesso, porta_olt: e.portaOlt, slot_olt: e.slotOlt,
+    data_inicio_operacoes: e.dataInicioOperacoes || null, data_agendamento: e.dataAgendamento || null,
+    tecnico: e.tecnico, status: e.status,
+    inicio_deslocamento: e.inicioDeslocamento || null, inicio_atendimento: e.inicioAtendimento || null,
+    data_finalizacao: e.dataFinalizacao || null, classificacao: e.classificacao || null,
+    equipamento: e.equipamento || null, fotos: e.fotos && e.fotos.length ? e.fotos : null,
+    validado_gestao: e.validadoGestao === undefined ? null : e.validadoGestao,
+    criado_por: e.criadoPor || null, criado_em: e.criadoEm || new Date().toISOString(),
+  };
+}
+function execucaoDeSupabase(r){
+  return {
+    protocolo: r.protocolo, tipoSolicitacao: r.tipo_solicitacao, tipoCurto: r.tipo_curto,
+    slaHoras: r.sla_horas, cidade: r.cidade, bairro: r.bairro, cliente: r.cliente,
+    pppoe: r.pppoe, pontoAcesso: r.ponto_acesso, portaOlt: r.porta_olt, slotOlt: r.slot_olt,
+    dataInicioOperacoes: r.data_inicio_operacoes, dataAgendamento: r.data_agendamento,
+    tecnico: r.tecnico, status: r.status,
+    inicioDeslocamento: r.inicio_deslocamento, inicioAtendimento: r.inicio_atendimento,
+    dataFinalizacao: r.data_finalizacao, classificacao: r.classificacao,
+    equipamento: r.equipamento, fotos: r.fotos || [], validadoGestao: r.validado_gestao,
+    criadoPor: r.criado_por, criadoEm: r.criado_em,
+  };
+}
+async function salvarExecucao(e){
+  OPS.saveData(STORAGE_KEY_EXECUCOES, execucoes);
+  await OPS_SUPABASE.upsert(TABELA_EXECUCOES, [execucaoParaSupabase(e)], 'protocolo');
+}
+
+function slaStatusExecucao(e){
+  if (!e.slaHoras || !e.dataInicioOperacoes) return { label: 'Sem SLA', classe: '' };
+  if (e.status === 'finalizado') return { label: 'Encerrado', classe: '' };
+  const elapsed = OPS.elapsedHoursSince(e.dataInicioOperacoes);
+  if (elapsed == null) return { label: 'Sem SLA', classe: '' };
+  const restante = e.slaHoras - elapsed;
+  if (restante < 0) return { label: `Fora do prazo (${Math.abs(restante).toFixed(0)}h)`, classe: 'vencido' };
+  if (restante <= e.slaHoras * 0.25) return { label: `Vence em ${restante.toFixed(0)}h`, classe: 'hoje' };
+  return { label: `Dentro do prazo (${restante.toFixed(0)}h)`, classe: 'ok' };
+}
+
+const STATUS_EXEC_LABEL = { aguardando: '⏳ Aguardando', deslocamento: '🚗 Em deslocamento', atendimento: '🔧 Em atendimento', finalizado: '✅ Finalizado' };
+
+function populateExecTecnicoSelects(){
+  const tecnicos = pessoas.filter(p => OPS.normalize(p.cargo || '') === 'instalador e reparador de operacoes').map(p => p.nome).sort();
+  const optsVazio = '<option value="">Selecione…</option>' + tecnicos.map(t => `<option value="${t.replace(/"/g, '&quot;')}">${t}</option>`).join('');
+  const optsTodos = '<option value="">Todos</option>' + tecnicos.map(t => `<option value="${t.replace(/"/g, '&quot;')}">${t}</option>`).join('');
+  const selColar = document.getElementById('mj-exec-colar-tecnico');
+  const valorColar = selColar.value;
+  selColar.innerHTML = optsVazio;
+  if (tecnicos.includes(valorColar)) selColar.value = valorColar;
+  const selFiltro = document.getElementById('mj-exec-f-tecnico');
+  const valorFiltro = selFiltro.value;
+  selFiltro.innerHTML = optsTodos;
+  if (tecnicos.includes(valorFiltro)) selFiltro.value = valorFiltro;
+}
+
+function minhasExecucoes(){
+  const colab = colaboradorAtual();
+  const meuNome = colab ? OPS.normalize(colab.nome) : OPS.normalize(usuarioAtual);
+  return execucoes.filter(e => OPS.normalize(e.tecnico || '') === meuNome);
+}
+
+function renderExecucoes(){
+  const papel = papelAtual();
+  const ehTecnico = papel === 'tecnico';
+  document.getElementById('mj-exec-painel-colar').style.display = ehTecnico ? 'none' : (document.getElementById('mj-exec-painel-colar').dataset.aberto === '1' ? 'block' : 'none');
+  document.getElementById('mj-btn-exec-nova-base').style.display = ehTecnico ? 'none' : '';
+  document.getElementById('mj-exec-f-tecnico-wrap').style.display = ehTecnico ? 'none' : '';
+
+  const termo = OPS.normalize(document.getElementById('mj-exec-search').value);
+  const filtroStatus = document.getElementById('mj-exec-f-status').value;
+  const filtroTecnico = document.getElementById('mj-exec-f-tecnico').value;
+
+  let base = ehTecnico ? minhasExecucoes() : execucoes.slice();
+  if (!ehTecnico && filtroTecnico) base = base.filter(e => e.tecnico === filtroTecnico);
+  if (filtroStatus) base = base.filter(e => e.status === filtroStatus);
+  if (termo) base = base.filter(e => [e.protocolo, e.cliente, e.cidade, e.tipoCurto, e.tecnico].some(v => OPS.normalize(v || '').includes(termo)));
+
+  const ordem = { aguardando: 0, deslocamento: 1, atendimento: 2, finalizado: 3 };
+  base.sort((a, b) => (ordem[a.status] - ordem[b.status]) || (new Date(b.criadoEm || 0) - new Date(a.criadoEm || 0)));
+
+  const cont = document.getElementById('mj-exec-lista');
+  if (!base.length){
+    cont.innerHTML = `<div class="empty-state"><div class="glyph">🛠️</div><h3>Nada por aqui ainda</h3><p>${ehTecnico ? 'Quando a coordenação atribuir um serviço a você, ele aparece nessa lista.' : 'Cole uma base de protocolos acima pra começar.'}</p></div>`;
+    return;
+  }
+  cont.innerHTML = base.map(e => {
+    const sla = slaStatusExecucao(e);
+    let acao = '';
+    if (ehTecnico){
+      if (e.status === 'aguardando') acao = `<button type="button" class="btn primary" data-exec-acao="deslocamento" data-exec-protocolo="${e.protocolo}">▶ Iniciar deslocamento</button>`;
+      else if (e.status === 'deslocamento') acao = `<button type="button" class="btn primary" data-exec-acao="atendimento" data-exec-protocolo="${e.protocolo}">🔧 Iniciar atendimento</button>`;
+      else if (e.status === 'atendimento') acao = `<button type="button" class="btn primary" data-exec-acao="finalizar" data-exec-protocolo="${e.protocolo}">✅ Finalizar atendimento</button>`;
+    }
+    const resumoFinal = e.status === 'finalizado'
+      ? `<div style="margin-top:6px;font-size:12.5px;color:var(--ink-dim)">${e.classificacao === 'produtivo' ? `✅ Produtivo${e.equipamento ? ' · ' + e.equipamento : ''} · ${(e.fotos || []).length} foto(s)` : `🚫 Improdutivo · validado com gestão: ${e.validadoGestao ? 'Sim' : 'Não'}`}</div>`
+      : '';
+    return `<div class="panel" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700">${e.tipoCurto || e.tipoSolicitacao} <span style="color:var(--ink-dim);font-weight:400">· ${e.protocolo}</span></div>
+          <div style="font-size:12.5px;color:var(--ink-dim);margin-top:2px">${e.cliente || 'Cliente não informado'} · ${e.cidade || ''}${e.bairro ? ' · ' + e.bairro : ''}</div>
+          ${!ehTecnico ? `<div style="font-size:12.5px;color:var(--ink-dim);margin-top:2px">👷 ${e.tecnico}</div>` : ''}
+          ${resumoFinal}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span class="badge-status">${STATUS_EXEC_LABEL[e.status] || e.status}</span>
+          <span class="badge-sla ${sla.classe}">${sla.label}</span>
+        </div>
+      </div>
+      ${acao ? `<div style="margin-top:10px">${acao}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function avancarEstagioExecucao(protocolo, novoStatus){
+  const e = execucoes.find(x => x.protocolo === protocolo);
+  if (!e) return;
+  const agora = new Date().toISOString();
+  if (novoStatus === 'deslocamento') e.inicioDeslocamento = agora;
+  else if (novoStatus === 'atendimento') e.inicioAtendimento = agora;
+  e.status = novoStatus;
+  try{
+    await salvarExecucao(e);
+  }catch(err){
+    console.error('Falha ao salvar avanço de estágio', err);
+    alert('Não consegui salvar essa atualização agora. Confere sua conexão e tenta de novo.');
+    return;
+  }
+  renderExecucoes();
+}
+
+document.getElementById('mj-exec-lista').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-exec-acao]');
+  if (!btn) return;
+  const acao = btn.dataset.execAcao;
+  const protocolo = btn.dataset.execProtocolo;
+  if (acao === 'finalizar') abrirFinalizarExecucao(protocolo);
+  else avancarEstagioExecucao(protocolo, acao);
+});
+
+// ---------- colar nova base ----------
+document.getElementById('mj-btn-exec-processar-colagem').addEventListener('click', async () => {
+  const texto = document.getElementById('mj-exec-colar-texto').value;
+  const tecnico = document.getElementById('mj-exec-colar-tecnico').value;
+  const statusEl = document.getElementById('mj-exec-colar-status');
+  if (!tecnico){ statusEl.style.color = 'var(--crit)'; statusEl.textContent = 'Escolhe o técnico responsável antes de criar.'; return; }
+  const { registros, erro } = parseColagemExecucao(texto);
+  if (erro){ statusEl.style.color = 'var(--crit)'; statusEl.textContent = erro; return; }
+  if (!registros.length){ statusEl.style.color = 'var(--crit)'; statusEl.textContent = 'Não achei nenhuma linha válida pra criar.'; return; }
+  statusEl.style.color = 'var(--ink-dim)'; statusEl.textContent = `Criando ${registros.length} execução(ões)...`;
+  const agora = new Date().toISOString();
+  let criadas = 0, atualizadas = 0;
+  for (const reg of registros){
+    const existente = execucoes.find(e => e.protocolo === reg.protocolo);
+    if (existente){ Object.assign(existente, reg, { tecnico }); atualizadas++; }
+    else { execucoes.push(Object.assign({}, reg, { tecnico, status: 'aguardando', fotos: [], criadoPor: usuarioAtual, criadoEm: agora })); criadas++; }
+  }
+  try{
+    OPS.saveData(STORAGE_KEY_EXECUCOES, execucoes);
+    const registrosSupabase = registros.map(reg => execucaoParaSupabase(execucoes.find(e => e.protocolo === reg.protocolo)));
+    await OPS_SUPABASE.upsert(TABELA_EXECUCOES, registrosSupabase, 'protocolo');
+    statusEl.style.color = 'var(--ok)';
+    statusEl.textContent = `✅ Pronto: ${criadas} nova(s), ${atualizadas} atualizada(s), atribuída(s) a ${tecnico}.`;
+    document.getElementById('mj-exec-colar-texto').value = '';
+    document.getElementById('mj-exec-painel-colar').dataset.aberto = '0';
+    document.getElementById('mj-exec-painel-colar').style.display = 'none';
+    renderExecucoes();
+  }catch(err){
+    console.error('Falha ao salvar execuções coladas', err);
+    statusEl.style.color = 'var(--crit)';
+    statusEl.textContent = 'Salvei aqui no navegador, mas não consegui enviar pro servidor compartilhado agora. Tenta atualizar em instantes.';
+  }
+});
+document.getElementById('mj-btn-exec-nova-base').addEventListener('click', () => {
+  const p = document.getElementById('mj-exec-painel-colar');
+  const abrir = p.style.display === 'none';
+  p.style.display = abrir ? 'block' : 'none';
+  p.dataset.aberto = abrir ? '1' : '0';
+});
+document.getElementById('mj-exec-search').addEventListener('input', renderExecucoes);
+document.getElementById('mj-exec-f-status').addEventListener('change', renderExecucoes);
+document.getElementById('mj-exec-f-tecnico').addEventListener('change', renderExecucoes);
+
+// ---------- modal de finalização ----------
+let execProtocoloEmFinalizacao = null;
+let execFinClassificacao = null;
+let execFinFotosProdutivo = [];
+let execFinFotoCasa = null;
+let execFinValidouGestao = null;
+
+// troca visualmente qual botão está "selecionado" — troca a classe ghost
+// pela primary (em vez de só somar primary por cima do ghost, que não
+// mudaria a cor: as duas classes têm a mesma especificidade CSS e ghost
+// vem depois no arquivo, então ela venceria e o botão pareceria não ter
+// reagido ao clique)
+function selecionarBotaoExec(selecionado, outros){
+  selecionado.classList.remove('ghost');
+  selecionado.classList.add('primary');
+  outros.forEach(b => { b.classList.remove('primary'); b.classList.add('ghost'); });
+}
+
+function resetarModalFinalizar(){
+  execFinClassificacao = null;
+  execFinFotosProdutivo = [];
+  execFinFotoCasa = null;
+  execFinValidouGestao = null;
+  document.getElementById('mj-exec-fin-bloco-produtivo').style.display = 'none';
+  document.getElementById('mj-exec-fin-bloco-improdutivo').style.display = 'none';
+  const btnProd = document.getElementById('mj-exec-fin-btn-produtivo');
+  const btnImprod = document.getElementById('mj-exec-fin-btn-improdutivo');
+  const btnSim = document.getElementById('mj-exec-fin-validou-sim');
+  const btnNao = document.getElementById('mj-exec-fin-validou-nao');
+  [btnProd, btnImprod, btnSim, btnNao].forEach(b => { b.classList.remove('primary'); b.classList.add('ghost'); });
+  document.getElementById('mj-exec-fin-equipamento').value = '';
+  document.getElementById('mj-exec-fin-fotos-preview').innerHTML = '';
+  document.getElementById('mj-exec-fin-foto-casa-preview').innerHTML = '';
+  document.getElementById('mj-exec-fin-erro').style.display = 'none';
+}
+function abrirFinalizarExecucao(protocolo){
+  execProtocoloEmFinalizacao = protocolo;
+  const e = execucoes.find(x => x.protocolo === protocolo);
+  resetarModalFinalizar();
+  document.getElementById('mj-exec-fin-subtitulo').textContent = `${e ? (e.tipoCurto || e.tipoSolicitacao) : ''} · ${protocolo}`;
+  document.getElementById('mj-modal-exec-finalizar').style.display = 'flex';
+}
+document.getElementById('mj-exec-fin-btn-cancelar').addEventListener('click', () => {
+  document.getElementById('mj-modal-exec-finalizar').style.display = 'none';
+});
+document.getElementById('mj-exec-fin-btn-produtivo').addEventListener('click', () => {
+  execFinClassificacao = 'produtivo';
+  selecionarBotaoExec(document.getElementById('mj-exec-fin-btn-produtivo'), [document.getElementById('mj-exec-fin-btn-improdutivo')]);
+  document.getElementById('mj-exec-fin-bloco-produtivo').style.display = 'block';
+  document.getElementById('mj-exec-fin-bloco-improdutivo').style.display = 'none';
+});
+document.getElementById('mj-exec-fin-btn-improdutivo').addEventListener('click', () => {
+  execFinClassificacao = 'improdutivo';
+  selecionarBotaoExec(document.getElementById('mj-exec-fin-btn-improdutivo'), [document.getElementById('mj-exec-fin-btn-produtivo')]);
+  document.getElementById('mj-exec-fin-bloco-improdutivo').style.display = 'block';
+  document.getElementById('mj-exec-fin-bloco-produtivo').style.display = 'none';
+});
+document.getElementById('mj-exec-fin-btn-add-foto').addEventListener('click', () => document.getElementById('mj-exec-fin-input-foto-produtivo').click());
+document.getElementById('mj-exec-fin-input-foto-produtivo').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  try{
+    const foto = await comprimirImagem(file);
+    execFinFotosProdutivo.push(foto);
+    const preview = document.getElementById('mj-exec-fin-fotos-preview');
+    const idx = execFinFotosProdutivo.length - 1;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+    wrap.innerHTML = `<img src="${foto}" style="width:64px;height:64px;object-fit:cover;border-radius:6px"><button type="button" style="position:absolute;top:-6px;right:-6px;background:var(--crit);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1">✕</button>`;
+    wrap.querySelector('button').addEventListener('click', () => {
+      execFinFotosProdutivo = execFinFotosProdutivo.filter(f => f !== foto);
+      wrap.remove();
+    });
+    preview.appendChild(wrap);
+  }catch(err){
+    alert(err.message === 'foto_grande_demais' ? 'Essa foto ficou grande demais mesmo depois de comprimir. Tenta uma foto mais simples.' : 'Não consegui processar essa imagem. Tenta outra foto.');
+  }
+});
+document.getElementById('mj-exec-fin-btn-foto-casa').addEventListener('click', () => document.getElementById('mj-exec-fin-input-foto-casa').click());
+document.getElementById('mj-exec-fin-input-foto-casa').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  try{
+    execFinFotoCasa = await comprimirImagem(file);
+    document.getElementById('mj-exec-fin-foto-casa-preview').innerHTML = `<img src="${execFinFotoCasa}" style="width:96px;height:96px;object-fit:cover;border-radius:6px">`;
+  }catch(err){
+    alert(err.message === 'foto_grande_demais' ? 'Essa foto ficou grande demais mesmo depois de comprimir. Tenta uma foto mais simples.' : 'Não consegui processar essa imagem. Tenta outra foto.');
+  }
+});
+document.getElementById('mj-exec-fin-validou-sim').addEventListener('click', () => {
+  execFinValidouGestao = true;
+  selecionarBotaoExec(document.getElementById('mj-exec-fin-validou-sim'), [document.getElementById('mj-exec-fin-validou-nao')]);
+});
+document.getElementById('mj-exec-fin-validou-nao').addEventListener('click', () => {
+  execFinValidouGestao = false;
+  selecionarBotaoExec(document.getElementById('mj-exec-fin-validou-nao'), [document.getElementById('mj-exec-fin-validou-sim')]);
+});
+document.getElementById('mj-exec-fin-btn-confirmar').addEventListener('click', async () => {
+  const erroEl = document.getElementById('mj-exec-fin-erro');
+  erroEl.style.display = 'none';
+  if (!execFinClassificacao){ erroEl.textContent = 'Escolhe se o atendimento foi produtivo ou improdutivo.'; erroEl.style.display = 'block'; return; }
+  if (execFinClassificacao === 'produtivo' && !execFinFotosProdutivo.length){ erroEl.textContent = 'Anexa pelo menos uma foto do serviço realizado.'; erroEl.style.display = 'block'; return; }
+  if (execFinClassificacao === 'improdutivo' && !execFinFotoCasa){ erroEl.textContent = 'Anexa a foto da frente da casa.'; erroEl.style.display = 'block'; return; }
+  if (execFinClassificacao === 'improdutivo' && execFinValidouGestao === null){ erroEl.textContent = 'Informa se validou com a gestão.'; erroEl.style.display = 'block'; return; }
+  const e = execucoes.find(x => x.protocolo === execProtocoloEmFinalizacao);
+  if (!e) return;
+  e.status = 'finalizado';
+  e.dataFinalizacao = new Date().toISOString();
+  e.classificacao = execFinClassificacao;
+  if (execFinClassificacao === 'produtivo'){
+    e.equipamento = document.getElementById('mj-exec-fin-equipamento').value.trim();
+    e.fotos = execFinFotosProdutivo;
+    e.validadoGestao = null;
+  } else {
+    e.equipamento = null;
+    e.fotos = [execFinFotoCasa];
+    e.validadoGestao = execFinValidouGestao;
+  }
+  try{
+    await salvarExecucao(e);
+    document.getElementById('mj-modal-exec-finalizar').style.display = 'none';
+    renderExecucoes();
+  }catch(err){
+    console.error('Falha ao salvar finalização', err);
+    erroEl.textContent = 'Não consegui enviar pro servidor agora. Confere sua conexão e tenta de novo.';
+    erroEl.style.display = 'block';
+  }
+});
+
 // ---------- navegação entre o portal (cartões) e as demais telas ----------
 function mostrarPortal(){
   document.getElementById('mj-view-portal').style.display = 'block';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'none';
   document.getElementById('mj-view-links').style.display = 'none';
+  document.getElementById('mj-view-execucao').style.display = 'none';
 }
 function mostrarSolicitacoes(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'block';
   document.getElementById('mj-view-colaborador').style.display = 'none';
   document.getElementById('mj-view-links').style.display = 'none';
+  document.getElementById('mj-view-execucao').style.display = 'none';
   renderAll();
 }
 function mostrarLinks(){
@@ -1427,12 +1950,23 @@ function mostrarLinks(){
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'none';
   document.getElementById('mj-view-links').style.display = 'block';
+  document.getElementById('mj-view-execucao').style.display = 'none';
+}
+function mostrarExecucao(){
+  document.getElementById('mj-view-portal').style.display = 'none';
+  document.getElementById('mj-view-solicitacoes').style.display = 'none';
+  document.getElementById('mj-view-colaborador').style.display = 'none';
+  document.getElementById('mj-view-links').style.display = 'none';
+  document.getElementById('mj-view-execucao').style.display = 'block';
+  populateExecTecnicoSelects();
+  renderExecucoes();
 }
 function mostrarColaborador(){
   document.getElementById('mj-view-portal').style.display = 'none';
   document.getElementById('mj-view-solicitacoes').style.display = 'none';
   document.getElementById('mj-view-colaborador').style.display = 'block';
   document.getElementById('mj-view-links').style.display = 'none';
+  document.getElementById('mj-view-execucao').style.display = 'none';
   const podeImportar = getCurrentAccess() === 'TOTAL';
   document.getElementById('mj-btn-importar-produtividade').style.display = podeImportar ? '' : 'none';
   // Supervisor/Técnico/Tipo de serviço são filtros de gestão — não fazem
@@ -1454,6 +1988,8 @@ document.getElementById('mj-btn-voltar-portal-2').addEventListener('click', most
 document.getElementById('mj-btn-voltar-portal-3').addEventListener('click', mostrarPortal);
 document.getElementById('mj-card-colaborador').addEventListener('click', mostrarColaborador);
 document.getElementById('mj-card-links').addEventListener('click', mostrarLinks);
+document.getElementById('mj-card-execucao').addEventListener('click', mostrarExecucao);
+document.getElementById('mj-btn-voltar-portal-4').addEventListener('click', mostrarPortal);
 
 // Reset completo pro app instalado (PWA): desregistra o service worker,
 // apaga todo o cache dele e recarrega direto do servidor - sem isso, se o
@@ -2974,6 +3510,16 @@ async function initPage(silencioso = false){
     tickets = OPS.loadData(STORAGE_KEY) || [];
     comentarios = OPS.loadData(STORAGE_KEY_COMENTARIOS) || [];
     historicos = OPS.loadData(STORAGE_KEY_HISTORICO) || [];
+  }
+  // Execução de Serviços — tabela nova, não trava o boot se ainda não
+  // existir no Supabase (ex: enquanto o SQL de criação não foi rodado)
+  try{
+    const rowsExecucoes = await OPS_SUPABASE.select(TABELA_EXECUCOES);
+    execucoes = rowsExecucoes.map(execucaoDeSupabase);
+    OPS.saveData(STORAGE_KEY_EXECUCOES, execucoes);
+  }catch(err){
+    console.error('Falha ao buscar Execução de Serviços no Supabase (a tabela existe no banco?)', err);
+    execucoes = OPS.loadData(STORAGE_KEY_EXECUCOES) || [];
   }
   if (toast) toast.remove();
   // alert() trava a tela - só mostra em carga inicial/atualização manual;
