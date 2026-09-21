@@ -11,7 +11,11 @@ const fs = require('fs');
 const AdmZip = require('adm-zip');
 const { ANIEL_URL, MENU_SELECTOR, esperarMenuOuLogin } = require('./aniel-common');
 
-const { ANIEL_USER, ANIEL_PASS, SITE_USER, SITE_PASS } = process.env;
+// .trim(): tira espaço/quebra de linha que às vezes vem junto quando se cola o valor no Secret
+const ANIEL_USER = (process.env.ANIEL_USER || '').trim();
+const ANIEL_PASS = (process.env.ANIEL_PASS || '').trim();
+const SITE_USER = (process.env.SITE_USER || '').trim();
+const SITE_PASS = (process.env.SITE_PASS || '').trim();
 const TMP_DIR = path.join(__dirname, 'tmp-mapa');
 const SITE_URL = process.env.SITE_URL || 'https://ope-touros.vercel.app/mapa-servicos.html';
 
@@ -142,6 +146,36 @@ async function abrirNavegadorEPainel() {
 // bug já corrigido no exportar-produtividade-v3.js. Agora, quando detecta que
 // a página morreu, fecha o navegador morto, abre um NOVO do zero, reabre o
 // Painel de Serviços e continua tentando dentro da mesma execução.
+// Marca rádio/checkbox de forma tolerante: o Aniel usa controles estilizados
+// em que o .check() normal às vezes fica esperando 90s (elemento "coberto" pelo
+// rótulo) - na nuvem isso acontecia na 1ª tentativa. Tenta normal (rápido),
+// depois forçado, e por último um clique via JavaScript.
+async function marcar(locator) {
+  try { await locator.check({ timeout: 8000 }); return; } catch (e) {}
+  try { await locator.check({ force: true, timeout: 5000 }); return; } catch (e) {}
+  await locator.evaluate((el) => { if (!el.checked) el.click(); });
+}
+
+// Erro com as primeiras linhas do "Call log" do Playwright (diz o que ele estava
+// esperando) - sem dados sensíveis, só seletores e estados dos elementos.
+function resumoErro(e) {
+  return e.message.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 5).join(' | ').slice(0, 450);
+}
+
+// Estado dos campos do filtro, pra descobrir por que algo não é clicável na nuvem.
+async function diagnosticoFiltro(page, painelFrame) {
+  const ids = ['iAbrirFiltro', 'iDataCriacao', 'iDataInicial', 'iDataFinal', 'iHistoricoReabertura', 'iSituacaoOS', 'iEstadosBrasil', 'iPesquisar'];
+  const partes = [];
+  for (const id of ids) {
+    const l = painelFrame.locator('#' + id);
+    const n = await l.count().catch(() => -1);
+    const vis = n > 0 ? await l.first().isVisible().catch(() => false) : false;
+    partes.push(`${id}:${n}${vis ? 'V' : 'x'}`);
+  }
+  const frames = await page.locator('iframe[src*="Gestao_Equipe"]').count().catch(() => -1);
+  log(`[diagnóstico filtro] ${partes.join(' ')} | iframes Gestao_Equipe: ${frames}`);
+}
+
 async function exportFromAniel(nav) {
   let page = nav.page;
   let painelFrame = nav.painelFrame;
@@ -161,7 +195,8 @@ async function exportFromAniel(nav) {
     const tentativasEspera = [4000, 8000, 15000, 25000];
     for (let tentativa = 0; tentativa < tentativasEspera.length; tentativa++) {
       try {
-        await painelFrame.locator('#iAbrirFiltro').click();
+        const jaAberto = await painelFrame.locator('#iDataCriacao').isVisible().catch(() => false);
+        if (!jaAberto) await painelFrame.locator('#iAbrirFiltro').click({ timeout: 30000 });
         // Espera o painel de filtro abrir de verdade em vez de um tempo fixo.
         await painelFrame.locator('#iDataCriacao').waitFor({ state: 'visible' });
 
@@ -173,7 +208,7 @@ async function exportFromAniel(nav) {
         // deixou marcado por último, e "Abertas + Data de Encerramento" é uma
         // combinação praticamente impossível (ticket aberto não tem data de
         // encerramento) - foi exatamente isso que derrubou o mapa pra 0 registros.
-        await painelFrame.locator('#iDataCriacao').check();
+        await marcar(painelFrame.locator('#iDataCriacao'));
         // iDataInicial nunca era setado explicitamente - ficava com o que
         // sobrava "lembrado" da sessão do Aniel (geralmente dia 1 do mês
         // corrente), então perto do fim do mês o mapa só mostrava os chamados
@@ -185,7 +220,7 @@ async function exportFromAniel(nav) {
         await setDatepicker(page, 'iDataInicial', duasSemanasAtras);
         await setDatepicker(page, 'iDataFinal', hoje);
 
-        await painelFrame.locator('#iHistoricoReabertura').check();
+        await marcar(painelFrame.locator('#iHistoricoReabertura'));
         await painelFrame.locator('#iSituacaoOS').selectOption('abertas');
 
         // Esse Aniel é compartilhado com outras regionais da empresa (PB, PE,
@@ -224,7 +259,8 @@ async function exportFromAniel(nav) {
         }
       } catch (e) {
         const morreu = page.isClosed();
-        log(`Tentativa ${tentativa + 1}: falhou (${e.message.split('\n')[0]})${morreu ? ' - navegador morreu, abrindo um novo' : ' - tentando de novo'}`);
+        log(`Tentativa ${tentativa + 1}: falhou (${resumoErro(e)})${morreu ? ' - navegador morreu, abrindo um novo' : ' - tentando de novo'}`);
+        if (!morreu) await diagnosticoFiltro(page, painelFrame);
         if (morreu) {
           await nav.browser.close().catch(() => {});
           try {
