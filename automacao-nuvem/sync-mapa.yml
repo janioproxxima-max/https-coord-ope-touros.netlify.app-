@@ -1,0 +1,37 @@
+name: Sync Mapa de Servicos (Aniel -> site)
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # a cada 30 min (o GitHub pode atrasar alguns minutos)
+  workflow_dispatch:          # botão "Run workflow" pra rodar na hora
+
+# nunca deixa duas sincronizações rodarem ao mesmo tempo
+concurrency:
+  group: sync-mapa
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # imagem oficial do Playwright: já vem com Chromium e dependências
+    # (a versão precisa ser igual à do package.json em automacao-nuvem)
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.1-jammy
+      options: --ipc=host
+    env:
+      TZ: America/Fortaleza
+      ANIEL_USER: ${{ secrets.ANIEL_USER }}
+      ANIEL_PASS: ${{ secrets.ANIEL_PASS }}
+      SITE_USER: ${{ secrets.SITE_USER }}
+      SITE_PASS: ${{ secrets.SITE_PASS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        working-directory: automacao-nuvem
+        run: npm install --no-audit --no-fund
+
+      - name: Sincronizar
+        working-directory: automacao-nuvem
+        run: node sync-nuvem.js
