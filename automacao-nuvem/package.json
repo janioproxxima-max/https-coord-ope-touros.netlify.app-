@@ -2,10 +2,11 @@
   "name": "ope-automacao-nuvem",
   "version": "1.0.0",
   "private": true,
-  "description": "Sync do Mapa de Serviços (Aniel -> site OPE Touros) rodando no GitHub Actions",
+  "description": "Sync do Mapa de Servi\u00e7os (Aniel -> site OPE Touros) rodando no GitHub Actions",
   "type": "commonjs",
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "playwright": "1.49.1"
+    "playwright": "1.49.1",
+    "xlsx": "0.18.5"
   }
 }

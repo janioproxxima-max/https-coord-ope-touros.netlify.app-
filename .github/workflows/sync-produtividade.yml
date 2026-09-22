@@ -1,0 +1,35 @@
+name: Sync Produtividade (Aniel -> site)
+
+on:
+  schedule:
+    - cron: '20 * * * *'      # 1x por hora (a exportação do mês leva bastante tempo)
+  workflow_dispatch:          # botão "Run workflow" pra rodar na hora
+
+# nunca deixa duas exportações de produtividade rodarem ao mesmo tempo
+concurrency:
+  group: sync-produtividade
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.1-jammy
+      options: --ipc=host
+    env:
+      TZ: America/Fortaleza
+      ANIEL_USER: ${{ secrets.ANIEL_USER }}
+      ANIEL_PASS: ${{ secrets.ANIEL_PASS }}
+      SITE_USER: ${{ secrets.SITE_USER }}
+      SITE_PASS: ${{ secrets.SITE_PASS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        working-directory: automacao-nuvem
+        run: npm install --no-audit --no-fund
+
+      - name: Exportar e importar produtividade
+        working-directory: automacao-nuvem
+        run: node sync-produtividade-nuvem.js
