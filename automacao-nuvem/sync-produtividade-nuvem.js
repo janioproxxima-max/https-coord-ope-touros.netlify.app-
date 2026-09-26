@@ -369,12 +369,26 @@ async function importarNoPainelColaborador(nav, filePath) {
       await page.locator('#lg-usr').fill(SITE_USER);
       await page.locator('#lg-pwd').fill(SITE_PASS);
       await loginBtn.click();
-      // Espera o botão sumir de verdade (autofill completou o login) em vez
-      // de um tempo fixo - se não sumir em 5s, cai no erro abaixo como antes.
-      await loginBtn.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+      // Espera o botão sumir de verdade (login processado) - alguns logins
+      // demoram mais que alguns segundos pra terminar (ex: carregando dados
+      // de Gestão de Pessoas antes de liberar a tela), por isso 30s agora
+      // em vez de 5s - era curto demais e causava falso negativo de login.
+      await loginBtn.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
       if (await loginBtn.isVisible().catch(() => false)) {
         throw new Error('Login no site OPE Touros não passou - confira os Secrets SITE_USER / SITE_PASS.');
       }
+    }
+
+    // Mesmo com o botão de login já escondido, a tela do portal pode levar
+    // mais um tempo pra realmente montar os cartões (busca dados de Gestão
+    // de Pessoas, calcula o papel do usuário etc). Espera isso de verdade,
+    // em vez de tentar clicar direto - era exatamente aqui que travava,
+    // preso 150s tentando clicar num cartão que nunca tinha ficado visível.
+    try {
+      await page.locator('#mj-card-colaborador').waitFor({ state: 'visible', timeout: 60000 });
+    } catch (e) {
+      await dumpDebug(page, 'produtividade-v3-portal-nao-carregou');
+      throw new Error('A tela do portal não carregou o cartão do Painel do Colaborador em 60s depois do login.');
     }
 
     await page.locator('#mj-card-colaborador').click();
