@@ -505,11 +505,31 @@ const OPS = (() => {
   // digitação tipo "Arizona" vs "Arisona"). Prioriza localidades da mesma
   // cidade do registro (cidadeNorm) quando informada; só usa o cadastro
   // inteiro como rede de segurança se não achar nenhuma candidata lá.
+  // Localidades que pertencem à cidade do registro: mesma cidade inferida
+  // (mais próxima), ou dentro do limite do município (malha IBGE), ou - se a
+  // malha ainda não carregou - a até 25km do centro da cidade. Antes, quando
+  // a cidade não tinha nenhuma localidade cadastrada (ex: Macau), a busca
+  // caía no cadastro INTEIRO e casava nomes parecidos de outra cidade - caso
+  // real: bairro "MACAU" casou com "Acauã" (Touros, ~90km) pela distância de
+  // digitação e jogou o protocolo 8962497/1 pra longe da cidade.
+  const MAX_DISTRITO_CENTRO_KM = 25;
+  function distritosDaCidade(cidadeNorm){
+    const centro = CITY_REGISTRY[cidadeNorm] || null;
+    return DISTRICT_REGISTRY_NORM.filter(d => {
+      if (d.cidade === cidadeNorm) return true;
+      const dentro = isPointInMunicipio(d.lat, d.lng, cidadeNorm);
+      if (dentro !== null) return dentro;
+      return !!centro && haversineKm(centro, d) <= MAX_DISTRITO_CENTRO_KM;
+    });
+  }
   function findDistrictByBairro(bairroTexto, cidadeNorm){
     const alvo = normalize(bairroTexto);
     if (!alvo) return null;
-    const daCidade = cidadeNorm ? DISTRICT_REGISTRY_NORM.filter(d => d.cidade === cidadeNorm) : [];
-    const pool = daCidade.length ? daCidade : DISTRICT_REGISTRY_NORM;
+    // bairro igual ao nome da cidade (ex: "MACAU" em Macau) = sede/centro,
+    // não é uma localidade específica
+    if (cidadeNorm && alvo === cidadeNorm) return null;
+    const pool = cidadeNorm ? distritosDaCidade(cidadeNorm) : DISTRICT_REGISTRY_NORM;
+    if (!pool.length) return null;
     let exato = pool.find(d => d.norm === alvo);
     if (exato) return exato;
     let contido = pool.find(d => alvo.includes(d.norm) || d.norm.includes(alvo));
