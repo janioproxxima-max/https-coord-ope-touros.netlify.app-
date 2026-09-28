@@ -841,6 +841,55 @@ let goRegistros = [], goHistorico = [], goPares = [], goTickets = [];
 // muda) sobrevive a isso. null = ainda não carregado (ver
 // carregarAberturaZaazCacheSeNecessario).
 let goAberturaZaazMap = null;
+
+// ---------- SLA de protocolos com /2, /3... (reagendamentos) ----------
+// Regra combinada com o coordenador: quando o chamado gera pernas /2 em
+// diante, o SLA conta da data de CRIAÇÃO da perna /1 (X) até o FECHAMENTO
+// da perna produtiva (Y). As pernas intermediárias improdutivas não entram
+// na conta (e continuam fora do SLA por serem improdutivas). Ex:
+//   /1 improdutivo -> data de criação X
+//   /2 improdutivo -> ignorado
+//   /3 produtivo   -> data de fechamento Y   => SLA = Y - X
+// Mapa protocolo base (sem /N) -> menor data_criacao vista entre todas as
+// pernas. A /1 pode ter fechado fora do período carregado (ex: mês
+// anterior), por isso as pernas anteriores que não vieram no lote são
+// buscadas direto no Supabase por protocolo.
+let goCriacaoOriginalMap = {};
+function __registrarCriacaoPerna(mapa, r){
+  if (!r || !r.protocolo || !r.data_criacao) return;
+  const base = String(r.protocolo).split('/')[0].trim();
+  if (!base) return;
+  const t = new Date(r.data_criacao).getTime();
+  if (!isFinite(t)) return;
+  if (!mapa[base] || t < new Date(mapa[base]).getTime()) mapa[base] = r.data_criacao;
+}
+async function __registrarPernasProtocolo(mapa, registros){
+  registros = registros || [];
+  registros.forEach(r => __registrarCriacaoPerna(mapa, r));
+  const jaTem = new Set(registros.map(r => String(r.protocolo || '').trim()));
+  const faltando = new Set();
+  registros.forEach(r => {
+    const m = String(r.protocolo || '').trim().match(/^(.+)\/(\d+)$/);
+    if (!m) return;
+    const n = parseInt(m[2], 10);
+    for (let i = 1; i < n; i++){
+      const p = `${m[1]}/${i}`;
+      if (!jaTem.has(p)) faltando.add(p);
+    }
+  });
+  const lista = [...faltando];
+  for (let i = 0; i < lista.length; i += 150){
+    const lote = lista.slice(i, i + 150).map(v => encodeURIComponent(v)).join(',');
+    try{
+      const linhas = (await OPS_SUPABASE.select('produtividade_registros', `protocolo=in.(${lote})`, 'protocolo,data_criacao')) || [];
+      linhas.forEach(r => __registrarCriacaoPerna(mapa, r));
+    }catch(err){
+      console.error('Falha ao buscar pernas anteriores (/1, /2...) dos protocolos', err);
+    }
+  }
+}
+async function registrarPernasProtocolo(registros){ await __registrarPernasProtocolo(goCriacaoOriginalMap, registros); }
+
 let goPessoasCache = null; // lazy-load compartilhado: filtro Instalador/Reparador do donut + aba Produtividade Técnica
 let goPessoas = null, goAusencias = null, goAtestados = null;
 let goVeiculos = null, goLavagens = null, goManutencoes = null;
@@ -953,7 +1002,6 @@ async function initPage(){
     goHistorico = (await OPS_SUPABASE.select('produtividade_historico')) || [];
     goTecnicoSupervisor = {};
     goHistorico.forEach(h => { goTecnicoSupervisor[h.tecnico] = h.supervisor || '—'; });
-    await carregarAberturaZaazCacheSeNecessario();
     await carregarSlaExcecoesCacheSeNecessario();
     // Inspetor vem do cadastro de Gestão de Pessoas (Apps Script, mais lento
     // e com cota diária) - só busca sob demanda, quando alguém realmente
@@ -988,6 +1036,7 @@ async function carregarPeriodo(){
     OPS_SUPABASE.select('produtividade_registros', filtroRegistros),
     OPS_SUPABASE.select('produtividade_pares_recorrencia', filtroParesStr),
   ]);
+  await registrarPernasProtocolo(regs);
   goRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
   goPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
   atualizarOpcoesCidade();
@@ -1318,6 +1367,7 @@ async function carregarHistoricoAnoSeNecessario(){
     OPS_SUPABASE.select('produtividade_registros', `data_encerramento=gte.${inicioAno}T00:00:00.000Z`),
     OPS_SUPABASE.select('produtividade_pares_recorrencia', `data_atual=gte.${inicioAno}T00:00:00.000Z`),
   ]);
+  await registrarPernasProtocolo(regs);
   goHistoricoAnoRegistros = (regs || []).filter(r => OPS.isTourosUnitCity(r.area));
   goHistoricoAnoPares = (pares || []).filter(p => OPS.isTourosUnitCity(p.area));
 }
@@ -1548,15 +1598,15 @@ async function carregarAberturaZaazCacheSeNecessario(){
     goAberturaZaazMap = {};
   }
 }
+function aberturaSla(r){
+  // SLA conta só com os dados do próprio site: criação da perna /1 do
+  // protocolo (ver goCriacaoOriginalMap - regra dos /2, /3...); sem /1
+  // conhecida, usa a data_criacao da própria linha
+  const base = r.protocolo ? String(r.protocolo).split('/')[0].trim() : null;
+  return (base && goCriacaoOriginalMap[base]) || r.data_criacao;
+}
 function horasAbertura(r){
-  // zaaz_abertura_reparos (casado por protocolo, ver
-  // carregarAberturaZaazCacheSeNecessario) é quando o cliente de fato abriu
-  // o chamado; data_criacao (da planilha de produtividade) é quando o
-  // técnico foi despachado, que pode ser bem depois se o chamado ficou na
-  // fila - usa a real sempre que tiver, senão cai pra data_criacao como antes
-  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
-  const abertura = (base && goAberturaZaazMap && goAberturaZaazMap[base]) || r.data_criacao;
-  return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
+  return (new Date(r.data_encerramento) - new Date(aberturaSla(r))) / 3600000;
 }
 function dentroDoPrazo(r){
   const t = (r.tipo || '').toUpperCase();
@@ -1812,7 +1862,7 @@ function linhasAnaliticoServicos(filtro){
       r.protocolo || '', r.tecnico || '', r.tipo || '', r.area || '', r.localidade || '',
       isProdutivo(r) ? 'Sim' : 'Não',
       r.pontos != null ? r.pontos : '',
-      r.data_criacao ? formatDateTimeBRProdutividade(r.data_criacao) : '',
+      aberturaSla(r) ? formatDateTimeBRProdutividade(aberturaSla(r)) : '',
       r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '',
       isFinite(parseFloat(r.tma)) ? Number(r.tma).toFixed(2) : '',
       dp == null ? '—' : (dp ? 'Sim' : 'Não'),
@@ -2983,6 +3033,7 @@ async function carregarSemanaPremiacao(){
   const fimStr = domingoDaSemana(goPremiacaoSemanaSegunda).toISOString().slice(0,10);
   const filtro = [`data_encerramento=gte.${inicioStr}T00:00:00.000Z`, `data_encerramento=lte.${fimStr}T23:59:59.999Z`].join('&');
   const registros = (await OPS_SUPABASE.select('produtividade_registros', filtro)) || [];
+  await registrarPernasProtocolo(registros);
   goPremiacaoRegistros = dedupePorProtocolo(registros.filter(r => OPS.isTourosUnitCity(r.area)));
   goPremiacaoRegistrosEquipe = dedupePorProtocolo(registros.filter(r => ehInstaladorReparador(r.tecnico)));
 }
@@ -3257,7 +3308,7 @@ function linhasAnaliticoPremiacao(filtro){
     return [
       r.protocolo || '', tituloCase(r.tecnico || ''), r.tipo || '', r.area || '', r.localidade || '',
       isProdutivo(r) ? 'Sim' : 'Não',
-      r.data_criacao ? formatDateTimeBRProdutividade(r.data_criacao) : '',
+      aberturaSla(r) ? formatDateTimeBRProdutividade(aberturaSla(r)) : '',
       r.data_encerramento ? formatDateTimeBRProdutividade(r.data_encerramento) : '',
       dp == null ? '—' : (dp ? 'Sim' : 'Não'),
     ];

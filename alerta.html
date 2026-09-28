@@ -165,8 +165,10 @@ function grupoSlaDoTipo(tipo){
 // se o chamado ficou na fila - usa a real quando tiver, senão cai pra
 // data_criacao como antes
 function horasAbertura(r){
-  const base = r.protocolo ? r.protocolo.split('/')[0] : null;
-  const abertura = (base && alAberturaZaazMap[base]) || r.data_criacao;
+  // só dados do próprio site: criação da perna /1 (regra dos /2, /3...,
+  // ver alCriacaoOriginalMap); sem /1 conhecida, data_criacao da própria linha
+  const base = r.protocolo ? String(r.protocolo).split('/')[0].trim() : null;
+  const abertura = (base && alCriacaoOriginalMap[base]) || r.data_criacao;
   return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
 }
 function dentroDoPrazo(r){
@@ -185,6 +187,54 @@ let alPessoas = null, alTecnicoSupervisor = {};
 // tabela à parte, indexada por protocolo, porque o import diário de
 // produtividade recria as linhas recentes com id novo)
 let alAberturaZaazMap = {};
+
+// ---------- SLA de protocolos com /2, /3... (reagendamentos) ----------
+// Regra combinada com o coordenador: quando o chamado gera pernas /2 em
+// diante, o SLA conta da data de CRIAÇÃO da perna /1 (X) até o FECHAMENTO
+// da perna produtiva (Y). As pernas intermediárias improdutivas não entram
+// na conta (e continuam fora do SLA por serem improdutivas). Ex:
+//   /1 improdutivo -> data de criação X
+//   /2 improdutivo -> ignorado
+//   /3 produtivo   -> data de fechamento Y   => SLA = Y - X
+// Mapa protocolo base (sem /N) -> menor data_criacao vista entre todas as
+// pernas. A /1 pode ter fechado fora do período carregado (ex: mês
+// anterior), por isso as pernas anteriores que não vieram no lote são
+// buscadas direto no Supabase por protocolo.
+let alCriacaoOriginalMap = {};
+function __registrarCriacaoPerna(mapa, r){
+  if (!r || !r.protocolo || !r.data_criacao) return;
+  const base = String(r.protocolo).split('/')[0].trim();
+  if (!base) return;
+  const t = new Date(r.data_criacao).getTime();
+  if (!isFinite(t)) return;
+  if (!mapa[base] || t < new Date(mapa[base]).getTime()) mapa[base] = r.data_criacao;
+}
+async function __registrarPernasProtocolo(mapa, registros){
+  registros = registros || [];
+  registros.forEach(r => __registrarCriacaoPerna(mapa, r));
+  const jaTem = new Set(registros.map(r => String(r.protocolo || '').trim()));
+  const faltando = new Set();
+  registros.forEach(r => {
+    const m = String(r.protocolo || '').trim().match(/^(.+)\/(\d+)$/);
+    if (!m) return;
+    const n = parseInt(m[2], 10);
+    for (let i = 1; i < n; i++){
+      const p = `${m[1]}/${i}`;
+      if (!jaTem.has(p)) faltando.add(p);
+    }
+  });
+  const lista = [...faltando];
+  for (let i = 0; i < lista.length; i += 150){
+    const lote = lista.slice(i, i + 150).map(v => encodeURIComponent(v)).join(',');
+    try{
+      const linhas = (await OPS_SUPABASE.select('produtividade_registros', `protocolo=in.(${lote})`, 'protocolo,data_criacao')) || [];
+      linhas.forEach(r => __registrarCriacaoPerna(mapa, r));
+    }catch(err){
+      console.error('Falha ao buscar pernas anteriores (/1, /2...) dos protocolos', err);
+    }
+  }
+}
+
 // protocolos concluídos em campo mas reabertos na Zaaz pra correção
 // administrativa (não demora do técnico) - lista conferida manualmente com o
 // coordenador, sem sinal automático nos dados (ver mesmo mecanismo em
@@ -194,7 +244,7 @@ async function carregarBaseComum(){
   const [pessoas, historico, aberturaZaaz, excecoes] = await Promise.all([
     OPS.syncPull('PessoasData').catch(() => []),
     OPS_SUPABASE.select('produtividade_historico').catch(() => []),
-    OPS_SUPABASE.select('zaaz_abertura_reparos').catch(() => []),
+    Promise.resolve([]), // zaaz_abertura_reparos não é mais usada no SLA
     OPS_SUPABASE.select('sla_excecoes_reparo').catch(() => []),
   ]);
   alPessoas = pessoas || [];
@@ -478,6 +528,7 @@ async function carregarJustificativaSla(){
     OPS_SUPABASE.select('produtividade_registros', filtro),
     carregarTratamentos('sla'),
   ]);
+  await __registrarPernasProtocolo(alCriacaoOriginalMap, registros);
   const base = dedupePorProtocolo(registros || []).filter(r => OPS.isTourosUnitCity(r.area) && ehInstaladorReparador(r.tecnico) && ehElegivelSla(r));
   const porCidadeGrupo = {}; // cidade|grupo -> {dentro, total, foraDoPrazo:[]}
   base.forEach(r => {
