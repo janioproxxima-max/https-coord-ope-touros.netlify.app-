@@ -388,6 +388,18 @@ async function importarNoPainelColaborador(nav, filePath) {
       await page.locator('#mj-card-colaborador').waitFor({ state: 'visible', timeout: 60000 });
     } catch (e) {
       await dumpDebug(page, 'produtividade-v3-portal-nao-carregou');
+      // diagnóstico sem dado sensível: só o nível de acesso do usuário do
+      // Secret e se o site mostrou a tela de "Sem permissão" (initShell
+      // remove todo o conteúdo da página quando o acesso não inclui o módulo)
+      const diag = await page.evaluate(() => ({
+        acesso: sessionStorage.getItem('ops_access'),
+        semPermissao: document.body.innerText.includes('Sem permissão para este módulo'),
+        trecho: document.body.innerText.replace(/\s+/g, ' ').slice(0, 200),
+      })).catch(() => ({}));
+      log(`[diagnóstico] acesso do SITE_USER: ${diag.acesso || '?'} | tela "Sem permissão": ${diag.semPermissao ? 'SIM' : 'não'} | tela: "${diag.trecho || ''}"`);
+      if (diag.semPermissao || (diag.acesso && diag.acesso !== '"TOTAL"')) {
+        throw new Error('O usuário do Secret SITE_USER não tem acesso TOTAL no site - o import de produtividade (Mundo Jira > Painel do Colaborador) só aparece pra acesso TOTAL. Use um login de coordenador no Secret SITE_USER/SITE_PASS.');
+      }
       throw new Error('A tela do portal não carregou o cartão do Painel do Colaborador em 60s depois do login.');
     }
 
