@@ -341,7 +341,20 @@ async function importarNoPainelColaborador(nav, filePath) {
   // Página nova, dedicada só pro import - não reaproveita a do painel de
   // serviços (evita herdar um estado estranho se ela sobreviveu a vários
   // crashes/reaberturas ao longo da busca).
-  const page = await nav.context.newPage();
+  // Contexto PRÓPRIO pro site, com service worker bloqueado: o Mundo Jira
+  // registra um service worker e recarrega a página sozinho quando ele
+  // assume o controle (controllerchange). Num navegador novo (toda execução
+  // no GitHub Actions começa do zero) isso acontecia bem no meio do login -
+  // a página recarregava com a tela de login vazia e o cartão do Painel do
+  // Colaborador nunca aparecia. No PC funcionava porque o perfil do Chrome
+  // já tinha o service worker instalado de antes.
+  const ctxSite = await nav.browser.newContext({
+    serviceWorkers: 'block',
+    viewport: { width: 1600, height: 900 },
+    locale: 'pt-BR',
+    timezoneId: 'America/Fortaleza',
+  });
+  const page = await ctxSite.newPage();
   page.setDefaultTimeout(150000);
 
   let ultimoAlerta = '';
@@ -369,13 +382,19 @@ async function importarNoPainelColaborador(nav, filePath) {
       await page.locator('#lg-usr').fill(SITE_USER);
       await page.locator('#lg-pwd').fill(SITE_PASS);
       await loginBtn.click();
-      // Espera o botão sumir de verdade (login processado) - alguns logins
-      // demoram mais que alguns segundos pra terminar (ex: carregando dados
-      // de Gestão de Pessoas antes de liberar a tela), por isso 30s agora
-      // em vez de 5s - era curto demais e causava falso negativo de login.
-      await loginBtn.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
-      if (await loginBtn.isVisible().catch(() => false)) {
-        throw new Error('Login no site OPE Touros não passou - confira os Secrets SITE_USER / SITE_PASS.');
+      // Espera o login terminar DE VERDADE (sessão gravada e tela de login
+      // removida). Antes esperava o texto "Entrar no sistema" sumir - só que
+      // o botão troca pra "Verificando..." logo no clique, então isso passava
+      // na hora mesmo sem o login ter terminado.
+      const logou = await page.waitForFunction(
+        () => !!sessionStorage.getItem('ops_user') && !document.getElementById('login-wrap'),
+        null, { timeout: 60000 }
+      ).then(() => true).catch(() => false);
+      if (!logou) {
+        const erroVisivel = await page.locator('#lg-err').isVisible().catch(() => false);
+        throw new Error(erroVisivel
+          ? 'Login no site OPE Touros recusado - confira os Secrets SITE_USER / SITE_PASS.'
+          : 'Login no site OPE Touros não terminou em 60s.');
       }
     }
 
@@ -441,10 +460,10 @@ async function importarNoPainelColaborador(nav, filePath) {
     }
 
     log('Importação de produtividade (v3) confirmada.');
-    await page.close();
+    await ctxSite.close().catch(() => {});
   } catch (err) {
     await dumpDebug(page, 'produtividade-v3-site-fail');
-    await page.close();
+    await ctxSite.close().catch(() => {});
     throw err;
   }
 }
