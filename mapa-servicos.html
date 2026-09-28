@@ -421,15 +421,21 @@ function classifyStatusChamado(r){
   const cat = classifyStatusAtendimento(r.statusAtendimento);
   if (cat === 'iniciado') return 'iniciado';
   if (cat === 'deslocamento') return 'deslocamento';
+
+  // Regra do coordenador: SLA vencido e o técnico NÃO está em deslocamento
+  // nem com atendimento iniciado = Atendimento atrasado (vermelho) - vale
+  // também pra pausado e pra chamado sem responsável (antes esses dois
+  // escondiam o atraso e a unidade aparecia sem nenhum atrasado)
+  if (getStatus(r) === 'fora') return 'atendimento_atrasado';
+
   if (cat === 'pausado') return 'pausado';
 
-  // "Pendente" é sobre responsabilidade, não sobre prazo — se não está na
-  // caixa de ninguém, é Pendente, mesmo que já esteja atrasado
+  // "Pendente" é sobre responsabilidade — se não está na caixa de ninguém
+  // (e ainda está dentro do prazo), é Pendente
   if (!r.responsavel) return 'pendente';
 
   // a partir daqui, o chamado já tem responsável — a urgência de prazo
   // decide se precisa de atenção hoje
-  if (getStatus(r) === 'fora') return 'atendimento_atrasado';
   if (venceAteAmanha9h(r)) return 'atendimento_hoje';
 
   // tem responsável, sem urgência de prazo — olha a data de agendamento
