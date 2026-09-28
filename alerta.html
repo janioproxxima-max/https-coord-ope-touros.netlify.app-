@@ -209,9 +209,22 @@ function __registrarCriacaoPerna(mapa, r){
   if (!isFinite(t)) return;
   if (!mapa[base] || t < new Date(mapa[base]).getTime()) mapa[base] = r.data_criacao;
 }
+// Cidade do chamado = área da PRIMEIRA perna (/1). No Aniel as pernas
+// seguintes às vezes vêm com a área de outra equipe (ex: /1 RIO DO FOGO,
+// /2 Pureza) e o chamado sumia da Unidade Touros; a Zaaz conta pela cidade
+// original do chamado, então aqui a perna /2+ herda a área da /1.
+const __areaPrimeiraPerna = {};
+function __registrarAreaPerna(r){
+  if (!r || !r.protocolo || !r.area) return;
+  const m = String(r.protocolo).trim().match(/^(.+?)(?:\/(\d+))?$/);
+  if (!m) return;
+  const base = m[1].trim(), n = m[2] ? parseInt(m[2], 10) : 1;
+  const atual = __areaPrimeiraPerna[base];
+  if (!atual || n < atual.n) __areaPrimeiraPerna[base] = { n, area: r.area };
+}
 async function __registrarPernasProtocolo(mapa, registros){
   registros = registros || [];
-  registros.forEach(r => __registrarCriacaoPerna(mapa, r));
+  registros.forEach(r => { __registrarCriacaoPerna(mapa, r); __registrarAreaPerna(r); });
   const jaTem = new Set(registros.map(r => String(r.protocolo || '').trim()));
   const faltando = new Set();
   registros.forEach(r => {
@@ -227,12 +240,23 @@ async function __registrarPernasProtocolo(mapa, registros){
   for (let i = 0; i < lista.length; i += 150){
     const lote = lista.slice(i, i + 150).map(v => encodeURIComponent(v)).join(',');
     try{
-      const linhas = (await OPS_SUPABASE.select('produtividade_registros', `protocolo=in.(${lote})`, 'protocolo,data_criacao')) || [];
-      linhas.forEach(r => __registrarCriacaoPerna(mapa, r));
+      const linhas = (await OPS_SUPABASE.select('produtividade_registros', `protocolo=in.(${lote})`, 'protocolo,data_criacao,area')) || [];
+      linhas.forEach(r => { __registrarCriacaoPerna(mapa, r); __registrarAreaPerna(r); });
     }catch(err){
       console.error('Falha ao buscar pernas anteriores (/1, /2...) dos protocolos', err);
     }
   }
+  // perna /2+ herda a área da /1 (a área original do Aniel fica em area_aniel)
+  registros.forEach(r => {
+    const m = String(r.protocolo || '').trim().match(/^(.+)\/(\d+)$/);
+    if (!m) return;
+    const n = parseInt(m[2], 10);
+    const primeira = __areaPrimeiraPerna[m[1].trim()];
+    if (primeira && primeira.n < n && primeira.area && primeira.area !== r.area){
+      r.area_aniel = r.area;
+      r.area = primeira.area;
+    }
+  });
 }
 
 // protocolos concluídos em campo mas reabertos na Zaaz pra correção
