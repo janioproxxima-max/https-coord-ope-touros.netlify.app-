@@ -618,6 +618,19 @@ const OPS = (() => {
   // -------- catálogo de tipos de serviço (fonte: tabela de referência do usuário) --------
   // full = nome completo como aparece na coluna "Tipo de Serviço" da planilha de demanda
   // tipo = nome curto pra exibir  |  tempo = prazo de SLA em horas (0 = sem SLA definido)
+  // -------- fechamento de SLA ajustado manualmente --------
+  // Protocolos cujo fechamento considerado pro SLA foi definido pelo
+  // coordenador (ex: fechado em campo mas encerrado depois no sistema).
+  // Chave = protocolo base (sem /1, /2...). Valor = data/hora local no
+  // "truque de fuso" do app (hora local disfarçada de UTC).
+  const SLA_FECHAMENTO_AJUSTADO = {
+    '8911523': '2026-09-18T16:48:00.000Z',
+  };
+  function fechamentoSla(r){
+    const base = r && r.protocolo ? String(r.protocolo).split('/')[0].trim() : null;
+    return (base && SLA_FECHAMENTO_AJUSTADO[base]) || (r && r.data_encerramento);
+  }
+
   const SERVICE_CATALOG = [
     { full: 'OPERAÇÕES - CABO BAIXO', norm: 'operacoes - cabo baixo', tipo: 'CABO BAIXO', tempo: 24.0, pontos: 1.33 },
     { full: 'OPERAÇÕES - SEM ACESSO', norm: 'operacoes - sem acesso', tipo: 'SEM ACESSO', tempo: 24.0, pontos: 1.33 },
@@ -1567,6 +1580,7 @@ const OPS = (() => {
     load, save, clearAll, uid, loadFallbackFromIdb,
     loadData, saveData, loadDataFallbackFromIdb, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
     SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
+    SLA_FECHAMENTO_AJUSTADO, fechamentoSla,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, CAICO_UNIT_CITIES, PARELHAS_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,
     isTourosUnitCity, unitForCity, isUnitCity, projectUnit, checkProjectError,

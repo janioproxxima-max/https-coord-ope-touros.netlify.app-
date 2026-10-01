@@ -169,7 +169,7 @@ function horasAbertura(r){
   // ver alCriacaoOriginalMap); sem /1 conhecida, data_criacao da própria linha
   const base = r.protocolo ? String(r.protocolo).split('/')[0].trim() : null;
   const abertura = (base && alCriacaoOriginalMap[base]) || r.data_criacao;
-  return (new Date(r.data_encerramento) - new Date(abertura)) / 3600000;
+  return (new Date(OPS.fechamentoSla(r)) - new Date(abertura)) / 3600000;
 }
 function dentroDoPrazo(r){
   const limite = HORAS_SLA_POR_TIPO[(r.tipo||'').toUpperCase()];

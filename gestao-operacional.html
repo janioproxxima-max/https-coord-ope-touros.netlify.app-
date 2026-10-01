@@ -1630,7 +1630,7 @@ function aberturaSla(r){
   return (base && goCriacaoOriginalMap[base]) || r.data_criacao;
 }
 function horasAbertura(r){
-  return (new Date(r.data_encerramento) - new Date(aberturaSla(r))) / 3600000;
+  return (new Date(OPS.fechamentoSla(r)) - new Date(aberturaSla(r))) / 3600000;
 }
 function dentroDoPrazo(r){
   const t = (r.tipo || '').toUpperCase();
