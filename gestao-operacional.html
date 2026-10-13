@@ -566,6 +566,22 @@
         <label for="go-insp-seletor">Inspetor</label>
         <select id="go-insp-seletor"></select>
       </div>
+      <div class="field">
+        <label>Visão</label>
+        <div class="qf-tiles" id="go-insp-periodo-tiles" style="margin:0">
+          <button type="button" class="qf-tile active" data-periodo="semana">Semana</button>
+          <button type="button" class="qf-tile" data-periodo="mes">Mês</button>
+          <button type="button" class="qf-tile" data-periodo="topo">Período do filtro</button>
+        </div>
+      </div>
+      <div class="field" id="go-insp-nav-wrap">
+        <label>&nbsp;</label>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn ghost" id="go-insp-nav-ant" title="Anterior" style="padding:6px 10px">◀</button>
+          <button type="button" class="btn ghost" id="go-insp-nav-hoje" title="Voltar pro atual" style="padding:6px 10px">Atual</button>
+          <button type="button" class="btn ghost" id="go-insp-nav-prox" title="Próximo" style="padding:6px 10px">▶</button>
+        </div>
+      </div>
       <div style="flex:1"></div>
       <span class="page-sub" id="go-insp-semana-label" style="margin:0"></span>
     </div>
@@ -573,11 +589,12 @@
     <div class="sla-grid" id="go-insp-tarefas-cards" style="margin-bottom:18px"></div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>📜 Histórico de Auditorias (semana selecionada)</h3><span class="cnt-badge" id="go-insp-hist-badge">—</span></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">O que foi feito, quando e o que foi registrado — Auditorias Internas, Pós Atendimento, Durante o Atendimento, Ferramental e SESMT do inspetor selecionado acima.</p>
+      <div class="card-head"><h3>📜 Histórico de Auditorias (<span id="go-insp-hist-periodo">semana selecionada</span>)</h3><span class="cnt-badge" id="go-insp-hist-badge">—</span>
+        <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-insp-hist-tbody" data-arquivo="inspetor-historico-auditorias" data-sheet="Auditorias" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">O que foi feito, quando e o que foi registrado — Auditorias Internas, Pós Atendimento, Durante o Atendimento, Ferramental e SESMT do(s) inspetor(es) selecionado(s) acima.</p>
       <div class="table-wrap" style="max-height:360px">
         <table class="services">
-          <thead><tr><th>Código</th><th>Tipo</th><th>Técnico auditado</th><th>Protocolo</th><th>Quando</th><th>Nota</th><th>Checklist</th><th>Detalhes</th></tr></thead>
+          <thead><tr><th>Código</th><th>Tipo</th><th>Inspetor</th><th>Técnico auditado</th><th>Protocolo</th><th>Quando</th><th>Nota</th><th>Checklist</th><th>Detalhes</th></tr></thead>
           <tbody id="go-insp-hist-tbody"></tbody>
         </table>
       </div>
@@ -4107,7 +4124,57 @@ async function renderAbaSlaFila(){
 // Pessoas). Mesmo filtro de período/supervisor/cidade do topo da página.
 let goInspSemanaSegunda = null, goInspSemanaInicioStr = '', goInspSemanaFimStr = '';
 let goInspAuditorias = [];
-let goInspSelecionado = null;
+let goInspSelecionado = null;   // null + goInspTodos = visão geral de todos os inspetores
+let goInspTodos = false;
+// visão do período das tarefas/histórico: 'semana' (padrão, com ◀ ▶),
+// 'mes' (mês corrente com ◀ ▶) ou 'topo' (mesmo De/Até do filtro da página)
+let goInspPeriodo = 'semana';
+let goInspMes = null; // Date no dia 1 do mês selecionado na visão "Mês"
+let goInspRangeIni = null, goInspRangeFim = null; // Date (00:00 do início / 00:00 do fim) da visão atual
+const INSP_TODOS_VALOR = '__todos__';
+function ehDoInspSelecionado(insp){
+  if (goInspTodos) return !!insp && insp !== 'Sem inspetor';
+  return insp === goInspSelecionado;
+}
+function parseDataLocal(iso){ const [y,m,d] = iso.split('-').map(Number); return new Date(y, m-1, d); }
+function isoLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+// calcula o intervalo da visão escolhida + texto do rótulo
+function calcularRangeInspetor(){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  let ini, fim, rotulo;
+  if (goInspPeriodo === 'mes'){
+    if (!goInspMes) goInspMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    ini = new Date(goInspMes);
+    fim = new Date(goInspMes.getFullYear(), goInspMes.getMonth() + 1, 0);
+    const nomeMes = ini.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    rotulo = `Mês: ${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}`;
+  } else if (goInspPeriodo === 'topo'){
+    const pr = periodoAtual();
+    ini = pr.inicio ? parseDataLocal(pr.inicio) : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    fim = pr.fim ? parseDataLocal(pr.fim) : new Date(hoje);
+    rotulo = `Período: ${OPS.formatDateBR ? OPS.formatDateBR(isoLocal(ini)) : fmtDataBR(ini)} a ${OPS.formatDateBR ? OPS.formatDateBR(isoLocal(fim)) : fmtDataBR(fim)}`;
+  } else {
+    if (!goInspSemanaSegunda) goInspSemanaSegunda = segundaFeiraDaSemana(new Date());
+    ini = new Date(goInspSemanaSegunda);
+    fim = domingoDaSemana(goInspSemanaSegunda);
+    rotulo = `Tarefas da semana: ${fmtDataBR(ini)} a ${fmtDataBR(fim)}`;
+  }
+  goInspRangeIni = ini; goInspRangeFim = fim;
+  return { ini, fim, rotulo };
+}
+// nº de semanas usado pra escalar as metas semanais: conta só os dias já
+// decorridos (um mês em andamento não fica "vermelho" por causa dos dias
+// que ainda não chegaram). Semana = sempre 1.
+function semanasDaVisaoInspetor(){
+  if (goInspPeriodo === 'semana') return 1;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const fimEfetivo = goInspRangeFim > hoje ? hoje : goInspRangeFim;
+  const dias = Math.max(1, Math.round((fimEfetivo - goInspRangeIni) / 86400000) + 1);
+  return dias / 7;
+}
+function rotuloPeriodoCurto(){
+  return goInspPeriodo === 'mes' ? 'mês selecionado' : (goInspPeriodo === 'topo' ? 'período do filtro' : 'semana selecionada');
+}
 
 async function renderAbaInspetor(){
   ['go-insp-rec-tbody','go-insp-log-tbody','go-insp-improd-tbody','go-insp-veic-tbody','go-insp-manut-tbody'].forEach(id => {
@@ -4124,20 +4191,60 @@ async function renderAbaInspetor(){
   }catch(err){
     console.error('Falha ao buscar dados de frotas', err);
   }
-  if (!goInspSemanaSegunda) goInspSemanaSegunda = segundaFeiraDaSemana(new Date());
-  const domingo = domingoDaSemana(goInspSemanaSegunda);
-  goInspSemanaInicioStr = goInspSemanaSegunda.toISOString().slice(0,10);
-  goInspSemanaFimStr = domingo.toISOString().slice(0,10);
-  document.getElementById('go-insp-semana-label').textContent = `Tarefas da semana: ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingo)}`;
+  await carregarAuditoriasInspetor();
+  if (goAbaAtiva !== 'inspetor') return; // trocou de aba enquanto buscava
+  popularSeletorInspetor();
+  ligarControlesPeriodoInspetor();
+  desenharAbaInspetor();
+  desenharTarefasInspetor();
+}
+// busca as auditorias do intervalo da visão atual (semana/mês/período)
+async function carregarAuditoriasInspetor(){
+  const { ini, fim, rotulo } = calcularRangeInspetor();
+  goInspSemanaInicioStr = ini.toISOString().slice(0,10);
+  goInspSemanaFimStr = fim.toISOString().slice(0,10);
+  document.getElementById('go-insp-semana-label').textContent = rotulo;
+  document.getElementById('go-insp-hist-periodo').textContent = rotuloPeriodoCurto();
+  document.getElementById('go-insp-nav-wrap').style.display = goInspPeriodo === 'topo' ? 'none' : '';
   try{
     goInspAuditorias = await OPS_SUPABASE.select('auditorias_registros', `data=gte.${goInspSemanaInicioStr}T00:00:00.000Z&data=lte.${goInspSemanaFimStr}T23:59:59.999Z`) || [];
   }catch(err){
-    console.error('Falha ao buscar auditorias da semana do inspetor', err);
+    goInspAuditorias = [];
+    console.error('Falha ao buscar auditorias do inspetor', err);
   }
-  if (goAbaAtiva !== 'inspetor') return; // trocou de aba enquanto buscava
-  popularSeletorInspetor();
-  desenharAbaInspetor();
+}
+async function trocarPeriodoInspetor(){
+  document.getElementById('go-insp-tarefas-cards').innerHTML = `<div class="sla-card neutral"><div class="sla-label">Carregando...</div></div>`;
+  await carregarAuditoriasInspetor();
+  if (goAbaAtiva !== 'inspetor') return;
   desenharTarefasInspetor();
+}
+function ligarControlesPeriodoInspetor(){
+  const tiles = document.getElementById('go-insp-periodo-tiles');
+  if (tiles.dataset.ligado) return;
+  tiles.dataset.ligado = '1';
+  tiles.querySelectorAll('[data-periodo]').forEach(b => b.addEventListener('click', () => {
+    tiles.querySelectorAll('[data-periodo]').forEach(x => x.classList.toggle('active', x === b));
+    goInspPeriodo = b.dataset.periodo;
+    trocarPeriodoInspetor();
+  }));
+  const mover = passo => {
+    if (goInspPeriodo === 'mes'){
+      const base = goInspMes || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      goInspMes = new Date(base.getFullYear(), base.getMonth() + passo, 1);
+    } else if (goInspPeriodo === 'semana'){
+      const base = new Date(goInspSemanaSegunda || segundaFeiraDaSemana(new Date()));
+      base.setDate(base.getDate() + 7 * passo);
+      goInspSemanaSegunda = base;
+    }
+    trocarPeriodoInspetor();
+  };
+  document.getElementById('go-insp-nav-ant').addEventListener('click', () => mover(-1));
+  document.getElementById('go-insp-nav-prox').addEventListener('click', () => mover(1));
+  document.getElementById('go-insp-nav-hoje').addEventListener('click', () => {
+    goInspMes = null; goInspSemanaSegunda = null;
+    trocarPeriodoInspetor();
+  });
 }
 function inspetorDoTecnico(nome){
   return (goTecnicoInspetor && goTecnicoInspetor[OPS.normalize(nome)]) || 'Sem inspetor';
@@ -4145,14 +4252,22 @@ function inspetorDoTecnico(nome){
 function popularSeletorInspetor(){
   const sel = document.getElementById('go-insp-seletor');
   const todos = [...new Set(Object.values(goTecnicoInspetor || {}))].filter(Boolean).sort();
-  if (!goInspSelecionado) goInspSelecionado = inspetorLogado() || todos[0] || null;
+  if (!goInspSelecionado && !goInspTodos) goInspSelecionado = inspetorLogado() || todos[0] || null;
   sel.innerHTML = todos.length
-    ? todos.map(i => `<option value="${i}" ${i === goInspSelecionado ? 'selected' : ''}>${tituloCase(i)}</option>`).join('')
+    ? `<option value="${INSP_TODOS_VALOR}" ${goInspTodos ? 'selected' : ''}>👥 Todos os inspetores (visão geral)</option>`
+      + todos.map(i => `<option value="${i}" ${!goInspTodos && i === goInspSelecionado ? 'selected' : ''}>${tituloCase(i)}</option>`).join('')
     : `<option value="">Nenhum inspetor cadastrado</option>`;
   if (!sel.dataset.ligado){
     sel.dataset.ligado = '1';
-    sel.addEventListener('change', () => { goInspSelecionado = sel.value || null; desenharTarefasInspetor(); desenharAbaInspetor(); });
+    sel.addEventListener('change', () => { selecionarInspetor(sel.value); });
   }
+}
+function selecionarInspetor(valor){
+  goInspTodos = valor === INSP_TODOS_VALOR;
+  goInspSelecionado = goInspTodos ? null : (valor || null);
+  const sel = document.getElementById('go-insp-seletor');
+  if (sel && sel.value !== (valor || '')) sel.value = valor || '';
+  desenharTarefasInspetor(); desenharAbaInspetor();
 }
 function inspetorLogado(){
   const nome = nomeDoLogin();
@@ -4193,7 +4308,7 @@ const AUDITORIA_TITULOS = {
 
 function desenharTarefasInspetor(){
   const container = document.getElementById('go-insp-tarefas-cards');
-  if (!goInspSelecionado){
+  if (!goInspSelecionado && !goInspTodos){
     container.innerHTML = `<div class="card" style="grid-column:1/-1"><div style="padding:18px;color:var(--ink-faint)">Nenhum inspetor cadastrado em Gestão de Pessoas ainda (campo "Inspetor" no cadastro do técnico).</div></div>`;
     return;
   }
@@ -4201,29 +4316,39 @@ function desenharTarefasInspetor(){
   // padrão é o mês atual) - não a janela semanal usada pelas metas de
   // auditoria acima, pra bater com a tabela "Recorrência por Inspetor" e o
   // resto do histórico do colaborador.
-  const produtivosMeu = goRegistrosFiltrados().filter(r => isProdutivo(r) && ehInstaladorReparador(r.tecnico) && inspetorDoTecnico(r.tecnico) === goInspSelecionado).length;
-  const paresMeuQtd = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && inspetorDoTecnico(p.tecnico) === goInspSelecionado).length;
+  const produtivosMeu = goRegistrosFiltrados().filter(r => isProdutivo(r) && ehInstaladorReparador(r.tecnico) && ehDoInspSelecionado(inspetorDoTecnico(r.tecnico))).length;
+  const paresMeuQtd = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && ehDoInspSelecionado(inspetorDoTecnico(p.tecnico))).length;
   const pctRecorrencia = produtivosMeu ? (paresMeuQtd / produtivosMeu) * 100 : 0;
 
-  const veiculosMeu = (goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === goInspSelecionado);
+  const veiculosMeu = (goVeiculos||[]).filter(v => ehDoInspSelecionado(inspetorDoTecnico(v.responsavel)));
   const placasMeu = new Set(veiculosMeu.map(v => v.placa));
   // meta de lavagem é mensal: cada veículo da equipe precisa ser lavado ao
   // menos 1x no mês corrente (não é uma cota semanal por equipe)
-  const mesAtualLavagem = mesAtualKey();
+  // visão Semana = mês corrente (como sempre foi); visão Mês = mês escolhido;
+  // visão Período do filtro = lavagens dentro do De/Até
+  const mesAtualLavagem = goInspPeriodo === 'mes' ? isoLocal(goInspRangeIni).slice(0,7) : mesAtualKey();
+  const iniLav = goInspRangeIni ? isoLocal(goInspRangeIni) : '', fimLav = goInspRangeFim ? isoLocal(goInspRangeFim) : '';
+  const lavagemNaVisao = l => goInspPeriodo === 'topo'
+    ? (diaKey(l.data) >= iniLav && diaKey(l.data) <= fimLav)
+    : diaKey(l.data).slice(0,7) === mesAtualLavagem;
   const placasLavadasMes = new Set((goLavagens||[])
-    .filter(l => placasMeu.has(l.placa) && diaKey(l.data).slice(0,7) === mesAtualLavagem)
+    .filter(l => placasMeu.has(l.placa) && lavagemNaVisao(l))
     .map(l => l.placa));
   const lavagensCobertura = { cobertos: placasLavadasMes.size, total: placasMeu.size };
   const manutMeu = (goManutencoes||[]).filter(m => m.status === 'aberta' && placasMeu.has(m.placa)).length;
 
-  const contarAuditorias = tipo => goInspAuditorias.filter(a => a.tipo === tipo && a.inspetor === goInspSelecionado).length;
+  const contarAuditorias = tipo => goInspAuditorias.filter(a => a.tipo === tipo && ehDoInspSelecionado(a.inspetor)).length;
   const valores = {
     interna: contarAuditorias('interna'), pos_atendimento: contarAuditorias('pos_atendimento'),
     durante_atendimento: contarAuditorias('durante_atendimento'), ferramental: contarAuditorias('ferramental'),
     sesmt: contarAuditorias('sesmt'), recorrencia: pctRecorrencia, lavagens: lavagensCobertura, manutencao: manutMeu,
   };
 
-  const equipes = numEquipesInspetor(goInspSelecionado);
+  const equipes = goInspTodos
+    ? inspetoresCadastrados().reduce((soma, i) => soma + numEquipesInspetor(i), 0)
+    : numEquipesInspetor(goInspSelecionado);
+  const semanas = semanasDaVisaoInspetor();
+  const semanasTxt = semanas === 1 ? '' : ` × ${String(Math.round(semanas * 10) / 10).replace('.', ',')} sem.`;
   container.innerHTML = INSP_TAREFAS.map(t => {
     const valor = valores[t.chave];
     const ehPct = t.chave === 'recorrencia';
@@ -4246,18 +4371,23 @@ function desenharTarefasInspetor(){
     } else if (t.escalaPorEquipe){
       // meta por equipe × nº de equipes do inspetor, com mínimo aceitável
       // de 70% do total escalado (mesmo padrão ok/warn/crit dos cards de SLA)
-      const metaEscalada = t.meta * equipes;
+      // fora da visão semanal, a meta semanal é multiplicada pelas semanas
+      // já decorridas do período (ex: mês em andamento até hoje)
+      const metaEscalada = Math.ceil(t.meta * equipes * semanas);
       const minimo = Math.ceil(metaEscalada * 0.7);
       cor = valor >= metaEscalada ? 'ok' : (valor >= minimo ? 'warn' : 'crit');
       metaTexto = equipes
-        ? `Meta: ${metaEscalada} (${t.meta}×${equipes} equipes) · mín. 70% = ${minimo}`
+        ? `Meta: ${metaEscalada} (${t.meta}×${equipes} equipes${semanasTxt}) · mín. 70% = ${minimo}`
         : `Meta: ${t.meta}/equipe · sem equipe cadastrada`;
     } else {
       cor = valor >= t.meta ? 'ok' : 'crit';
       metaTexto = `Meta: ≥${t.meta}`;
     }
-    const ehClicavel = t.tipo === 'log' || t.clicavel;
-    return `<div class="sla-card ${cor}" ${ehClicavel ? `style="cursor:pointer" data-tarefa="${t.chave}" title="${t.tipo === 'log' ? 'Clique pra registrar' : 'Clique pra ver por colaborador'}"` : ''}>
+    // visão geral (todos): todo card abre o detalhamento por inspetor.
+    // inspetor específico: auditorias abrem o registro, demais o detalhe.
+    const tituloClique = goInspTodos ? 'Clique pra ver por inspetor'
+      : (t.tipo === 'log' ? 'Clique pra registrar' : 'Clique pra ver o detalhe');
+    return `<div class="sla-card ${cor}" style="cursor:pointer" data-tarefa="${t.chave}" title="${tituloClique}">
       <div class="sla-label">${t.icon} ${t.label}</div>
       <div class="sla-value">${valorTexto}</div>
       <div class="sla-meta">${metaTexto} · ${t.sufixo}</div>
@@ -4265,8 +4395,12 @@ function desenharTarefasInspetor(){
   }).join('');
   container.querySelectorAll('[data-tarefa]').forEach(card => {
     card.addEventListener('click', () => {
-      if (card.dataset.tarefa === 'recorrencia') detalheRecorrenciaTarefaInspetor();
-      else abrirModalAuditoria(card.dataset.tarefa);
+      const chave = card.dataset.tarefa;
+      if (goInspTodos) detalheTarefaPorInspetor(chave);
+      else if (chave === 'recorrencia') detalheRecorrenciaTarefaInspetor();
+      else if (chave === 'lavagens') detalheVeiculosPorInspetor(goInspSelecionado);
+      else if (chave === 'manutencao') detalheManutencaoPorInspetor(goInspSelecionado);
+      else abrirModalAuditoria(chave);
     });
   });
 
@@ -4278,7 +4412,7 @@ function desenharTarefasInspetor(){
 // dos cards acima - o que foi feito, quando e o que foi marcado.
 function desenharHistoricoAuditorias(){
   const historico = goInspAuditorias
-    .filter(a => a.inspetor === goInspSelecionado)
+    .filter(a => ehDoInspSelecionado(a.inspetor))
     .slice()
     .sort((a,b) => new Date(b.data) - new Date(a.data));
   document.getElementById('go-insp-hist-badge').textContent = `${fmtNum(historico.length)} registro(s)`;
@@ -4310,14 +4444,14 @@ function desenharHistoricoAuditorias(){
     }
     return `<tr>
       <td style="font-family:monospace;white-space:nowrap">${a.codigo || '—'}</td>
-      <td>${label}</td><td>${tituloCase(a.tecnico || '—')}</td><td>${a.protocolo || '—'}</td>
+      <td>${label}</td><td>${tituloCase(a.inspetor || '—')}</td><td>${tituloCase(a.tecnico || '—')}</td><td>${a.protocolo || '—'}</td>
       <td>${OPS.formatDateTimeBR(a.data)}</td>
       <td>${a.nota != null ? a.nota : '—'}</td><td style="max-width:260px">${checklistTexto}</td>
       <td style="max-width:180px">${detalhesHtml
         ? `<details><summary style="cursor:pointer;color:var(--brand);font-size:12px">📝 Ver</summary><div style="margin-top:6px">${detalhesHtml}</div></details>`
         : '—'}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhuma auditoria registrada nessa semana pra esse inspetor.</td></tr>`;
+  }).join('') || `<tr><td colspan="9" style="color:var(--ink-faint)">Nenhuma auditoria registrada nesse período${goInspTodos ? '' : ' pra esse inspetor'}.</td></tr>`;
 }
 
 // código curto pra identificar o registro (ex: em conversa, print, cobrança
@@ -4366,7 +4500,7 @@ let goInspFotos = {}; // idx do item -> base64 (fotos anexadas no modal aberto)
 function abrirModalAuditoria(tipo){
   document.getElementById('go-insp-modal').dataset.tipo = tipo;
   document.getElementById('go-insp-modal-titulo').textContent = AUDITORIA_TITULOS[tipo];
-  document.getElementById('go-insp-modal-sub').textContent = `Inspetor: ${tituloCase(goInspSelecionado)} · semana de ${fmtDataBR(goInspSemanaSegunda)} a ${fmtDataBR(domingoDaSemana(goInspSemanaSegunda))}`;
+  document.getElementById('go-insp-modal-sub').textContent = `Inspetor: ${tituloCase(goInspSelecionado)} · registro com data de hoje (${fmtDataBR(new Date())})`;
   // lista de técnicos: prioriza a equipe do inspetor selecionado; se não
   // achar ninguém vinculado (cadastro incompleto, cache ainda carregando
   // etc.), cai pra lista geral de Instalador/Reparador ativos pra não
@@ -4545,8 +4679,8 @@ function detalheVeiculosPorInspetor(insp){
 // abre, a partir do card de Recorrência das tarefas do inspetor selecionado,
 // o detalhamento por colaborador (técnico) daquele inspetor - mesmo período
 // usado no cálculo do card (filtro global da página, padrão mês atual).
-function detalheRecorrenciaTarefaInspetor(){
-  const insp = goInspSelecionado;
+function detalheRecorrenciaTarefaInspetor(inspForcado){
+  const insp = inspForcado || goInspSelecionado;
   const data = goRegistrosFiltrados().filter(r => ehInstaladorReparador(r.tecnico) && inspetorDoTecnico(r.tecnico) === insp);
   const pares = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && inspetorDoTecnico(p.tecnico) === insp);
   const produtivosPorTec = {}, paresPorTec = {}, cidadesPorTec = {};
@@ -4570,6 +4704,74 @@ function detalheRecorrenciaTarefaInspetor(){
   }).join('') || `<tr><td colspan="4" style="color:var(--ink-faint)">Sem dados no período.</td></tr>`;
   abrirInspetorDetalhe(`🔁 Recorrência por colaborador — ${tituloCase(insp)}`, ['Colaborador', 'Cidade', '% Recorrência', 'Qtd'], html);
 }
+function inspetoresCadastrados(){
+  return [...new Set(Object.values(goTecnicoInspetor || {}))].filter(Boolean).sort();
+}
+// visão geral (Todos os inspetores): clicar num card abre esse quadro com
+// uma linha por inspetor. Clicar numa linha abre o detalhe daquele inspetor
+// (auditorias: seleciona o inspetor na tela; demais: o detalhe do card).
+let goInspDetalheTarefa = null;
+function detalheTarefaPorInspetor(chave){
+  const t = INSP_TAREFAS.find(x => x.chave === chave);
+  if (!t) return;
+  goInspDetalheTarefa = chave;
+  const semanas = semanasDaVisaoInspetor();
+  const inspetores = inspetoresCadastrados();
+  let headers, linhas;
+  if (t.tipo === 'log'){
+    headers = ['Inspetor', 'Equipes', 'Realizado', 'Meta', '%'];
+    linhas = inspetores.map(insp => {
+      const qtd = goInspAuditorias.filter(a => a.tipo === chave && a.inspetor === insp).length;
+      const equipes = numEquipesInspetor(insp);
+      const meta = t.escalaPorEquipe ? Math.ceil(t.meta * equipes * semanas) : null;
+      const pct = meta ? (qtd / meta) * 100 : null;
+      const cor = meta == null ? 'neutral' : (qtd >= meta ? 'ok' : (qtd >= Math.ceil(meta * 0.7) ? 'warn' : 'crit'));
+      return { insp, ordem: pct != null ? pct : qtd, html: `<td>${tituloCase(insp)}</td><td>${fmtNum(equipes)}</td><td>${fmtNum(qtd)}</td><td>${meta != null ? fmtNum(meta) : '—'}</td><td>${pct != null ? `<span class="badge ${cor}"><span class="dot"></span>${fmtPct1(pct)}</span>` : '—'}</td>` };
+    });
+  } else if (chave === 'recorrencia'){
+    headers = ['Inspetor', 'Produtivos', 'Recorrências', '%'];
+    linhas = inspetores.map(insp => {
+      const prod = goRegistrosFiltrados().filter(r => isProdutivo(r) && ehInstaladorReparador(r.tecnico) && inspetorDoTecnico(r.tecnico) === insp).length;
+      const rec = goParesFiltrados().filter(p => ehInstaladorReparador(p.tecnico) && inspetorDoTecnico(p.tecnico) === insp).length;
+      const pct = prod ? (rec / prod) * 100 : 0;
+      return { insp, ordem: pct, html: `<td>${tituloCase(insp)}</td><td>${fmtNum(prod)}</td><td>${fmtNum(rec)}</td><td><span class="badge ${pct < t.meta ? 'ok' : 'crit'}"><span class="dot"></span>${fmtPct1(pct)}</span></td>` };
+    });
+  } else if (chave === 'lavagens'){
+    headers = ['Inspetor', 'Veículos', 'Lavados', '%'];
+    const mesRef = goInspPeriodo === 'mes' ? isoLocal(goInspRangeIni).slice(0,7) : mesAtualKey();
+    const iniLav = isoLocal(goInspRangeIni), fimLav = isoLocal(goInspRangeFim);
+    const naVisao = l => goInspPeriodo === 'topo' ? (diaKey(l.data) >= iniLav && diaKey(l.data) <= fimLav) : diaKey(l.data).slice(0,7) === mesRef;
+    linhas = inspetores.map(insp => {
+      const placas = new Set((goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === insp).map(v => v.placa));
+      const lavadas = new Set((goLavagens||[]).filter(l => placas.has(l.placa) && naVisao(l)).map(l => l.placa));
+      const pct = placas.size ? (lavadas.size / placas.size) * 100 : 0;
+      const cor = !placas.size ? 'neutral' : (lavadas.size >= placas.size ? 'ok' : (lavadas.size >= Math.ceil(placas.size * 0.7) ? 'warn' : 'crit'));
+      return { insp, ordem: pct, html: `<td>${tituloCase(insp)}</td><td>${fmtNum(placas.size)}</td><td>${fmtNum(lavadas.size)}</td><td><span class="badge ${cor}"><span class="dot"></span>${fmtPct1(pct)}</span></td>` };
+    });
+  } else {
+    headers = ['Inspetor', 'Em manutenção agora'];
+    linhas = inspetores.map(insp => {
+      const placas = new Set((goVeiculos||[]).filter(v => inspetorDoTecnico(v.responsavel) === insp).map(v => v.placa));
+      const qtd = (goManutencoes||[]).filter(m => m.status === 'aberta' && placas.has(m.placa)).length;
+      return { insp, ordem: qtd, html: `<td>${tituloCase(insp)}</td><td>${fmtNum(qtd)}</td>` };
+    });
+  }
+  const html = linhas.sort((a, b) => b.ordem - a.ordem)
+    .map(l => `<tr style="cursor:pointer" data-insp-geral="${l.insp.replace(/"/g, '&quot;')}" title="Clique pra abrir esse inspetor">${l.html}</tr>`).join('')
+    || `<tr><td colspan="${headers.length}" style="color:var(--ink-faint)">Nenhum inspetor cadastrado.</td></tr>`;
+  abrirInspetorDetalhe(`${t.icon} ${t.label} por inspetor — ${rotuloPeriodoCurto()}`, headers, html);
+}
+document.getElementById('go-insp-detalhe-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-insp-geral]');
+  if (!tr) return;
+  const insp = tr.dataset.inspGeral;
+  const chave = goInspDetalheTarefa;
+  document.getElementById('go-modal-insp-detalhe').style.display = 'none';
+  if (chave === 'recorrencia') detalheRecorrenciaTarefaInspetor(insp);
+  else if (chave === 'lavagens') detalheVeiculosPorInspetor(insp);
+  else if (chave === 'manutencao') detalheManutencaoPorInspetor(insp);
+  else selecionarInspetor(insp);
+});
 function detalheManutencaoPorInspetor(insp){
   const linhas = (goManutencoes || []).filter(m => m.status === 'aberta').filter(m => {
     const veic = (goVeiculos || []).find(v => v.placa === m.placa);
