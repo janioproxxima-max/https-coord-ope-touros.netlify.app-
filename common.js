@@ -1898,12 +1898,42 @@ function initShell(active, pageTitle){
     }).catch((e) => console.error('Falha ao solicitar sincronização forçada do mapa', e));
   }
 
+  // dispara AGORA a automação na nuvem (GitHub Actions: Mapa de Serviços e
+  // Produtividade) via função da Vercel (api/sincronizar.js), que guarda o
+  // token do GitHub do lado do servidor. Os dados novos chegam alguns minutos
+  // depois (a automação precisa entrar no Aniel, exportar e importar).
+  async function dispararSincronizacaoNuvem(){
+    try{
+      const resp = await fetch('/api/sincronizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipos: ['mapa', 'produtividade'] }),
+      });
+      const dados = await resp.json().catch(() => ({}));
+      const r = dados.resultado || {};
+      let msg;
+      if (resp.ok && Object.values(r).some(v => v === 'disparado')){
+        msg = '🔄 Sincronização com o Aniel iniciada. Mapa leva ~5 min e Produtividade um pouco mais — clique em Atualizar de novo depois pra ver os dados novos.';
+      } else if (resp.ok){
+        msg = '⏳ Já tem uma sincronização com o Aniel em andamento — os dados novos chegam em alguns minutos.';
+      } else {
+        msg = '⚠️ Não consegui iniciar a sincronização com o Aniel agora (a automação continua no horário normal).';
+        console.error('Falha ao disparar sincronização na nuvem', resp.status, dados);
+      }
+      const aviso = OPS.showToast(msg);
+      setTimeout(() => aviso.remove(), 7000);
+    }catch(e){
+      console.error('Falha ao disparar sincronização na nuvem', e);
+    }
+  }
+
   sidebar.querySelector('#sb-refresh').addEventListener('click', async () => {
     const btn = sidebar.querySelector('#sb-refresh');
     const textoOriginal = btn.textContent;
     btn.disabled = true;
     btn.textContent = '↻ Atualizando...';
     solicitarSincronizacaoMapaForcada();
+    dispararSincronizacaoNuvem();
     let ok = true;
     if (typeof window.OPS_ON_REFRESH === 'function'){
       try{
