@@ -1371,7 +1371,71 @@ const OPS = (() => {
     return null;
   }
 
-  const MAPA_SERVICOS_IMPORT_META_KEY = 'ops_touros_mapa_servicos_import_meta_v1';
+  // -------- origem do protocolo (SLA conta da /1) --------
+  // Protocolo = número base + etapa: 8992570/1 é a abertura original,
+  // 8992570/2 a 1ª reabertura etc. O SLA conta da abertura da /1. Até
+  // 04/09/2026 o Aniel mandava a data da /1 na coluna "Abertura Original"
+  // das reaberturas; desde então ela vem VAZIA, e a /1 (já fechada) nem
+  // aparece na exportação de abertas - aí a /2 parecia um chamado novo
+  // (caso real: 8992570/2 contando 32h, sendo a /1 de 05/10/2026).
+  // Busca a data da /1 nesta ordem e fica com a MAIS ANTIGA encontrada:
+  //  - coluna "Abertura Original" (formato antigo) ou a própria /1 no lote;
+  //  - abertura mais antiga entre as etapas do mesmo protocolo no lote;
+  //  - memória: o que já estava salvo na nuvem para o mesmo número base
+  //    (a /1 fica guardada enquanto aparecia nas importações anteriores e a
+  //    /2 corrigida carrega a data adiante nas próximas);
+  //  - histórico do Aniel enviado pelo robô da nuvem (exportação "todas as
+  //    situações" com histórico de reabertura) em window.__OPS_ORIGEM_PROTOCOLO
+  //    = { '8992570': '05/10/2026 08:12', ... }.
+  // Só como último recurso fica a abertura da própria etapa.
+  function protoBase(p){ return String(p || '').trim().replace(/\s*\/\s*\d+\s*$/, ''); }
+  function protoVer(p){ const m = String(p || '').match(/\/\s*(\d+)\s*$/); return m ? parseInt(m[1], 10) : 1; }
+
+  function corrigirOrigemReaberturas(records, anteriores){
+    const menor = new Map(); // base -> { t, fonte }
+    function considerar(base, valor, fonte){
+      if (!base || !valor) return;
+      const t = (valor instanceof Date ? valor : new Date(valor)).getTime();
+      if (isNaN(t)) return;
+      const cur = menor.get(base);
+      if (!cur || t < cur.t) menor.set(base, { t, fonte });
+    }
+    for (const r of records){
+      const base = protoBase(r.protocolo);
+      const ver = protoVer(r.protocolo);
+      if (ver === 1) considerar(base, r.criadoEm, 'propria');
+      else if (r.origemFonte === 'campo-original' || r.origemFonte === 'legado') considerar(base, r.criadoEm, r.origemFonte);
+      considerar(base, r.aberturaEtapa, 'etapa-mais-antiga');
+    }
+    for (const r of (anteriores || [])){
+      if (!r || !r.protocolo) continue;
+      considerar(protoBase(r.protocolo), r.criadoEm, 'memoria');
+      considerar(protoBase(r.protocolo), r.aberturaEtapa, 'memoria');
+    }
+    const doRobo = (typeof window !== 'undefined' && window.__OPS_ORIGEM_PROTOCOLO) || {};
+    for (const base of Object.keys(doRobo)){
+      const v = doRobo[base];
+      considerar(base, typeof v === 'string' && v.includes('/') ? parseBRDateTime(v) : v, 'aniel-historico');
+    }
+
+    let corrigidos = 0;
+    for (const r of records){
+      if (protoVer(r.protocolo) < 2) continue;
+      const o = menor.get(protoBase(r.protocolo));
+      if (!o) continue;
+      const atualT = r.criadoEm ? new Date(r.criadoEm).getTime() : NaN;
+      if (isNaN(atualT) || o.t < atualT){
+        r.criadoEm = new Date(o.t).toISOString();
+        r.origemFonte = o.fonte;
+        corrigidos++;
+      }
+    }
+    console.log('[Importação] Reaberturas com a data da /1 recuperada:', corrigidos,
+      '| datas vindas do robô:', Object.keys(doRobo).length);
+    return corrigidos;
+  }
+
+  const MAPA_SERVICOS_IMPORT_META_KEY ='ops_touros_mapa_servicos_import_meta_v1';
   const MAPA_SERVICOS_IMPORT_META_SYNC = 'MapaServicosImportMetaData';
 
   // Importa um arquivo (Excel/CSV) do Mapa de Serviços — pode ser chamado de
@@ -1430,15 +1494,21 @@ const OPS = (() => {
 
           const suffixMatch = row.protocolo.match(/\/(\d+)\s*$/);
           const suffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 1;
+          // Data/Hora de abertura da PRÓPRIA etapa (/1, /2...) e "Abertura
+          // Original" (desde 04/09/2026 o Aniel manda VAZIA nas reaberturas).
+          // O SLA conta da /1: quando a original não vem, a data da /1 é
+          // recuperada depois, em corrigirOrigemReaberturas().
+          const dtCriacao = parseBRDateTime(row.dataCriacao);
+          const dtOriginal = parseBRDateTime(row.dataAberturaOriginal);
           let baseDt = null;
+          let origemFonte = suffix >= 2 ? 'etapa' : 'propria';
           if (row.criadoEmLegacy){
             const d = new Date(row.criadoEmLegacy);
-            if (!isNaN(d.getTime())) baseDt = d;
+            if (!isNaN(d.getTime())){ baseDt = d; origemFonte = 'legado'; }
           }
           if (!baseDt){
-            const dtCriacao = parseBRDateTime(row.dataCriacao);
-            const dtOriginal = parseBRDateTime(row.dataAberturaOriginal);
             baseDt = (suffix >= 2 && dtOriginal) ? dtOriginal : (dtCriacao || dtOriginal || null);
+            if (suffix >= 2 && dtOriginal) origemFonte = 'campo-original';
           }
 
           let slaHoras = svc.catalogado ? svc.slaHoras : null;
@@ -1471,6 +1541,8 @@ const OPS = (() => {
             observacaoTecnico: row.observacaoTecnico || '',
             lat, lng,
             criadoEm: baseDt ? baseDt.toISOString() : null,
+            aberturaEtapa: dtCriacao ? dtCriacao.toISOString() : null,
+            origemFonte,
             tempoManual, prazoManual,
             descricaoEncerramento: row.descricaoEncerramento || '',
             dataFimAtendimento: (() => {
@@ -1520,6 +1592,7 @@ const OPS = (() => {
         const tSalvando = showToast('💾 Salvando e sincronizando...');
         const atual = (await syncPull('MapaServicosData')) || loadData(STORAGE_KEY) || [];
         console.log('[Importação] Registros atuais na nuvem/local antes de salvar:', atual.length);
+        corrigirOrigemReaberturas(imported, atual);
         const finalRecords = mode ? imported : [...atual, ...imported];
 
         saveData(STORAGE_KEY, finalRecords);

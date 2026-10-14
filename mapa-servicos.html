@@ -1119,7 +1119,8 @@ function openDetail(rec){
         ? `<a href="https://www.google.com/maps?q=${rec.lat},${rec.lng}" target="_blank" rel="noopener" style="color:var(--brand)">${rec.lat}, ${rec.lng}</a>`
         : '—'}</span>
     </div>
-    <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val" style="font-size:12.5px">${abertura}</span></div>
+    <div class="status-row"><span class="status-name">Aberto em</span><span class="status-val" style="font-size:12.5px">${abertura}</span></div>${(rec.aberturaEtapa && rec.criadoEm && Math.abs(new Date(rec.aberturaEtapa) - new Date(rec.criadoEm)) > 60000) ? `
+    <div class="status-row"><span class="status-name">Abertura desta etapa</span><span class="status-val" style="font-size:12.5px">${new Date(rec.aberturaEtapa).toLocaleString('pt-BR')} <span style="opacity:.7">(o tempo conta da /1)</span></span></div>` : ''}
     <div class="status-row"><span class="status-name">Status do atendimento</span><span class="status-val">${rec.statusAtendimento || '—'}</span></div>
     <div class="status-row"><span class="status-name">SLA</span><span class="status-val">${rec.slaHoras ? rec.slaHoras + 'h' : 'não definido'}</span></div>
     <div class="status-row" style="display:block">

@@ -9,6 +9,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
+const XLSX = require('xlsx');
 const { ANIEL_URL, MENU_SELECTOR, esperarMenuOuLogin } = require('./aniel-common');
 
 // .trim(): tira espaço/quebra de linha que às vezes vem junto quando se cola o valor no Secret
@@ -176,7 +177,14 @@ async function diagnosticoFiltro(page, painelFrame) {
   log(`[diagnóstico filtro] ${partes.join(' ')} | iframes Gestao_Equipe: ${frames}`);
 }
 
-async function exportFromAniel(nav) {
+// opts.situacao: valor do select "Situação" ('abertas' = mapa; '' = todas).
+// opts.dias: janela pela Data de Criação. opts.subdir: pasta do download.
+// opts.fecharNoFim: false quando ainda vamos usar a mesma aba depois.
+async function exportFromAniel(nav, opts = {}) {
+  const situacao = opts.situacao ?? 'abertas';
+  const dias = opts.dias ?? 14;
+  const pastaDestino = opts.subdir ? path.join(TMP_DIR, opts.subdir) : TMP_DIR;
+  const fecharNoFim = opts.fecharNoFim !== false;
   let page = nav.page;
   let painelFrame = nav.painelFrame;
 
@@ -190,7 +198,7 @@ async function exportFromAniel(nav) {
     // pouco e tentamos de novo, reaplicando os filtros do zero a cada vez
     // (o painel fecha sozinho depois da primeira busca, e não temos certeza
     // se ele preserva os valores ao reabrir).
-    fs.mkdirSync(TMP_DIR, { recursive: true });
+    fs.mkdirSync(pastaDestino, { recursive: true });
     let destPath = null;
     const tentativasEspera = [4000, 8000, 15000, 25000];
     for (let tentativa = 0; tentativa < tentativasEspera.length; tentativa++) {
@@ -216,12 +224,12 @@ async function exportFromAniel(nav) {
         // uma janela rolante de 14 dias, sempre, independente de virada de mês.
         const hoje = new Date();
         const duasSemanasAtras = new Date(hoje);
-        duasSemanasAtras.setDate(duasSemanasAtras.getDate() - 14);
+        duasSemanasAtras.setDate(duasSemanasAtras.getDate() - dias);
         await setDatepicker(page, 'iDataInicial', duasSemanasAtras);
         await setDatepicker(page, 'iDataFinal', hoje);
 
         await marcar(painelFrame.locator('#iHistoricoReabertura'));
-        await painelFrame.locator('#iSituacaoOS').selectOption('abertas');
+        await painelFrame.locator('#iSituacaoOS').selectOption(situacao);
 
         // Esse Aniel é compartilhado com outras regionais da empresa (PB, PE,
         // BA aparecem juntos se não filtrar) - sem isso a busca traz o Brasil
@@ -244,7 +252,7 @@ async function exportFromAniel(nav) {
         ]);
 
         const nomeArquivo = download.suggestedFilename();
-        const tmpPath = path.join(TMP_DIR, nomeArquivo);
+        const tmpPath = path.join(pastaDestino, nomeArquivo);
         // ESTE é o ponto onde o Chrome costuma crashar de verdade - agora
         // está DENTRO do try/catch da tentativa, então um crash aqui cai no
         // catch abaixo e aciona o retry (com navegador novo se necessário),
@@ -281,17 +289,167 @@ async function exportFromAniel(nav) {
       throw new Error('A planilha veio vazia em todas as tentativas - a busca no Aniel não retornou registros.');
     }
 
-    await page.close();
+    if (fecharNoFim) await page.close();
     return destPath;
   } catch (err) {
     await dumpDebug(page, 'aniel-fail');
-    await page.close();
+    if (fecharNoFim) await page.close();
     throw err;
   }
 }
 
-async function importToSite(context, filePath) {
+// ---------------- ORIGEM DO PROTOCOLO (SLA conta da /1) ----------------
+// Protocolo = base + etapa (8992570/1 = abertura original, /2 = 1ª reabertura).
+// Desde 04/09/2026 o Aniel manda a coluna "Abertura Original" VAZIA nas
+// reaberturas, e a /1 (já fechada) não vem na exportação de abertas - o site
+// acabava contando o SLA da abertura da /2 (caso real: 8992570/2 com 32h,
+// sendo a /1 de 05/10/2026). Quando aparece reabertura sem data da /1
+// conhecida, o robô faz UMA exportação extra com "todas as situações" +
+// histórico de reabertura (que traz a /1) e guarda as datas num cache
+// (memória) que dura enquanto o job da nuvem estiver rodando. As datas vão
+// pro site junto da importação (window.__OPS_ORIGEM_PROTOCOLO).
+const ORIGEM_CACHE = path.join(TMP_DIR, 'origem-protocolos.json');
+const ORIGEM_JANELA_DIAS = 45;         // até quantos dias atrás procurar a /1
+const ORIGEM_INTERVALO_MIN_MIN = 20;   // no máx. 1 exportação extra a cada 20min
+const ORIGEM_INTERVALO_MAX_MIN = 360;  // e ao menos 1 a cada 6h (refresca a memória)
+
+function normalizaTxt(str) {
+  return (str || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function protoBase(p) { return String(p || '').trim().replace(/\s*\/\s*\d+\s*$/, ''); }
+function protoVer(p) { const m = String(p || '').match(/\/\s*(\d+)\s*$/); return m ? parseInt(m[1], 10) : 1; }
+
+// Devolve { txt: 'dd/mm/aaaa hh:mm', t: epoch } ou null.
+function dataBR(v) {
+  if (v === null || v === undefined || v === '') return null;
+  let d = null;
+  if (typeof v === 'number') {
+    const c = XLSX.SSF.parse_date_code(v);
+    if (c && c.y > 1) d = new Date(c.y, c.m - 1, c.d, c.H, c.M);
+  } else if (v instanceof Date) {
+    d = v;
+  } else {
+    const m = String(v).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if (m && Number(m[3]) > 1) d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]));
+  }
+  if (!d || isNaN(d.getTime())) return null;
+  const p2 = (n) => String(n).padStart(2, '0');
+  return { txt: `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`, t: d.getTime() };
+}
+
+// Lê a planilha exportada do Aniel e devolve [{ proto, criacao, original }].
+function lerEtapasDaPlanilha(filePath) {
+  let buf = fs.readFileSync(filePath);
+  // mesmo conserto do site: xmlns repetido dentro de <is> faz o SheetJS ler texto vazio
+  try {
+    const zip = new AdmZip(buf);
+    let mudou = false;
+    for (const e of zip.getEntries()) {
+      if (!/^xl\/worksheets\/.*\.xml$/.test(e.entryName)) continue;
+      const xml = zip.readAsText(e);
+      const fixed = xml.replace(/(<is\b[^>]*)\s+xmlns="[^"]*"/g, '$1');
+      if (fixed !== xml) { zip.updateFile(e.entryName, Buffer.from(fixed, 'utf8')); mudou = true; }
+    }
+    if (mudou) buf = zip.toBuffer();
+  } catch (e) { /* segue com a leitura normal */ }
+  const wb = XLSX.read(buf, { type: 'buffer' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+  const tipoColuna = (h) => {
+    const n = normalizaTxt(h);
+    if (n.includes('ordem servico') || n === 'protocolo') return 'proto';
+    if (n.includes('abertura original')) return 'original';
+    if (n.includes('data') && n.includes('criacao')) return 'criacao';
+    return null;
+  };
+  let hIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    if ((rows[i] || []).map(tipoColuna).includes('proto')) { hIdx = i; break; }
+  }
+  if (hIdx < 0) return [];
+  const cols = rows[hIdx].map(tipoColuna);
+  const idx = (k) => cols.indexOf(k);
+  const out = [];
+  for (const r of rows.slice(hIdx + 1)) {
+    const proto = String(r[idx('proto')] ?? '').trim();
+    if (!proto) continue;
+    out.push({
+      proto,
+      criacao: idx('criacao') >= 0 ? dataBR(r[idx('criacao')]) : null,
+      original: idx('original') >= 0 ? dataBR(r[idx('original')]) : null,
+    });
+  }
+  return out;
+}
+
+function lerCacheOrigem() {
+  try {
+    const c = JSON.parse(fs.readFileSync(ORIGEM_CACHE, 'utf8'));
+    return { geradoEm: c.geradoEm || 0, mapa: c.mapa || {}, buscados: c.buscados || [] };
+  } catch (e) { return { geradoEm: 0, mapa: {}, buscados: [] }; }
+}
+function salvarCacheOrigem(c) {
+  try { fs.mkdirSync(TMP_DIR, { recursive: true }); fs.writeFileSync(ORIGEM_CACHE, JSON.stringify(c)); } catch (e) {}
+}
+// guarda a data mais antiga por número base
+function registrarOrigem(mapa, base, d) {
+  if (!base || !d) return;
+  const cur = mapa[base];
+  if (!cur || d.t < cur.t) mapa[base] = d;
+}
+function absorverEtapas(mapa, etapas) {
+  for (const e of etapas) {
+    const base = protoBase(e.proto);
+    registrarOrigem(mapa, base, e.original);           // formato antigo (exata)
+    registrarOrigem(mapa, base, e.criacao);            // /1 exata; /2+ = etapa mais antiga
+  }
+}
+
+// Monta { base: 'dd/mm/aaaa hh:mm' } para as reaberturas do mapa. Faz a
+// exportação extra de histórico só quando precisa (e respeitando os limites).
+async function origensDasReaberturas(nav, arquivoMapa) {
+  const etapas = lerEtapasDaPlanilha(arquivoMapa);
+  const cache = lerCacheOrigem();
+  absorverEtapas(cache.mapa, etapas);
+
+  const reaberturas = etapas.filter((e) => protoVer(e.proto) >= 2);
+  const bases = [...new Set(reaberturas.map((e) => protoBase(e.proto)))];
+  // reabertura sem data da /1 conhecida: o melhor que temos é a própria etapa
+  const semOrigem = bases.filter((b) => {
+    const etapaMaisAntiga = Math.min(...reaberturas.filter((e) => protoBase(e.proto) === b && e.criacao).map((e) => e.criacao.t));
+    const conhecida = cache.mapa[b];
+    return !conhecida || conhecida.t >= etapaMaisAntiga;
+  });
+  // não repete a busca por protocolo que já foi procurado no último histórico
+  // (ex: /1 mais antiga que a janela) - espera o refresco de 6h
+  const novos = semOrigem.filter((b) => !cache.buscados.includes(b));
+  const idadeMin = (Date.now() - (cache.geradoEm || 0)) / 60000;
+  const precisa = (novos.length > 0 && idadeMin >= ORIGEM_INTERVALO_MIN_MIN) || idadeMin >= ORIGEM_INTERVALO_MAX_MIN;
+  log(`Origem /1: ${bases.length} reabertura(s) no mapa, ${semOrigem.length} sem data da /1 conhecida${precisa ? ' - buscando histórico no Aniel' : ''}.`);
+
+  if (precisa) {
+    try {
+      const arq = await exportFromAniel(nav, { situacao: '', dias: ORIGEM_JANELA_DIAS, subdir: 'historico', fecharNoFim: false });
+      const hist = lerEtapasDaPlanilha(arq);
+      absorverEtapas(cache.mapa, hist);
+      cache.geradoEm = Date.now();
+      cache.buscados = semOrigem.slice();
+      const aindaSem = semOrigem.filter((b) => !hist.some((e) => protoBase(e.proto) === b && protoVer(e.proto) === 1));
+      log(`Origem /1: histórico com ${hist.length} etapa(s); ${semOrigem.length - aindaSem.length} reabertura(s) resolvida(s) pela /1${aindaSem.length ? `, ${aindaSem.length} sem a /1 na janela de ${ORIGEM_JANELA_DIAS} dias` : ''}.`);
+    } catch (e) {
+      log(`Origem /1: não consegui exportar o histórico (${resumoErro(e)}) - seguindo com a memória.`);
+    }
+  }
+  salvarCacheOrigem(cache);
+
+  const saida = {};
+  for (const b of bases) if (cache.mapa[b]) saida[b] = cache.mapa[b].txt;
+  return saida;
+}
+
+async function importToSite(context, filePath, origens = {}) {
   const page = await context.newPage();
+  // datas da /1 das reaberturas, lidas pelo site na importação (common.js)
+  await page.addInitScript((m) => { window.__OPS_ORIGEM_PROTOCOLO = m; }, origens);
   page.setDefaultTimeout(90000);
 
   page.on('dialog', async (dialog) => {
@@ -380,10 +538,18 @@ async function importToSite(context, filePath) {
     log('Iniciando sincronização (nuvem)...');
     nav = await abrirNavegadorEPainel();
 
-    const filePath = await exportFromAniel(nav);
+    const filePath = await exportFromAniel(nav, { fecharNoFim: false });
     log('Exportado do Aniel.');
 
-    await importToSite(nav.context, filePath);
+    let origens = {};
+    try {
+      origens = await origensDasReaberturas(nav, filePath);
+    } catch (e) {
+      log(`Origem /1: falhou (${resumoErro(e)}) - o site usa só a memória dele.`);
+    }
+    await nav.page.close().catch(() => {});
+
+    await importToSite(nav.context, filePath, origens);
     log('Importado no site com sucesso.');
   } catch (err) {
     log(`ERRO: ${err.message}`);

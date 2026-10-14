@@ -385,6 +385,23 @@ document.getElementById('file-import-fechamento').addEventListener('change', (e)
       };
     }).filter(Boolean);
 
+    // SLA conta da /1: desde 04/09/2026 o Aniel manda a "Abertura Original"
+    // vazia nas reaberturas (/2, /3...). Com o histórico de reabertura a /1
+    // vem na mesma planilha, então usa a abertura mais antiga entre as
+    // etapas do mesmo número base.
+    {
+      const base = p => String(p || '').trim().replace(/\s*\/\s*\d+\s*$/, '');
+      const menor = {};
+      imported.forEach(r => {
+        const t = r.criadoEm ? new Date(r.criadoEm).getTime() : NaN;
+        if (!isNaN(t) && (menor[base(r.protocolo)] === undefined || t < menor[base(r.protocolo)])) menor[base(r.protocolo)] = t;
+      });
+      imported.forEach(r => {
+        const t = menor[base(r.protocolo)];
+        if (t !== undefined && (!r.criadoEm || t < new Date(r.criadoEm).getTime())) r.criadoEm = new Date(t).toISOString();
+      });
+    }
+
     if (!imported.length){ alert('Não encontrei registros válidos nessa planilha de fechamento.'); return; }
 
     const mode = confirm(`Foram lidos ${imported.length} registros de fechamento.\nOK = substituir a base atual.\nCancelar = adicionar aos registros existentes.`);
