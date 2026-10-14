@@ -185,6 +185,7 @@ async function exportFromAniel(nav, opts = {}) {
   const dias = opts.dias ?? 14;
   const pastaDestino = opts.subdir ? path.join(TMP_DIR, opts.subdir) : TMP_DIR;
   const fecharNoFim = opts.fecharNoFim !== false;
+  const campoData = opts.campoData || 'iDataCriacao';
   let page = nav.page;
   let painelFrame = nav.painelFrame;
 
@@ -200,7 +201,7 @@ async function exportFromAniel(nav, opts = {}) {
     // se ele preserva os valores ao reabrir).
     fs.mkdirSync(pastaDestino, { recursive: true });
     let destPath = null;
-    const tentativasEspera = [4000, 8000, 15000, 25000];
+    const tentativasEspera = [4000, 8000, 15000, 25000].slice(0, opts.maxTentativas || 4);
     for (let tentativa = 0; tentativa < tentativasEspera.length; tentativa++) {
       try {
         const jaAberto = await painelFrame.locator('#iDataCriacao').isVisible().catch(() => false);
@@ -216,7 +217,7 @@ async function exportFromAniel(nav, opts = {}) {
         // deixou marcado por último, e "Abertas + Data de Encerramento" é uma
         // combinação praticamente impossível (ticket aberto não tem data de
         // encerramento) - foi exatamente isso que derrubou o mapa pra 0 registros.
-        await marcar(painelFrame.locator('#iDataCriacao'));
+        await marcar(painelFrame.locator('#' + campoData));
         // iDataInicial nunca era setado explicitamente - ficava com o que
         // sobrava "lembrado" da sessão do Aniel (geralmente dia 1 do mês
         // corrente), então perto do fim do mês o mapa só mostrava os chamados
@@ -309,7 +310,12 @@ async function exportFromAniel(nav, opts = {}) {
 // (memória) que dura enquanto o job da nuvem estiver rodando. As datas vão
 // pro site junto da importação (window.__OPS_ORIGEM_PROTOCOLO).
 const ORIGEM_CACHE = path.join(TMP_DIR, 'origem-protocolos.json');
-const ORIGEM_JANELA_DIAS = 45;         // até quantos dias atrás procurar a /1
+// A /1 que gerou a reabertura foi ENCERRADA pouco antes da /2 ser aberta, e o
+// mapa só tem chamados criados nos últimos 14 dias - então basta buscar o que
+// foi encerrado nos últimos 15 dias (todas as situações + histórico de
+// reabertura). Buscar por Data de Criação em 45 dias ficou pesado demais
+// (o Aniel não entregava o arquivo a tempo).
+const ORIGEM_JANELA_DIAS = 15;
 const ORIGEM_INTERVALO_MIN_MIN = 20;   // no máx. 1 exportação extra a cada 20min
 const ORIGEM_INTERVALO_MAX_MIN = 360;  // e ao menos 1 a cada 6h (refresca a memória)
 
@@ -428,7 +434,7 @@ async function origensDasReaberturas(nav, arquivoMapa) {
 
   if (precisa) {
     try {
-      const arq = await exportFromAniel(nav, { situacao: '', dias: ORIGEM_JANELA_DIAS, subdir: 'historico', fecharNoFim: false });
+      const arq = await exportFromAniel(nav, { situacao: '', campoData: 'iDataEncerramento', dias: ORIGEM_JANELA_DIAS, subdir: 'historico', fecharNoFim: false, maxTentativas: 3 });
       const hist = lerEtapasDaPlanilha(arq);
       absorverEtapas(cache.mapa, hist);
       cache.geradoEm = Date.now();
