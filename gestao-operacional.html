@@ -2886,7 +2886,17 @@ function calcularSugestaoFerias(registros){
 
 let goFerFiltroLigado = false;
 function desenharAbaFerias(){
-  const todos = (goFerias || []).map(r => ({ ...r, _st: statusEfetivoFerias(r) }));
+  // limites vazios (cadastro manual ou carga que não trouxe a data): calcula
+  // pela regra do DP - ideal = dia seguinte ao fim do período aquisitivo;
+  // máximo = fim do aquisitivo + 335 dias (fim do concessivo - 30 dias)
+  const todos = (goFerias || []).map(r => {
+    const fimAq = ferDt(r.periodo_aquisitivo_fim);
+    const c = { ...r };
+    if (fimAq && !c.data_limite_ideal) c.data_limite_ideal = ferISO(ferAdd(fimAq, 1));
+    if (fimAq && !c.data_limite_max) c.data_limite_max = ferISO(ferAdd(fimAq, 335));
+    c._st = statusEfetivoFerias(c);
+    return c;
+  });
 
   // filtro de função: capacidade é por função (instalador não cobre supervisor)
   const sel = document.getElementById('go-fer-f-funcao');
