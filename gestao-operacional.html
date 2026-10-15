@@ -3613,17 +3613,21 @@ async function desenharProdutividadeTempoReal(){
   // falhar - senão, numa falha de rede na carga inicial, nem o botão
   // "Atualizar agora" nem o auto-refresh ficariam disponíveis pra tentar de novo
   ligarAutoAtualizacaoTempoReal();
+  // datas pelo calendário LOCAL (não toISOString, que é UTC): das 21h à
+  // meia-noite o UTC já está no dia seguinte e a tela zerava, tratando
+  // "amanhã" como hoje e o dia de hoje como "dia anterior"
+  const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const hoje = new Date();
-  const hojeStr = hoje.toISOString().slice(0,10);
+  const hojeStr = isoLocal(hoje);
   const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
-  const amanhaStr = amanha.toISOString().slice(0,10);
+  const amanhaStr = isoLocal(amanha);
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const inicioMesStr = inicioMes.toISOString().slice(0,10);
+  const inicioMesStr = isoLocal(inicioMes);
   // busca também uns dias antes do mês, só pra achar "pontos do dia
   // anterior trabalhado" mesmo se hoje for dia 1/2 do mês (sem isso, quem
   // só trabalhou no fim do mês passado ficaria sem essa coluna)
   const buscaDesde = new Date(inicioMes); buscaDesde.setDate(buscaDesde.getDate() - 10);
-  const buscaDesdeStr = buscaDesde.toISOString().slice(0,10);
+  const buscaDesdeStr = isoLocal(buscaDesde);
 
   let registros = [];
   try{
