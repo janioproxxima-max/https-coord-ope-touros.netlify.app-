@@ -3780,9 +3780,12 @@ async function desenharProdutividadeTempoReal(){
   const rosterNormSet = new Set(roster.map(p => OPS.normalize(p.nome)));
   const registrosHojeDoTime = registrosHoje.filter(r => r.tecnico && rosterNormSet.has(OPS.normalize(r.tecnico)));
   const registrosHojeDoTimeTouros = registrosHojeDoTime.filter(r => OPS.isTourosUnitCity(r.area));
+  // conta PROTOCOLO, não linha: atendimento em dupla vem uma linha por
+  // técnico (mesmo protocolo) e contava 2x a mesma ativação/reparo
+  const qtdProtocolos = arr => new Set(arr.map(r => r.protocolo || `${r.tecnico}|${r.data_encerramento}`)).size;
   const cardResumo = (label, filtro) => {
-    const total = registrosHojeDoTime.filter(filtro).length;
-    const emTouros = registrosHojeDoTimeTouros.filter(filtro).length;
+    const total = qtdProtocolos(registrosHojeDoTime.filter(filtro));
+    const emTouros = qtdProtocolos(registrosHojeDoTimeTouros.filter(filtro));
     return `<div class="stat-card brand"><div class="label">${label}</div><div class="value">${fmtNum(total)}</div>
       <div class="sla-meta" style="margin-top:2px">${fmtNum(emTouros)} em cidades Touros</div></div>`;
   };
