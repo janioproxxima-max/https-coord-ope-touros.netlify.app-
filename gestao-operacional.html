@@ -549,14 +549,18 @@
         <h3>⚡ Painel por colaborador (tempo real)</h3><span class="cnt-badge" id="go-ptr-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-ptr-tbody" data-arquivo="produtividade-tempo-real" data-sheet="Tempo Real" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Placa/Cidade/Supervisor vêm da Gestão de Pessoas. Pts. Instalação/Reparo/Recolhimento e horários são de hoje; Pontos Mês (soma do mês atual) e PPC são do mês atual.</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Placa/Cidade/Supervisor vêm da Gestão de Pessoas. Bloco HOJE: só atendimentos encerrados hoje (pontos por tipo, improdutivos e horários). Bloco ANTERIOR / MÊS: último dia trabalhado antes de hoje e acumulado do mês atual (Pts. Mês, PPC e quartil).</p>
       <div class="table-wrap" style="max-height:600px;overflow-x:hidden">
         <table class="services compact">
           <thead><tr>
-            <th>Equipe</th><th>Cidade</th><th>Supervisor</th><th>Quartil mês</th>
+            <th colspan="3"></th>
+            <th colspan="8" id="go-ptr-th-hoje" style="text-align:center;color:var(--brand);border-bottom:2px solid var(--brand)">HOJE</th>
+            <th colspan="4" style="text-align:center;color:var(--ink-dim);border-bottom:2px solid var(--ink-faint)">ANTERIOR / MÊS</th>
+          </tr><tr>
+            <th>Equipe</th><th>Cidade</th><th>Supervisor</th>
             <th>Instal.</th><th>Reparo</th><th>Recol.</th><th>Mud. End.</th><th>Pts. Dia</th>
-            <th>Pts. Dia Ant.</th><th>Pts. Mês</th><th>PPC</th><th>Improd.</th>
-            <th>1º Desloc.</th><th>Últ. Concl.</th>
+            <th>Improd.</th><th>1º Desloc.</th><th>Últ. Concl.</th>
+            <th>Pts. Dia Ant.</th><th>Pts. Mês</th><th>PPC</th><th>Quartil mês</th>
           </tr></thead>
           <tbody id="go-ptr-tbody"></tbody>
         </table>
@@ -2198,7 +2202,10 @@ function exportarTabelaParaExcel(tbodyId, nomeArquivo, sheetName){
   const tbody = document.getElementById(tbodyId);
   const tabela = tbody && tbody.closest('table');
   if (!tabela) return;
-  const headers = [...tabela.querySelectorAll('thead th')].map(th => th.textContent.trim());
+  // usa só a última linha do cabeçalho (tabelas com linha de agrupamento,
+  // ex: HOJE / ANTERIOR no Tempo Real, têm 2 linhas de th)
+  const linhasCab = tabela.querySelectorAll('thead tr');
+  const headers = [...(linhasCab.length ? linhasCab[linhasCab.length - 1].querySelectorAll('th') : [])].map(th => th.textContent.trim());
   const linhas = [...tbody.querySelectorAll('tr')]
     .map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim()))
     .filter(cols => cols.length === headers.length); // ignora linha de "sem dados"
@@ -3872,16 +3879,17 @@ async function desenharProdutividadeTempoReal(){
   document.getElementById('go-ptr-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   document.getElementById('go-ptr-tbody').innerHTML = linhas.map(l => `<tr>
     <td>${tituloCase(l.nome)}</td><td>${tituloCase(l.cidade)}</td><td>${nomeCurto2(l.supervisor)}</td>
-    <td>${l.quartil ? `<span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º</span>` : '—'}</td>
     <td>${l.pontosInstalacao.toFixed(2)}</td><td>${l.pontosReparo.toFixed(2)}</td><td>${l.pontosRecolhimento.toFixed(2)}</td><td>${l.pontosMudancaEndereco.toFixed(2)}</td>
     <td><span class="badge ${corPontosDia(l.pontosDia)}"><span class="dot"></span>${l.pontosDia.toFixed(2)}</span></td>
-    <td>${l.pontosDiaAnterior == null ? '—' : l.pontosDiaAnterior.toFixed(2)}</td>
-    <td>${l.pontosMes.toFixed(2)}</td><td>${l.ppc == null ? '—' : l.ppc.toFixed(2)}</td>
     <td>${fmtNum(l.improdHoje)}</td>
     <td>${fmtHoraCurta(l.primeiroDeslocamento)}</td><td>${fmtHoraCurta(l.ultimoConcluido)}</td>
+    <td style="color:var(--ink-dim)">${l.pontosDiaAnterior == null ? '—' : l.pontosDiaAnterior.toFixed(2)}</td>
+    <td style="color:var(--ink-dim)">${l.pontosMes.toFixed(2)}</td><td style="color:var(--ink-dim)">${l.ppc == null ? '—' : l.ppc.toFixed(2)}</td>
+    <td>${l.quartil ? `<span class="badge ${QUARTIL_COR[l.quartil]}"><span class="dot"></span>${l.quartil}º</span>` : '—'}</td>
   </tr>`).join('') || `<tr><td colspan="15" style="color:var(--ink-faint)">Nenhum colaborador ativo.</td></tr>`;
 
   document.getElementById('go-ptr-ultima-att').textContent = `Atualizado às ${fmtHoraCurtaLocal(new Date())}`;
+  document.getElementById('go-ptr-th-hoje').textContent = `HOJE · ${hojeStr.slice(8, 10)}/${hojeStr.slice(5, 7)}`;
 }
 document.getElementById('go-ptr-timeline-abrir').addEventListener('click', () => {
   window.open('linha-do-tempo.html', '_blank');
