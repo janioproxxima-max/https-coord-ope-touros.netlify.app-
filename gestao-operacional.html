@@ -399,7 +399,12 @@
   <!-- ================= ABA: FÉRIAS ================= -->
   <div id="go-aba-ferias" style="display:none">
     <div class="panel toolbar" style="margin-bottom:14px">
-      <p class="page-sub" style="margin:0">Carga inicial da planilha Diretoria de Operações — a partir daqui, agendamentos e atualizações são feitos manualmente em Gestão de Pessoas.</p>
+      <p class="page-sub" style="margin:0">Carga inicial da planilha Diretoria de Operações — a partir daqui, agendamentos e atualizações são feitos manualmente em Gestão de Pessoas. O status é recalculado pela data de hoje (quem fechou o período aquisitivo depois da carga já aparece como vencida).</p>
+      <div style="flex:1"></div>
+      <div class="field" style="min-width:220px">
+        <label for="go-fer-f-funcao">Função</label>
+        <select id="go-fer-f-funcao"><option value="">Todas</option></select>
+      </div>
     </div>
 
     <div class="stat-row" id="go-fer-cards"></div>
@@ -409,18 +414,18 @@
         <h3>📋 Situação por colaborador</h3><span class="cnt-badge" id="go-fer-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-fer-tbody" data-arquivo="ferias" data-sheet="Férias" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Um colaborador pode ter mais de um ciclo (período aquisitivo) em aberto — aqui mostra sempre o mais urgente de cada um.</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Um colaborador pode ter mais de um ciclo (período aquisitivo) em aberto — aqui mostra o mais urgente de cada um; "+1 ciclo" indica outro período pendente. O prazo que vale é o limite máximo (último dia pra iniciar sem pagar em dobro); o limite ideal é o primeiro dia em que já pode sair.</p>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
-          <thead><tr><th>Colaborador</th><th>Função</th><th>Status</th><th>Período aquisitivo</th><th>Limite ideal</th><th>Limite máximo</th><th>Agendado/Confeccionado</th></tr></thead>
+          <thead><tr><th>Colaborador</th><th>Função</th><th>Status</th><th>Período aquisitivo</th><th>Limite ideal</th><th>Limite máximo</th><th>Dias p/ limite máx.</th><th>Agendado/Confeccionado</th></tr></thead>
           <tbody id="go-fer-tbody"></tbody>
         </table>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="card-head"><h3>📅 Ocupação mensal (quantos de férias por mês)</h3></div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Barra sólida = já agendado/confeccionado. Barra tracejada = sugestão pra quem ainda não tem data, calculada respeitando o limite de cada um e tentando manter só 1 por mês (só sobe pra 2+ quando os prazos realmente colidem).</p>
+      <div class="card-head"><h3>📅 Pico de pessoas de férias ao mesmo tempo, por mês</h3></div>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Verde = já agendado/confeccionado. Amarelo = acréscimo com a sugestão pra quem ainda não tem data (respeita o limite máximo de cada um e o aviso de 30 dias, mirando no máximo 2 fora ao mesmo tempo). Linha vermelha = quantos estariam fora juntos se cada um só saísse no limite máximo. Use o filtro de função pra ver a capacidade de cada equipe.</p>
       <div class="chart-box tall"><canvas id="go-fer-chart-mes"></canvas></div>
     </div>
 
@@ -429,10 +434,10 @@
         <h3>💡 Sugestão de programação anual</h3><span class="cnt-badge" id="go-fer-sug-badge">—</span>
         <button type="button" class="btn ghost go-btn-export-tabela" data-tbody="go-fer-sug-tbody" data-arquivo="ferias-sugestao" data-sheet="Sugestão" style="margin-left:auto;font-size:11px;padding:4px 8px">⇩ Excel</button>
       </div>
-      <p class="page-sub" style="padding:0 16px;margin:10px 0">Só quem ainda não tem férias agendadas/confeccionadas. Ordenado por urgência (limite mais próximo primeiro).</p>
+      <p class="page-sub" style="padding:0 16px;margin:10px 0">Todos os ciclos sem data (inclusive o segundo período de quem já tem um agendado). Ordenado por urgência (limite máximo mais próximo primeiro). Início sugerido sempre no dia 1 ou 16, considerando 30 dias de férias.</p>
       <div class="table-wrap" style="max-height:420px">
         <table class="services">
-          <thead><tr><th>Colaborador</th><th>Função</th><th>Limite ideal</th><th>Mês sugerido</th><th>Motivo</th></tr></thead>
+          <thead><tr><th>Colaborador</th><th>Função</th><th>Situação</th><th>Limite máximo</th><th>Período sugerido</th><th>Fora ao mesmo tempo</th><th>Motivo</th></tr></thead>
           <tbody id="go-fer-sug-tbody"></tbody>
         </table>
       </div>
@@ -2759,12 +2764,12 @@ function feriasMesKey(dataISO){ return dataISO ? dataISO.slice(0, 7) : null; }
 
 async function renderAbaFerias(){
   if (goFerias === null){
-    document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--ink-faint)">Carregando...</td></tr>`;
+    document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="8" style="color:var(--ink-faint)">Carregando...</td></tr>`;
     try{
       goFerias = (await OPS_SUPABASE.select('ferias_registros')) || [];
     }catch(err){
       console.error('Falha ao buscar férias', err);
-      document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="7" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
+      document.getElementById('go-fer-tbody').innerHTML = `<tr><td colspan="8" style="color:var(--crit)">⚠️ Não consegui buscar os dados. ${err.message}</td></tr>`;
       return;
     }
   }
@@ -2772,143 +2777,206 @@ async function renderAbaFerias(){
   desenharAbaFerias();
 }
 
+// ---- datas (sempre meia-noite local, sem somar milissegundos) ----
+const FER_DIAS_PADRAO = 30;      // duração assumida quando a planilha não diz
+const FER_AVISO_DIAS = 30;       // aviso de férias: no mínimo 30 dias antes
+const FER_MAX_SIMULTANEO = 2;    // alvo de gente da mesma função fora ao mesmo tempo
+function ferDt(iso){ return iso ? new Date(String(iso).slice(0, 10) + 'T00:00:00') : null; }
+function ferISO(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function ferAdd(d, n){ return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+function ferHoje(){ const h = new Date(); return new Date(h.getFullYear(), h.getMonth(), h.getDate()); }
+function ferDiasAte(iso){ const d = ferDt(iso); return d ? Math.round((d - ferHoje()) / 86400000) : null; }
+
+// O status da planilha é uma foto do dia da carga e envelhece: quem fecha o
+// período aquisitivo depois disso continua "não vencida" pra sempre, e quem
+// já voltou das férias continua "confeccionado". Aqui recalcula pela data.
+function statusEfetivoFerias(r){
+  const hoje = ferHoje();
+  const ini = ferDt(r.data_inicio_confeccionada || r.data_agendamento);
+  if (r.status === 'CONFECCIONADO' || r.status === 'PROGRAMADA'){
+    const fim = ferDt(r.data_fim_confeccionada) || (ini ? ferAdd(ini, FER_DIAS_PADRAO - 1) : null);
+    if (r.status === 'CONFECCIONADO' && fim && fim < hoje) return 'GOZADA';
+    return r.status;
+  }
+  const fimAq = ferDt(r.periodo_aquisitivo_fim);
+  if (r.status === 'VENCIDA SEM AGENDAMENTO' || (fimAq && fimAq < hoje)) return 'VENCIDA SEM AGENDAMENTO';
+  return r.status || 'FERIAS NAO VENCIDAS';
+}
+function feriasAgendada(st){ return st === 'CONFECCIONADO' || st === 'PROGRAMADA'; }
+function feriasPendente(st){ return st === 'VENCIDA SEM AGENDAMENTO' || st === 'FERIAS NAO VENCIDAS'; }
+const FER_STATUS_LABEL = { 'VENCIDA SEM AGENDAMENTO': 'Vencida sem agendamento', 'PROGRAMADA': 'Programada', 'CONFECCIONADO': 'Confeccionado', 'FERIAS NAO VENCIDAS': 'Não vencida', 'GOZADA': 'Já gozada' };
+const FER_STATUS_COR = { 'VENCIDA SEM AGENDAMENTO': 'crit', 'PROGRAMADA': 'ok', 'CONFECCIONADO': 'ok', 'FERIAS NAO VENCIDAS': 'neutral', 'GOZADA': 'neutral' };
+
 // escolhe, entre os ciclos (períodos aquisitivos) de um colaborador, o mais
-// relevante pra mostrar agora: já agendado/confeccionado > vencido sem
-// agendamento > não vencido com limite mais próximo.
+// relevante pra mostrar agora: agendado/confeccionado ainda não gozado >
+// vencido sem agendamento > não vencido - sempre pelo limite MÁXIMO mais
+// próximo. Ciclo já gozado só aparece se não sobrar nenhum outro.
 function cicloPrimarioFerias(registrosDoNome){
-  const agendado = registrosDoNome.find(r => r.status === 'CONFECCIONADO' || r.status === 'PROGRAMADA');
-  if (agendado) return agendado;
-  const vencida = registrosDoNome.find(r => r.status === 'VENCIDA SEM AGENDAMENTO');
-  if (vencida) return vencida;
-  const naoVencidas = registrosDoNome.filter(r => r.status === 'FERIAS NAO VENCIDAS')
-    .sort((a, b) => new Date(a.data_limite_ideal || '2999-12-31') - new Date(b.data_limite_ideal || '2999-12-31'));
-  if (naoVencidas.length) return naoVencidas[0];
-  return registrosDoNome[0];
+  const porLimite = (a, b) => (ferDt(a.data_limite_max) || new Date(2999, 0, 1)) - (ferDt(b.data_limite_max) || new Date(2999, 0, 1));
+  const lista = registrosDoNome.slice().sort(porLimite);
+  return lista.find(r => feriasAgendada(r._st))
+    || lista.find(r => r._st === 'VENCIDA SEM AGENDAMENTO')
+    || lista.find(r => r._st === 'FERIAS NAO VENCIDAS')
+    || lista[0];
 }
 
-// algoritmo guloso: ordena por urgência (limite mais próximo primeiro) e
-// encaixa cada pessoa no mês, entre agora e o limite dela, que já tiver
-// menos gente de férias - só empurra pra 2+ no mesmo mês quando os prazos
-// de fato colidem e não sobra outro mês livre antes do limite.
-function calcularSugestaoFerias(pessoas){
-  const jaAgendados = pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA');
-  const pendentes = pessoas.filter(p => p.registro.status === 'VENCIDA SEM AGENDAMENTO' || p.registro.status === 'FERIAS NAO VENCIDAS');
+// Monta a programação dia a dia. Quem já tem data entra fixo; os pendentes
+// (todos os ciclos em aberto, não só o primeiro de cada um) entram por ordem
+// de limite MÁXIMO (o prazo de verdade - o "limite ideal" da planilha é o 1º
+// dia em que a pessoa já pode sair, não um prazo). Janela de cada um: do
+// maior entre o limite ideal e hoje + 30 dias de aviso, até o limite máximo.
+// Dentro da janela pega a 1ª data (dias 1 e 16 de cada mês) em que ficariam
+// no máximo FER_MAX_SIMULTANEO pessoas fora; se nenhuma data deixa, pega a
+// de menor sobreposição.
+function calcularSugestaoFerias(registros){
+  const hoje = ferHoje();
+  const ocupAgendado = {}, ocupTotal = {}, ocupNoLimite = {};
+  const marcar = (mapa, ini, dias) => { for (let i = 0; i < dias; i++){ const k = ferISO(ferAdd(ini, i)); mapa[k] = (mapa[k] || 0) + 1; } };
+  const custo = ini => { let m = 0; for (let i = 0; i < FER_DIAS_PADRAO; i++) m = Math.max(m, ocupTotal[ferISO(ferAdd(ini, i))] || 0); return m; };
 
-  const ocupacao = {};
-  jaAgendados.forEach(p => {
-    const mes = feriasMesKey(p.registro.data_inicio_confeccionada || p.registro.data_agendamento);
-    if (mes) ocupacao[mes] = (ocupacao[mes] || 0) + 1;
+  registros.filter(r => feriasAgendada(r._st)).forEach(r => {
+    const ini = ferDt(r.data_inicio_confeccionada || r.data_agendamento);
+    if (!ini) return;
+    const fim = ferDt(r.data_fim_confeccionada);
+    const dias = fim && fim >= ini ? Math.round((fim - ini) / 86400000) + 1 : FER_DIAS_PADRAO;
+    [ocupAgendado, ocupTotal, ocupNoLimite].forEach(m => marcar(m, ini, dias));
   });
 
-  const hoje = new Date();
-  const comDeadline = pendentes
-    .map(p => ({ ...p, deadline: p.registro.data_limite_ideal || p.registro.data_limite_max }))
-    .filter(p => p.deadline)
-    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
-  const semDeadline = pendentes.filter(p => !(p.registro.data_limite_ideal || p.registro.data_limite_max));
+  const pendentes = registros.filter(r => feriasPendente(r._st));
+  const comLimite = pendentes.filter(r => r.data_limite_max).sort((a, b) => ferDt(a.data_limite_max) - ferDt(b.data_limite_max));
+  const minAviso = ferAdd(hoje, FER_AVISO_DIAS);
 
   const sugestoes = [];
-  comDeadline.forEach(p => {
-    const deadlineDt = new Date(p.deadline + 'T00:00:00');
-    const candidatos = [];
-    const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    // se o limite já passou (vencida), não faz sentido sugerir um mês que já
-    // foi - trata como urgência máxima: único candidato é o mês atual.
-    let limiteMes = new Date(deadlineDt.getFullYear(), deadlineDt.getMonth(), 1);
-    if (limiteMes < cursor) limiteMes = new Date(cursor);
-    while (cursor <= limiteMes){
-      candidatos.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
-      cursor.setMonth(cursor.getMonth() + 1);
+  comLimite.forEach(r => {
+    const limite = ferDt(r.data_limite_max);
+    const ideal = ferDt(r.data_limite_ideal);
+    const inicioJanela = ideal && ideal > minAviso ? ideal : minAviso;
+    let ini, motivo, critico = false;
+    if (limite < inicioJanela){
+      critico = true;
+      ini = limite >= hoje ? limite : minAviso;
+      motivo = limite < hoje
+        ? 'Limite máximo já passou — risco de pagamento em dobro, tratar com o DP'
+        : 'Não cabe mais o aviso de 30 dias antes do limite — agendar já';
+    } else {
+      const cands = [inicioJanela];
+      let d = inicioJanela;
+      for (;;){
+        d = d.getDate() < 16 ? new Date(d.getFullYear(), d.getMonth(), 16) : new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        if (d > limite) break;
+        cands.push(d);
+      }
+      ini = cands.find(c => custo(c) < FER_MAX_SIMULTANEO)
+        || cands.reduce((m, c) => (custo(c) < custo(m) ? c : m), cands[0]);
     }
-    let melhor = candidatos[0];
-    candidatos.forEach(m => { if ((ocupacao[m] || 0) < (ocupacao[melhor] || 0)) melhor = m; });
-    ocupacao[melhor] = (ocupacao[melhor] || 0) + 1;
-    sugestoes.push({
-      nome: p.nome, cargo: p.registro.cargo, deadline: p.deadline, mesSugerido: melhor,
-      motivo: candidatos.length === 1
-        ? 'Único mês possível antes do limite'
-        : (ocupacao[melhor] > 1 ? 'Mês com menor concentração (colisão de prazos)' : 'Mês com menor concentração'),
-    });
+    const juntos = custo(ini) + 1;
+    if (!critico){
+      motivo = juntos === 1 ? 'Ninguém mais da função fora no período'
+        : juntos <= FER_MAX_SIMULTANEO ? `${juntos} ao mesmo tempo (dentro do alvo)`
+        : `${juntos} ao mesmo tempo — prazos colidem, não tem data melhor antes do limite`;
+    }
+    marcar(ocupTotal, ini, FER_DIAS_PADRAO);
+    marcar(ocupNoLimite, limite >= minAviso ? limite : minAviso, FER_DIAS_PADRAO);
+    sugestoes.push({ nome: r.nome, cargo: r.cargo, st: r._st, limite: r.data_limite_max, inicio: ferISO(ini), fim: ferISO(ferAdd(ini, FER_DIAS_PADRAO - 1)), juntos, motivo, critico });
   });
-  semDeadline.forEach(p => sugestoes.push({ nome: p.nome, cargo: p.registro.cargo, deadline: null, mesSugerido: null, motivo: 'Sem data limite na planilha' }));
+  pendentes.filter(r => !r.data_limite_max).forEach(r => sugestoes.push({ nome: r.nome, cargo: r.cargo, st: r._st, limite: null, inicio: null, fim: null, juntos: null, motivo: 'Sem limite máximo na planilha', critico: false }));
 
-  return { sugestoes, ocupacao, jaAgendados };
+  return { sugestoes, ocupAgendado, ocupTotal, ocupNoLimite };
 }
 
+let goFerFiltroLigado = false;
 function desenharAbaFerias(){
-  const porNome = {};
-  (goFerias || []).forEach(r => { (porNome[r.nome] = porNome[r.nome] || []).push(r); });
-  const pessoas = Object.entries(porNome).map(([nome, registros]) => ({ nome, registro: cicloPrimarioFerias(registros) }));
+  const todos = (goFerias || []).map(r => ({ ...r, _st: statusEfetivoFerias(r) }));
 
-  const vencidas = pessoas.filter(p => p.registro.status === 'VENCIDA SEM AGENDAMENTO').length;
-  const agendadas = pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA').length;
-  const naoVencidas = pessoas.filter(p => p.registro.status === 'FERIAS NAO VENCIDAS').length;
+  // filtro de função: capacidade é por função (instalador não cobre supervisor)
+  const sel = document.getElementById('go-fer-f-funcao');
+  const funcoes = [...new Set(todos.map(r => r.cargo).filter(Boolean))].sort();
+  const atual = sel.value;
+  sel.innerHTML = `<option value="">Todas</option>` + funcoes.map(f => `<option value="${f}">${tituloCase(f)}</option>`).join('');
+  sel.value = funcoes.includes(atual) ? atual : '';
+  if (!goFerFiltroLigado){ sel.addEventListener('change', desenharAbaFerias); goFerFiltroLigado = true; }
+  const registros = sel.value ? todos.filter(r => r.cargo === sel.value) : todos;
+
+  const porNome = {};
+  registros.forEach(r => { (porNome[r.nome] = porNome[r.nome] || []).push(r); });
+  const pessoas = Object.entries(porNome).map(([nome, regs]) => ({ nome, registro: cicloPrimarioFerias(regs), ciclos: regs }));
+
+  const vencidas = pessoas.filter(p => p.ciclos.some(r => r._st === 'VENCIDA SEM AGENDAMENTO')).length;
+  const urgentes = pessoas.filter(p => p.ciclos.some(r => feriasPendente(r._st) && r.data_limite_max && ferDiasAte(r.data_limite_max) <= 90)).length;
+  const agendadas = pessoas.filter(p => p.ciclos.some(r => feriasAgendada(r._st))).length;
+  const naoVencidas = pessoas.filter(p => p.registro._st === 'FERIAS NAO VENCIDAS').length;
   document.getElementById('go-fer-cards').innerHTML = `
-    <div class="stat-card ${vencidas ? 'crit' : 'ok'}"><div class="label">Vencida sem agendamento</div><div class="value">${fmtNum(vencidas)}</div></div>
+    <div class="stat-card ${vencidas ? 'crit' : 'ok'}"><div class="label">Com férias vencidas sem agendamento</div><div class="value">${fmtNum(vencidas)}</div></div>
+    <div class="stat-card ${urgentes ? 'warn' : 'ok'}"><div class="label">Limite máx. em até 90 dias (sem data)</div><div class="value">${fmtNum(urgentes)}</div></div>
     <div class="stat-card ok"><div class="label">Agendada / Confeccionada</div><div class="value">${fmtNum(agendadas)}</div></div>
-    <div class="stat-card"><div class="label">Não vencida</div><div class="value">${fmtNum(naoVencidas)}</div></div>
-    <div class="stat-card brand"><div class="label">Colaboradores com férias na planilha</div><div class="value">${fmtNum(pessoas.length)}</div></div>
+    <div class="stat-card"><div class="label">Só com férias não vencidas</div><div class="value">${fmtNum(naoVencidas)}</div></div>
+    <div class="stat-card brand"><div class="label">Colaboradores</div><div class="value">${fmtNum(pessoas.length)}</div></div>
   `;
 
-  const PRIORIDADE_STATUS = { 'VENCIDA SEM AGENDAMENTO': 0, 'PROGRAMADA': 1, 'CONFECCIONADO': 1, 'FERIAS NAO VENCIDAS': 2 };
+  const PRIORIDADE_STATUS = { 'VENCIDA SEM AGENDAMENTO': 0, 'PROGRAMADA': 1, 'CONFECCIONADO': 1, 'FERIAS NAO VENCIDAS': 2, 'GOZADA': 3 };
   const linhas = pessoas.slice().sort((a, b) => {
-    const pa = PRIORIDADE_STATUS[a.registro.status] ?? 3, pb = PRIORIDADE_STATUS[b.registro.status] ?? 3;
+    const pa = PRIORIDADE_STATUS[a.registro._st] ?? 4, pb = PRIORIDADE_STATUS[b.registro._st] ?? 4;
     if (pa !== pb) return pa - pb;
-    return new Date(a.registro.data_limite_ideal || '2999-12-31') - new Date(b.registro.data_limite_ideal || '2999-12-31');
+    return (ferDt(a.registro.data_limite_max) || new Date(2999, 0, 1)) - (ferDt(b.registro.data_limite_max) || new Date(2999, 0, 1));
   });
-  const STATUS_COR = { 'VENCIDA SEM AGENDAMENTO': 'crit', 'PROGRAMADA': 'ok', 'CONFECCIONADO': 'ok', 'FERIAS NAO VENCIDAS': 'neutral' };
+  const hoje = ferHoje();
   document.getElementById('go-fer-badge').textContent = `${fmtNum(linhas.length)} colaborador(es)`;
   document.getElementById('go-fer-tbody').innerHTML = linhas.map(p => {
     const r = p.registro;
     const periodo = (r.periodo_aquisitivo_inicio || r.periodo_aquisitivo_fim)
       ? `${r.periodo_aquisitivo_inicio ? OPS.formatDateBR(r.periodo_aquisitivo_inicio) : '—'} a ${r.periodo_aquisitivo_fim ? OPS.formatDateBR(r.periodo_aquisitivo_fim) : '—'}`
       : '—';
-    const agendado = (r.data_inicio_confeccionada || r.data_agendamento)
-      ? `${OPS.formatDateBR(r.data_inicio_confeccionada || r.data_agendamento)}${r.data_fim_confeccionada ? ' a ' + OPS.formatDateBR(r.data_fim_confeccionada) : ''}`
-      : '—';
+    const iniAg = r.data_inicio_confeccionada || r.data_agendamento;
+    let agendado = iniAg ? `${OPS.formatDateBR(iniAg)}${r.data_fim_confeccionada ? ' a ' + OPS.formatDateBR(r.data_fim_confeccionada) : ''}` : '—';
+    if (r._st === 'PROGRAMADA' && iniAg && ferDt(iniAg) <= ferAdd(hoje, FER_AVISO_DIAS)){
+      agendado += ` <span class="badge warn" title="Programada mas ainda não confeccionada pelo DP"><span class="dot"></span>Confirmar confecção</span>`;
+    }
+    const dias = feriasPendente(r._st) ? ferDiasAte(r.data_limite_max) : null;
+    const diasCel = dias === null ? '—'
+      : `<span class="badge ${dias < 0 ? 'crit' : dias <= 60 ? 'crit' : dias <= 120 ? 'warn' : 'neutral'}"><span class="dot"></span>${dias < 0 ? 'Estourado' : fmtNum(dias) + ' d'}</span>`;
+    const outros = p.ciclos.filter(c => c !== r && feriasPendente(c._st)).length;
     return `<tr>
-      <td>${tituloCase(p.nome)}</td><td>${tituloCase(r.cargo || '—')}</td>
-      <td><span class="badge ${STATUS_COR[r.status] || 'neutral'}"><span class="dot"></span>${tituloCase(r.status || '—')}</span></td>
+      <td>${tituloCase(p.nome)}${outros ? ` <span style="color:var(--ink-faint);font-size:11px">(+${outros} ciclo)</span>` : ''}</td><td>${tituloCase(r.cargo || '—')}</td>
+      <td><span class="badge ${FER_STATUS_COR[r._st] || 'neutral'}"><span class="dot"></span>${FER_STATUS_LABEL[r._st] || tituloCase(r._st || '—')}</span></td>
       <td>${periodo}</td>
       <td>${r.data_limite_ideal ? OPS.formatDateBR(r.data_limite_ideal) : '—'}</td>
       <td>${r.data_limite_max ? OPS.formatDateBR(r.data_limite_max) : '—'}</td>
+      <td>${diasCel}</td>
       <td>${agendado}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Nenhum dado importado ainda.</td></tr>`;
+  }).join('') || `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhum dado importado ainda.</td></tr>`;
 
-  const { sugestoes, ocupacao } = calcularSugestaoFerias(pessoas);
+  const { sugestoes, ocupAgendado, ocupTotal, ocupNoLimite } = calcularSugestaoFerias(registros);
 
-  const sugestoesValidas = sugestoes.filter(s => s.mesSugerido).sort((a, b) => new Date(a.deadline || '2999-12-31') - new Date(b.deadline || '2999-12-31'));
-  document.getElementById('go-fer-sug-badge').textContent = `${fmtNum(sugestoes.length)} pendente(s)`;
+  document.getElementById('go-fer-sug-badge').textContent = `${fmtNum(sugestoes.length)} ciclo(s) pendente(s)`;
   document.getElementById('go-fer-sug-tbody').innerHTML = sugestoes.map(s => `<tr>
     <td>${tituloCase(s.nome)}</td><td>${tituloCase(s.cargo || '—')}</td>
-    <td>${s.deadline ? OPS.formatDateBR(s.deadline) : '—'}</td>
-    <td>${s.mesSugerido ? formatarMesCurto(s.mesSugerido) : '—'}</td>
-    <td>${s.motivo}</td>
-  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--ink-faint)">Ninguém pendente de agendamento.</td></tr>`;
+    <td><span class="badge ${FER_STATUS_COR[s.st] || 'neutral'}"><span class="dot"></span>${FER_STATUS_LABEL[s.st] || s.st}</span></td>
+    <td>${s.limite ? OPS.formatDateBR(s.limite) : '—'}</td>
+    <td>${s.inicio ? `${OPS.formatDateBR(s.inicio)} a ${OPS.formatDateBR(s.fim)}` : '—'}</td>
+    <td>${s.juntos ? fmtNum(s.juntos) : '—'}</td>
+    <td${s.critico || (s.juntos && s.juntos > FER_MAX_SIMULTANEO) ? ' style="color:var(--crit)"' : ''}>${s.motivo}</td>
+  </tr>`).join('') || `<tr><td colspan="7" style="color:var(--ink-faint)">Ninguém pendente de agendamento.</td></tr>`;
 
-  // gráfico: janela rolante de 12 meses a partir do mês atual, estendida se
-  // alguma sugestão/agendamento já confirmado cair além disso
-  const hoje = new Date();
-  const mesesChave = Object.keys(ocupacao);
+  // gráfico: pico de pessoas fora AO MESMO TEMPO em cada mês (dia a dia),
+  // janela de 12 meses a partir do atual, estendida até a última sugestão
+  const ultimoDia = Object.keys(ocupTotal).sort().pop();
   let horizonteMeses = 12;
-  mesesChave.forEach(m => {
-    const [y, mo] = m.split('-').map(Number);
-    const diff = (y - hoje.getFullYear()) * 12 + (mo - 1 - hoje.getMonth()) + 1;
-    if (diff > horizonteMeses) horizonteMeses = diff;
-  });
+  if (ultimoDia){
+    const [y, mo] = ultimoDia.split('-').map(Number);
+    horizonteMeses = Math.max(12, Math.min(24, (y - hoje.getFullYear()) * 12 + (mo - 1 - hoje.getMonth()) + 1));
+  }
   const janela = [];
   for (let i = 0; i < horizonteMeses; i++){
     const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
     janela.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
-  const agendadoPorMes = {};
-  pessoas.filter(p => p.registro.status === 'CONFECCIONADO' || p.registro.status === 'PROGRAMADA').forEach(p => {
-    const mes = feriasMesKey(p.registro.data_inicio_confeccionada || p.registro.data_agendamento);
-    if (mes) agendadoPorMes[mes] = (agendadoPorMes[mes] || 0) + 1;
-  });
-  const sugeridoPorMes = {};
-  sugestoesValidas.forEach(s => { sugeridoPorMes[s.mesSugerido] = (sugeridoPorMes[s.mesSugerido] || 0) + 1; });
+  const picoMes = mapa => {
+    const out = {};
+    Object.entries(mapa).forEach(([dia, n]) => { const m = dia.slice(0, 7); if (n > (out[m] || 0)) out[m] = n; });
+    return out;
+  };
+  const picoAg = picoMes(ocupAgendado), picoTot = picoMes(ocupTotal), picoLim = picoMes(ocupNoLimite);
 
   if (goCharts.ferMes) goCharts.ferMes.destroy();
   goCharts.ferMes = new Chart(document.getElementById('go-fer-chart-mes'), {
@@ -2916,8 +2984,9 @@ function desenharAbaFerias(){
     data: {
       labels: janela.map(formatarMesCurto),
       datasets: [
-        { label: 'Já agendado/confeccionado', data: janela.map(m => agendadoPorMes[m] || 0), backgroundColor: '#00e5a0', stack: 's' },
-        { label: 'Sugestão', data: janela.map(m => sugeridoPorMes[m] || 0), backgroundColor: '#ffd166', stack: 's' },
+        { label: 'Já agendado/confeccionado', data: janela.map(m => picoAg[m] || 0), backgroundColor: '#00e5a0', stack: 's', order: 2 },
+        { label: 'Com a sugestão', data: janela.map(m => Math.max(0, (picoTot[m] || 0) - (picoAg[m] || 0))), backgroundColor: '#ffd166', stack: 's', order: 2 },
+        { type: 'line', label: 'Se cada um sair só no limite máximo', data: janela.map(m => picoLim[m] || 0), borderColor: '#ff5c7a', backgroundColor: '#ff5c7a', borderDash: [6, 4], pointRadius: 3, tension: 0, stack: 'lim', order: 1, datalabels: { display: false } },
       ],
     },
     plugins: [ChartDataLabels],
