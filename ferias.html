@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Férias · OPE Touros</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .fer-grid{ display:grid; grid-template-columns:110px repeat(13, minmax(44px,1fr)); gap:4px; font-size:12px; align-items:stretch; }
+  .fer-grid .h{ color:var(--ink-faint); font-weight:600; text-transform:uppercase; font-size:10.5px; letter-spacing:.05em; text-align:center; padding:4px 0; }
+  .fer-grid .rl{ color:var(--ink-dim); font-weight:600; display:flex; align-items:center; font-size:11.5px; }
+  .fer-grid .c{ background:var(--bg-panel-2); border:1px solid var(--line); border-radius:6px; text-align:center; padding:8px 0; font-family:var(--f-display); font-weight:700; font-size:15px; }
+  .fer-grid .c.zero{ color:var(--ink-faint); font-weight:500; }
+  .fer-grid .c.cheio{ border-color:var(--warn); color:var(--warn); }
+  .fer-grid .c.estouro{ border-color:var(--crit); color:var(--crit); background:var(--crit-wash); }
+  .fer-grid .c.prev{ opacity:.8; border-style:dashed; }
+  .fer-grid .c.lim{ color:var(--ink-dim); }
+  .fer-names{ font-size:10px; color:var(--ink-dim); line-height:1.25; padding:4px 2px 0; text-align:center; word-break:break-word; }
+  .fer-sec-title{ font-size:13px; font-weight:700; margin:0 0 10px; color:var(--ink); }
+  .fer-note{ font-size:12px; color:var(--ink-dim); margin:8px 0 0; }
+  table.services td.num{ text-align:center; }
+  table.services select, table.services input[type=text]{ font-size:12px; padding:3px 6px; background:var(--bg-panel-2); color:var(--ink); border:1px solid var(--line); border-radius:6px; }
+  table.services input[type=text]{ width:140px; }
+  tr.fora td{ opacity:.5; }
+  tr.fora td.keep{ opacity:1; }
+  .fer-wrap{ overflow-x:auto; }
+  @media (max-width: 900px){ .fer-grid{ grid-template-columns:80px repeat(13, minmax(38px,1fr)); } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <p class="eyebrow">Gestão de Pessoas</p>
+    <h1 class="page-title">Férias</h1>
+    <p class="page-sub">Limites da planilha da Diretoria de Operações e simulação de quantos saem por mês.</p>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-unidade">Unidade</label>
+      <select id="f-unidade">
+        <option value="TOUROS">Touros</option>
+        <option value="NATAL">Natal</option>
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-ano">Ano da análise</label>
+      <select id="f-ano"></select>
+    </div>
+    <div class="field">
+      <label for="f-cap">Máximo por mês</label>
+      <select id="f-cap">
+        <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-search">Buscar</label>
+      <input class="input" id="f-search" placeholder="Nome ou matrícula">
+    </div>
+    <div style="flex:1"></div>
+    <span class="fer-note" id="fer-base-info"></span>
+    <button class="btn" id="btn-import">⇧ Importar planilha de férias</button>
+    <input type="file" id="file-import" accept=".xlsx,.xls" style="display:none">
+    <button class="btn" id="btn-export">⇩ Exportar plano</button>
+  </div>
+
+  <div class="panel" style="padding:16px 18px; margin-bottom:18px;">
+    <p class="fer-sec-title">Distribuição por mês</p>
+    <div class="fer-wrap"><div class="fer-grid" id="fer-grid"></div></div>
+    <p class="fer-note">“Limite” = quantos têm a data limite máxima naquele mês. “Plano” = sugestão respeitando o máximo por mês, deixando cada um o mais perto possível do limite e adiantando só o necessário. A coluna do mês anterior a janeiro só é usada quando não cabe todo mundo no ano.</p>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;">
+    <div class="table-wrap">
+      <table class="services compact">
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Admissão</th>
+            <th>Período aquisitivo</th>
+            <th>Limite máx.</th>
+            <th>Status planilha</th>
+            <th>Plano</th>
+            <th>Adianta</th>
+            <th>Mês fixo</th>
+            <th>Na conta</th>
+            <th>Motivo (fora da conta)</th>
+          </tr>
+        </thead>
+        <tbody id="tb-plano"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;">
+    <div style="padding:14px 18px 0;"><p class="fer-sec-title" id="outros-title">Fora do ano da análise</p></div>
+    <div class="table-wrap">
+      <table class="services compact">
+        <thead>
+          <tr><th>Colaborador</th><th>Admissão</th><th>Período aquisitivo</th><th>Limite máx.</th><th>Status planilha</th><th>Situação</th></tr>
+        </thead>
+        <tbody id="tb-outros"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+requireAuthThenInit('ferias.html', 'Férias');
+
+const SYNC_DADOS = 'FeriasData';
+const SYNC_AJUSTES = 'FeriasAjustesData';
+const KEY_DADOS = 'ops_touros_ferias_v1';
+const KEY_AJUSTES = 'ops_touros_ferias_ajustes_v1';
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const RESOLVIDO = ['CONFECCIONADO', 'PROGRAMADA'];
+
+let dados = OPS.loadData(KEY_DADOS) || [];
+let ajustes = OPS.loadData(KEY_AJUSTES) || [];
+
+const els = {
+  unidade: document.getElementById('f-unidade'),
+  ano: document.getElementById('f-ano'),
+  cap: document.getElementById('f-cap'),
+  search: document.getElementById('f-search'),
+};
+(function popularAnos(){
+  const y = new Date().getFullYear();
+  [y, y + 1, y + 2].forEach(a => {
+    const o = document.createElement('option'); o.value = a; o.textContent = a;
+    if (a === y + 1) o.selected = true;
+    els.ano.appendChild(o);
+  });
+})();
+
+// ---------- datas ----------
+function parseData(v){
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v) ? null : new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  return null;
+}
+const iso = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+const br = s => { const d = parseData(s); return d ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : '—'; };
+const nomeCurto = n => { const p = (n || '').split(' ').filter(Boolean); return p.length > 2 ? `${p[0]} ${p[p.length-1]}` : (n || ''); };
+const normMat = v => String(v ?? '').trim().replace(/^0+(?=\d)/, '');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- importação da planilha (formato Diretoria de Operações) ----------
+function mapHeader(h){
+  const n = OPS.normalize(h);
+  if (n === 'nome empresa') return 'empresa';
+  if (n.startsWith('cc')) return 'cc';
+  if (n === 'matricula') return 'matricula';
+  if (n === 'nome') return 'nome';
+  if (n.includes('admissao')) return 'admissao';
+  if (n.includes('aquisitivo')) return 'aquisitivo';
+  if (n.includes('limite ideal')) return 'limiteIdeal';
+  if (n.includes('limite max')) return 'limiteMax';
+  if (n.includes('agendamento')) return 'agendamento';
+  if (n.includes('inicio de ferias')) return 'inicio';
+  if (n.includes('final de ferias')) return 'fim';
+  if (n.includes('aviso')) return 'aviso';
+  if (n === 'status') return 'status';
+  if (n.includes('funcao')) return 'funcao';
+  if (n.includes('ferias venc')) return 'vencidas';
+  if (n.includes('ferias propor')) return 'proporcionais';
+  if (n.includes('ferias antec')) return 'antecipadas';
+  if (n.includes('qtd') && n.includes('dias')) return 'diasFerias';
+  if (n.includes('dias pagos')) return 'diasPagos';
+  return null;
+}
+function unidadeDoCC(cc){
+  const n = OPS.normalize(cc);
+  if (n.includes('touros')) return 'TOUROS';
+  if (n.includes('natal')) return 'NATAL';
+  return (cc || '').toString().split('-').pop().trim().toUpperCase();
+}
+async function importarPlanilha(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+  const hIdx = linhas.findIndex(r => r.some(c => OPS.normalize(c) === 'matricula'));
+  if (hIdx < 0){ OPS.showToast('⚠️ Não encontrei a coluna "Matrícula" na planilha.'); return; }
+  const cab = linhas[hIdx].map(mapHeader);
+  const novos = [];
+  linhas.slice(hIdx + 1).forEach(r => {
+    const o = {};
+    cab.forEach((k, i) => { if (k) o[k] = r[i]; });
+    if (!o.matricula && !o.nome) return;
+    const [aqIni, aqFim] = String(o.aquisitivo || '').split(/\s+-\s+/).map(s => iso(parseData(s)));
+    const txt = v => { const d = parseData(v); return d ? iso(d) : String(v || '').trim(); };
+    novos.push({
+      id: `${normMat(o.matricula)}_${aqIni || ''}`,
+      unidade: unidadeDoCC(o.cc),
+      cc: String(o.cc || '').trim(),
+      matricula: normMat(o.matricula),
+      nome: String(o.nome || '').trim(),
+      funcao: String(o.funcao || '').trim(),
+      admissao: iso(parseData(o.admissao)),
+      aquisitivoIni: aqIni || '', aquisitivoFim: aqFim || '',
+      limiteIdeal: iso(parseData(o.limiteIdeal)),
+      limiteMax: iso(parseData(o.limiteMax)),
+      agendamento: txt(o.agendamento), inicio: txt(o.inicio), fim: txt(o.fim), aviso: txt(o.aviso),
+      status: String(o.status || '').trim().toUpperCase(),
+      vencidas: Number(o.vencidas) || 0, proporcionais: Number(o.proporcionais) || 0,
+      antecipadas: Number(o.antecipadas) || 0, diasFerias: Number(o.diasFerias) || 0, diasPagos: Number(o.diasPagos) || 0,
+    });
+  });
+  if (!novos.length){ OPS.showToast('⚠️ Nenhuma linha válida na planilha.'); return; }
+  dados = novos;
+  OPS.saveData(KEY_DADOS, dados);
+  await OPS.syncPushWithToast(SYNC_DADOS, [{ _meta: true, importadoEm: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || '', arquivo: file.name }, ...dados]);
+  renderAll();
+}
+document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+document.getElementById('file-import').onchange = e => { const f = e.target.files[0]; if (f) importarPlanilha(f); e.target.value = ''; };
+
+// ---------- ajustes compartilhados (fora da conta / mês fixo) ----------
+function ajusteDe(mat){ return ajustes.find(a => a.id === mat) || null; }
+async function salvarAjuste(mat, patch){
+  const atual = ajusteDe(mat) || { id: mat, foraDaConta: false, motivo: '', mesFixo: '' };
+  const novo = { ...atual, ...patch, atualizadoEm: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || '' };
+  ajustes = ajustes.filter(a => a.id !== mat);
+  if (novo.foraDaConta || novo.motivo || novo.mesFixo) ajustes.push(novo);
+  OPS.saveData(KEY_AJUSTES, ajustes);
+  renderAll();
+  await OPS.syncPushWithToast(SYNC_AJUSTES, ajustes);
+}
+
+// ---------- montagem da análise ----------
+function analisar(){
+  const ano = +els.ano.value;
+  const cap = +els.cap.value;
+  const uni = els.unidade.value;
+  const inicioAno = new Date(ano, 0, 1);
+  const pessoas = {};
+  dados.filter(d => !d._meta && (!uni || d.unidade === uni)).forEach(d => {
+    (pessoas[d.matricula] = pessoas[d.matricula] || []).push(d);
+  });
+
+  const naConta = [], outros = [];
+  Object.values(pessoas).forEach(periodos => {
+    periodos.sort((a, b) => (a.limiteMax || '').localeCompare(b.limiteMax || ''));
+    const base = periodos[0];
+    const pend = periodos.filter(p => !RESOLVIDO.includes(p.status));
+    const atrasado = pend.find(p => parseData(p.limiteMax) && parseData(p.limiteMax) < inicioAno);
+    const doAno = pend.find(p => { const l = parseData(p.limiteMax); return l && l.getFullYear() === ano; });
+    const resolvidoNoAno = periodos.find(p => RESOLVIDO.includes(p.status) && parseData(p.limiteMax) && parseData(p.limiteMax).getFullYear() === ano);
+    const aj = ajusteDe(base.matricula);
+    const pessoa = { matricula: base.matricula, nome: base.nome, funcao: base.funcao, admissao: base.admissao, unidade: base.unidade, ajuste: aj };
+
+    if (atrasado){
+      outros.push({ ...pessoa, periodo: atrasado, situacao: { txt: 'Limite já passou sem agendamento', cls: 'crit' } });
+    }
+    if (doAno){
+      const lim = parseData(doAno.limiteMax);
+      const libera = parseData(doAno.aquisitivoFim); if (libera) libera.setDate(libera.getDate() + 1);
+      // índice de mês: 0 = dezembro do ano anterior, 1..12 = jan..dez do ano
+      const mesLimite = lim.getMonth() + 1;
+      let mesMin = 0;
+      if (libera){
+        if (libera.getFullYear() > ano) mesMin = 13;
+        else if (libera.getFullYear() === ano) mesMin = libera.getMonth() + 1;
+      }
+      naConta.push({ ...pessoa, periodo: doAno, mesLimite, mesMin, fora: !!(aj && aj.foraDaConta) });
+    } else if (resolvidoNoAno){
+      outros.push({ ...pessoa, periodo: resolvidoNoAno, situacao: { txt: resolvidoNoAno.status === 'PROGRAMADA' ? 'Programada' : 'Confeccionada', cls: 'ok' } });
+    } else if (!atrasado){
+      const prox = pend[0] || periodos[periodos.length - 1];
+      const l = parseData(prox.limiteMax);
+      outros.push({ ...pessoa, periodo: prox, situacao: l && l.getFullYear() > ano
+        ? { txt: `Limite só em ${l.getFullYear()}`, cls: 'neutral' }
+        : { txt: 'Sem período pendente', cls: 'neutral' } });
+    }
+  });
+
+  // planejamento: meses fixos primeiro, depois do fim do ano para o começo,
+  // cada mês recebe primeiro quem vence nele e depois quem sobrou dos meses seguintes
+  const plano = {};
+  const ocup = Array(13).fill(0);
+  const ativos = naConta.filter(p => !p.fora);
+  ativos.forEach(p => {
+    const mf = p.ajuste && p.ajuste.mesFixo;
+    if (mf){
+      const [y, m] = mf.split('-').map(Number);
+      const idx = y === ano ? m : (y === ano - 1 && m === 12 ? 0 : null);
+      if (idx !== null){ plano[p.matricula] = idx; ocup[idx]++; }
+    }
+  });
+  for (let m = 12; m >= 0; m--){
+    const cand = ativos.filter(p => plano[p.matricula] === undefined && p.mesLimite >= Math.max(m, 1) && p.mesMin <= m);
+    cand.sort((a, b) => ((a.mesLimite !== m) - (b.mesLimite !== m)) || (b.mesMin - a.mesMin) || (b.mesLimite - a.mesLimite));
+    for (const p of cand){
+      if (ocup[m] >= cap) break;
+      plano[p.matricula] = m; ocup[m]++;
+    }
+  }
+  naConta.forEach(p => { p.mesPlano = p.fora ? null : (plano[p.matricula] ?? -1); });
+  return { ano, cap, naConta, outros, ocup };
+}
+
+// ---------- render ----------
+function labelMes(idx, ano){ return idx === 0 ? `dez/${String(ano-1).slice(2)}` : `${MESES[idx-1]}/${String(ano).slice(2)}`; }
+
+function renderAll(){
+  const a = analisar();
+  const q = OPS.normalize(els.search.value);
+  const filtro = p => !q || OPS.normalize(p.nome + ' ' + p.matricula).includes(q);
+
+  const ativos = a.naConta.filter(p => !p.fora);
+  const adiantam = ativos.filter(p => p.mesPlano >= 0 && p.mesPlano < p.mesLimite);
+  const semVaga = ativos.filter(p => p.mesPlano === -1);
+  const atrasados = a.outros.filter(o => o.situacao.cls === 'crit');
+  const programadas = a.outros.filter(o => o.situacao.cls === 'ok');
+  const fora = a.naConta.filter(p => p.fora);
+  const card = (label, value, cls = '', sub = '') => `<div class="stat-card ${cls}"><div class="label">${label}</div><div class="value">${value}${sub ? ` <small>${sub}</small>` : ''}</div></div>`;
+  document.getElementById('stat-row').innerHTML =
+    card(`Limite em ${a.ano}`, ativos.length, 'brand', 'na conta') +
+    card('Precisam adiantar', adiantam.length, adiantam.length ? 'warn' : 'ok', `${adiantam.reduce((s, p) => s + (p.mesLimite - p.mesPlano), 0)} meses`) +
+    card('Sem vaga no plano', semVaga.length, semVaga.length ? 'crit' : 'ok') +
+    card('Limite vencido sem agendar', atrasados.length, atrasados.length ? 'crit' : 'ok') +
+    card('Programadas / confeccionadas', programadas.length) +
+    card('Fora da conta', fora.length);
+
+  // grade mensal
+  const lim = Array(13).fill(0);
+  const nomesPlano = Array.from({ length: 13 }, () => []);
+  ativos.forEach(p => { lim[p.mesLimite]++; if (p.mesPlano >= 0) nomesPlano[p.mesPlano].push(nomeCurto(p.nome) + (p.mesPlano < p.mesLimite ? ' ⤺' : '')); });
+  let g = '<div></div>';
+  for (let i = 0; i <= 12; i++) g += `<div class="h">${labelMes(i, a.ano)}</div>`;
+  g += '<div class="rl">Limite</div>';
+  for (let i = 0; i <= 12; i++) g += `<div class="c lim ${lim[i] ? '' : 'zero'} ${i === 0 ? 'prev' : ''}">${i === 0 ? '–' : lim[i]}</div>`;
+  g += `<div class="rl">Plano (máx. ${a.cap})</div>`;
+  for (let i = 0; i <= 12; i++){
+    const v = a.ocup[i];
+    const cls = v === 0 ? 'zero' : (v > a.cap ? 'estouro' : (v === a.cap ? 'cheio' : ''));
+    g += `<div><div class="c ${cls} ${i === 0 ? 'prev' : ''}">${v}</div><div class="fer-names">${nomesPlano[i].map(esc).join('<br>')}</div></div>`;
+  }
+  document.getElementById('fer-grid').innerHTML = g;
+
+  // tabela principal
+  const opcoesMes = sel => {
+    let h = `<option value="">Automático</option>`;
+    for (let i = 0; i <= 12; i++){
+      const val = i === 0 ? `${a.ano - 1}-12` : `${a.ano}-${String(i).padStart(2, '0')}`;
+      h += `<option value="${val}" ${sel === val ? 'selected' : ''}>${labelMes(i, a.ano)}</option>`;
+    }
+    return h;
+  };
+  const linhas = a.naConta.filter(filtro).sort((x, y) => (x.fora - y.fora) || ((x.mesPlano ?? 99) - (y.mesPlano ?? 99)) || x.periodo.limiteMax.localeCompare(y.periodo.limiteMax));
+  document.getElementById('tb-plano').innerHTML = linhas.map(p => {
+    const aj = p.ajuste || {};
+    const adianta = (!p.fora && p.mesPlano >= 0) ? p.mesLimite - p.mesPlano : null;
+    const planoTxt = p.fora ? '—' : (p.mesPlano === -1 ? '<span class="badge crit">Sem vaga</span>' : `<span class="badge ${adianta ? 'warn' : 'ok'}">${labelMes(p.mesPlano, a.ano)}</span>`);
+    return `<tr class="${p.fora ? 'fora' : ''}">
+      <td title="${esc(p.funcao)}">${esc(p.nome)}<br><span style="color:var(--ink-faint)">${esc(p.matricula)} · ${esc(p.unidade)}</span></td>
+      <td>${br(p.admissao)}</td>
+      <td>${br(p.periodo.aquisitivoIni)} a ${br(p.periodo.aquisitivoFim)}</td>
+      <td><b>${br(p.periodo.limiteMax)}</b></td>
+      <td><span class="badge neutral">${esc(p.periodo.status || '—')}</span></td>
+      <td>${planoTxt}</td>
+      <td class="num">${adianta ? `${adianta} ${adianta === 1 ? 'mês' : 'meses'}` : (p.fora ? '' : '—')}</td>
+      <td class="keep"><select data-mat="${esc(p.matricula)}" data-act="mes" ${p.fora ? 'disabled' : ''}>${opcoesMes(aj.mesFixo || '')}</select></td>
+      <td class="keep num"><input type="checkbox" data-mat="${esc(p.matricula)}" data-act="conta" ${p.fora ? '' : 'checked'}></td>
+      <td class="keep"><input type="text" data-mat="${esc(p.matricula)}" data-act="motivo" value="${esc(aj.motivo || '')}" placeholder="ex.: desligamento"></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="10" style="text-align:center;color:var(--ink-dim);padding:18px">${dados.length ? 'Ninguém com limite no ano selecionado.' : 'Nenhuma planilha importada ainda.'}</td></tr>`;
+
+  document.getElementById('outros-title').textContent = `Fora do ano da análise (${a.ano})`;
+  document.getElementById('tb-outros').innerHTML = a.outros.filter(filtro)
+    .sort((x, y) => (x.situacao.cls === 'crit' ? -1 : 0) - (y.situacao.cls === 'crit' ? -1 : 0) || (x.periodo.limiteMax || '').localeCompare(y.periodo.limiteMax || ''))
+    .map(o => `<tr>
+      <td>${esc(o.nome)}<br><span style="color:var(--ink-faint)">${esc(o.matricula)} · ${esc(o.unidade)}</span></td>
+      <td>${br(o.admissao)}</td>
+      <td>${br(o.periodo.aquisitivoIni)} a ${br(o.periodo.aquisitivoFim)}</td>
+      <td>${br(o.periodo.limiteMax)}</td>
+      <td><span class="badge neutral">${esc(o.periodo.status || '—')}</span></td>
+      <td><span class="badge ${o.situacao.cls}">${esc(o.situacao.txt)}</span></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-dim);padding:14px">—</td></tr>';
+
+  const meta = (window.__feriasMeta || null);
+  document.getElementById('fer-base-info').textContent = meta ? `Base: ${meta.arquivo || 'planilha'} · ${OPS.formatDateTimeBR ? OPS.formatDateTimeBR(meta.importadoEm) : meta.importadoEm}` : '';
+}
+
+document.getElementById('tb-plano').addEventListener('change', e => {
+  const t = e.target, mat = t.dataset.mat;
+  if (!mat) return;
+  if (t.dataset.act === 'conta') salvarAjuste(mat, { foraDaConta: !t.checked });
+  if (t.dataset.act === 'mes') salvarAjuste(mat, { mesFixo: t.value });
+  if (t.dataset.act === 'motivo') salvarAjuste(mat, { motivo: t.value.trim() });
+});
+[els.unidade, els.ano, els.cap].forEach(el => el.addEventListener('change', renderAll));
+els.search.addEventListener('input', renderAll);
+
+document.getElementById('btn-export').onclick = () => {
+  const a = analisar();
+  const headers = ['MATRÍCULA', 'NOME', 'UNIDADE', 'ADMISSÃO', 'PERÍODO AQUISITIVO', 'LIMITE MÁX.', 'STATUS PLANILHA', 'MÊS NO PLANO', 'ADIANTA (MESES)', 'NA CONTA', 'MOTIVO'];
+  const rows = a.naConta.map(p => [p.matricula, p.nome, p.unidade, br(p.admissao), `${br(p.periodo.aquisitivoIni)} a ${br(p.periodo.aquisitivoFim)}`, br(p.periodo.limiteMax), p.periodo.status,
+    p.fora ? '' : (p.mesPlano >= 0 ? labelMes(p.mesPlano, a.ano) : 'SEM VAGA'), (!p.fora && p.mesPlano >= 0) ? p.mesLimite - p.mesPlano : '', p.fora ? 'NÃO' : 'SIM', (p.ajuste && p.ajuste.motivo) || '']);
+  OPS.downloadXLSX(`plano-ferias-${a.ano}-max${a.cap}.xlsx`, headers, rows);
+};
+
+async function initPage(silencioso = false){
+  const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
+  const [d, aj] = await Promise.all([OPS.syncPull(SYNC_DADOS), OPS.syncPull(SYNC_AJUSTES)]);
+  if (toast) toast.remove();
+  if (d){
+    window.__feriasMeta = d.find(x => x && x._meta) || null;
+    dados = d.filter(x => x && !x._meta).map(x => ({ ...x, matricula: normMat(x.matricula) }));
+    OPS.saveData(KEY_DADOS, dados);
+  }
+  if (aj){ ajustes = aj.map(x => ({ ...x, id: normMat(x.id) })); OPS.saveData(KEY_AJUSTES, ajustes); }
+  renderAll();
+  return !!(d || aj);
+}
+window.OPS_ON_REFRESH = initPage;
+initPage();
+</script>
+</body>
+</html>
