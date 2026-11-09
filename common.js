@@ -12,6 +12,8 @@ const OPS = (() => {
   // inconsistentes vindas da planilha) + coordenada central de fallback.
   const CITY_REGISTRY = {
     'touros':                 { name: 'TOUROS',                lat: -5.1989, lng: -35.4608 },
+    // pseudo-cidade: protocolos da Unidade Touros sem cidade no Voalle (ponto no mar, em frente a Touros)
+    'sem cidade':             { name: 'SEM CIDADE',            lat: -5.1600, lng: -35.3800 },
     'natal':                  { name: 'NATAL',                 lat: -5.7945, lng: -35.2110 },
     'acari':                  { name: 'ACARI',                 lat: -6.4136, lng: -36.6417 },
     'canguaretama':           { name: 'CANGUARETAMA',          lat: -6.3800, lng: -35.1289 },
@@ -88,7 +90,7 @@ const OPS = (() => {
     'touros', 'sao miguel do gostoso', 'joao camara', 'macau', 'rio do fogo',
     'guamare', 'pendencias', 'sao bento do norte', 'parazinho', 'caicara do norte',
     'pedra grande', 'alto do rodrigues', 'serra do mel', 'porto do mangue',
-    'ipanguacu', 'afonso bezerra', 'bento fernandes',
+    'ipanguacu', 'afonso bezerra', 'bento fernandes', 'sem cidade',
   ];
   const NATAL_UNIT_CITIES = [
     'senador georgino avelino', 'sao jose de mipibu', 'nisia floresta', 'ares',
