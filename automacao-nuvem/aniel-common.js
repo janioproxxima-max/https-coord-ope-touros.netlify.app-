@@ -2,7 +2,7 @@
 // Se o endereço do Aniel mudar de novo, troque só aqui (uma linha).
 // Também dá pra sobrescrever sem editar arquivo: variável de ambiente ANIEL_URL.
 
-const ANIEL_URL = process.env.ANIEL_URL || 'https://proxxima.sinapseinformatica.com.br/Web/Aniel.Connect/#!';
+const ANIEL_URL = process.env.ANIEL_URL || 'https://proxxima.sinapseinformatica.com.br/Proxxima/Web/Aniel.Connect/#!';
 
 const MENU_SELECTOR = 'a.nav-link:has-text("Gestão de Técnicos")';
 
