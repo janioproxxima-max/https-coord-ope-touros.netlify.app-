@@ -1725,6 +1725,7 @@ const OPS_NAV_LINKS = [
   { href: 'atividades.html',      label: 'Atividades',         icon: '📋' },
   { href: 'alerta.html',           label: 'Alerta',             icon: '🚨' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
+  { href: 'ferias.html',           label: 'Férias',             icon: '🏖️' },
   { href: 'frotas.html',          label: 'Frotas',             icon: '🚚' },
 ];
 
@@ -1801,6 +1802,8 @@ function hasAccess(moduleKey, access){
   // promovida pro menu lateral - usa a mesma permissão de lá, sem precisar
   // cadastrar um acesso novo pra quem já enxerga Gestão Operacional
   if (moduleKey === 'produtividade-tempo-real') moduleKey = 'gestao-operacional';
+  // Férias faz parte de Gestão de Pessoas - mesma permissão
+  if (moduleKey === 'ferias') moduleKey = 'gestao-pessoas';
   return Array.isArray(access) && access.includes(moduleKey);
 }
 
