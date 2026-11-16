@@ -88,6 +88,30 @@
   .ad-zoom{ position:fixed; inset:0; background:rgba(6,8,10,.9); display:flex; align-items:center; justify-content:center; z-index:400; cursor:zoom-out; flex-direction:column; gap:10px; }
   .ad-zoom img{ max-width:92vw; max-height:84vh; border-radius:8px; }
   .ad-zoom p{ color:#e2eaf5; font-size:13px; margin:0; }
+  .cs-eq{ margin:4px 0 10px; }
+  .cs-eq-top{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:12.5px; }
+  .cs-eq-top span{ flex:1; color:var(--ink-dim); font-size:12px; }
+  .cs-cnt{ display:inline-block; min-width:38px; text-align:center; padding:2px 8px; border-radius:99px; font-size:11.5px; font-weight:700; background:var(--bg-raised); color:var(--ink-faint); }
+  .cs-cnt.meio{ background:rgba(255,209,102,.15); color:var(--warn); }
+  .cs-cnt.ok{ background:rgba(0,229,160,.15); color:var(--ok); }
+  .cs-cnt.crit{ background:rgba(255,77,109,.15); color:var(--crit); }
+  .cs-st{ display:inline-block; padding:3px 10px; border-radius:99px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .cs-st.ok{ background:rgba(0,229,160,.15); color:var(--ok); }
+  .cs-st.fb{ background:rgba(255,209,102,.15); color:var(--warn); }
+  .cs-st.aud{ background:rgba(255,77,109,.13); color:var(--crit); }
+  .ct-slots{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin:6px 0 4px; }
+  .ct-slot{ position:relative; display:flex; flex-direction:column; gap:3px; text-align:left; padding:10px 12px 10px 40px; border:1px dashed var(--line); border-radius:var(--radius-sm); background:var(--bg-panel-2); color:var(--ink-dim); font:inherit; font-size:12.5px; cursor:pointer; min-height:66px; }
+  .ct-slot b{ color:var(--ink); font-size:12.5px; }
+  .ct-slot small{ font-size:11px; color:var(--ink-faint); }
+  .ct-slot .ct-ic{ position:absolute; left:10px; top:12px; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; background:var(--bg-raised); color:var(--ink-dim); }
+  button.ct-slot:hover{ border-color:var(--brand); }
+  .ct-slot.feito{ border-style:solid; border-color:rgba(0,229,160,.4); cursor:default; }
+  .ct-slot.feito .ct-ic{ background:var(--ok); color:#0B1512; }
+  .ct-slot.fb:not(.feito){ border-color:var(--warn); }
+  .ct-slot.bloq{ opacity:.6; cursor:not-allowed; }
+  .fb-pre{ white-space:pre-wrap; font-size:12.5px; line-height:1.5; background:var(--bg-panel-2); border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:var(--radius-sm); padding:10px 12px; margin:0; }
+  .rg-op-txt{ font-size:12.5px; margin:4px 0; white-space:pre-wrap; line-height:1.45; }
+  .rg-op-txt b{ color:var(--ink-dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; display:block; }
   .rg-chips{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
   .rg-chip{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg-panel); font-size:12px; color:var(--ink-faint); }
   .rg-chip b{ font-family:var(--f-display); font-size:18px; color:var(--ink-faint); }
@@ -264,8 +288,32 @@
     </div>
   </div>
 
-  <!-- 3. Ações -->
-  <p class="ar-sec">Ações · início, andamento e fim</p>
+  <!-- 3. Ciclo semanal -->
+  <p class="ar-sec">Ciclo semanal dos ofensores · auditorias e feedback</p>
+  <div class="panel ar-panel" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+      <div style="flex:1;min-width:260px;">
+        <p class="ar-title">Plano da semana por ofensor</p>
+        <p class="ar-sub" style="margin:0">Toda segunda, quem gerou reabertura na semana anterior entra aqui sozinho. Cada ofensor precisa de 3 auditorias internas, 1 durante o atendimento e 1 pós atendimento; depois delas o feedback é liberado, já com o pré-feedback montado.</p>
+      </div>
+      <div class="field"><label for="cs-semana">Ciclo</label><select id="cs-semana"></select></div>
+      <div class="field"><label for="cs-equipe">Equipe</label>
+        <select id="cs-equipe"><option value="">Todas</option><option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option><option value="JOEL DIAS TAVARES">Joel Dias</option></select></div>
+      <div class="field"><label for="cs-status">Situação</label>
+        <select id="cs-status"><option value="">Todas</option><option value="pend">Pendentes</option><option value="aud">Falta auditoria</option><option value="fb">Falta só o feedback</option><option value="ok">Concluídos</option></select></div>
+    </div>
+    <div class="ar-mini-stats" id="cs-stats"></div>
+    <div id="cs-equipes"></div>
+    <div class="table-wrap" style="max-height:520px">
+      <table class="services compact">
+        <thead><tr><th>Técnico</th><th>Equipe</th><th>Reaberturas</th><th>Interna</th><th>Durante</th><th>Pós</th><th>Feedback</th><th>Evidências</th><th>Situação</th></tr></thead>
+        <tbody id="cs-tabela"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4. Ações -->
+  <p class="ar-sec">Ações do programa · início, andamento e fim</p>
   <div class="panel ar-panel" style="margin-bottom:16px;">
     <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
       <div style="flex:1;min-width:240px;">
@@ -402,6 +450,49 @@
   </div>
 </div>
 
+<!-- técnico no ciclo -->
+<div class="modal-backdrop" id="cs-modal" style="display:none">
+  <div class="modal wide">
+    <div class="ad-head">
+      <div style="flex:1"><div id="ct-status"></div><p class="ad-title" id="ct-nome"></p><p class="ad-sub" id="ct-sub"></p></div>
+      <div class="ad-actions"><button class="btn ghost" id="ct-analitico">📊 Analítico</button><button class="btn ghost" id="ct-fechar">Fechar</button></div>
+    </div>
+    <div class="ar-mini-stats" id="ct-stats" style="margin-top:12px"></div>
+    <div class="ad-box"><h4>Etapas do ciclo</h4><div class="ct-slots" id="ct-slots"></div></div>
+    <div class="ad-box">
+      <h4>Reaberturas que geraram o ciclo</h4>
+      <div class="table-wrap" style="max-height:240px"><table class="services ar-det compact">
+        <thead><tr><th>Reabertura</th><th>Data</th><th>Problema</th><th>OS anterior</th><th>Dias</th><th>Grupo</th><th>O que ele registrou</th></tr></thead>
+        <tbody id="ct-reabs"></tbody></table></div>
+    </div>
+    <div class="ad-box"><h4>Registros e evidências</h4><div id="ct-hist"></div></div>
+  </div>
+</div>
+
+<!-- feedback do ciclo -->
+<div class="modal-backdrop" id="fb-modal" style="display:none">
+  <div class="modal" style="max-width:min(720px,94vw)">
+    <h3>🗣️ Feedback do ciclo</h3>
+    <p class="modal-sub" id="fb-sub"></p>
+    <div class="field"><label>Pré-feedback (montado com as reaberturas e as auditorias)</label><p class="fb-pre" id="fb-pre"></p></div>
+    <div class="field"><label>Data</label><input class="input" id="fb-data" type="date"></div>
+    <div class="field"><label>Oportunidade · ponto de vista da equipe (o que o técnico disse)</label><textarea id="fb-op-eq" style="min-height:80px" placeholder="Como o técnico enxerga as reaberturas e o que ele acha que pode melhorar"></textarea></div>
+    <div class="field"><label>Oportunidade · ponto de vista do supervisor</label><textarea id="fb-op-sup" style="min-height:80px" placeholder="O que o supervisor viu nas auditorias e nas reaberturas"></textarea></div>
+    <div class="field"><label>Compromisso combinado</label><textarea id="fb-comp" style="min-height:60px" placeholder="Ex.: testar potência e tirar foto do sinal antes de encerrar toda OS"></textarea></div>
+    <div class="field"><label>Evidências (fotos)</label>
+      <div class="ad-actions">
+        <input class="input" id="fb-foto-legenda" type="text" placeholder="Legenda da foto (opcional)" style="min-width:200px;flex:1">
+        <label class="btn ghost ad-file">📷 Anexar fotos<input type="file" id="fb-fotos" accept="image/*" multiple></label>
+      </div>
+      <div class="rg-prev" id="fb-prev"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="fb-cancelar">Cancelar</button>
+      <button class="btn primary" id="fb-salvar">✅ Concluir feedback</button>
+    </div>
+  </div>
+</div>
+
 <!-- registro (auditoria / feedback) -->
 <div class="modal-backdrop" id="rg-modal" style="display:none">
   <div class="modal" style="max-width:min(720px,94vw)">
@@ -414,7 +505,7 @@
         <div class="field"><label>Data</label><input class="input" id="rg-data" type="date"></div>
         <div class="field" id="rg-prot-wrap"><label>Protocolo (se aplicável)</label><input class="input" id="rg-prot" type="text" placeholder="Ex: 8784054/1"></div>
       </div>
-      <div class="field">
+      <div class="field" id="rg-colabs-wrap">
         <label style="display:flex;justify-content:space-between;align-items:center;gap:8px">Colaboradores
           <span><button type="button" class="btn ghost" id="rg-todos" style="padding:2px 8px;font-size:11px">Marcar todos</button> <button type="button" class="btn ghost" id="rg-nenhum" style="padding:2px 8px;font-size:11px">Limpar</button></span></label>
         <input class="input" id="rg-busca" type="text" placeholder="Buscar colaborador" style="margin-bottom:6px">
@@ -1119,7 +1210,8 @@ function cardRegistro(r, fotos){
   if (r.protocolo) info.push('Protocolo ' + esc(r.protocolo));
   if (r.nota) info.push('Nota ' + r.nota + '/5');
   if (ok + nok) info.push(`<b style="color:${nok ? 'var(--crit)' : 'var(--ok)'}">${ok}/${ok + nok} conformes</b>`);
-  if (fotos.length) info.push('📷 ' + fotos.length + ' foto(s)');
+  const nF = fotos.length || Number(r.nFotos) || 0;
+  if (nF) info.push('📷 ' + nF + ' foto(s)');
   const ncs = r.checklist.filter(c => c.status === 'nao_conforme');
   return `<div class="rg-card">
     <div class="rg-top">
@@ -1130,6 +1222,9 @@ function cardRegistro(r, fotos){
     <p class="m">${info.join(' · ')}</p>
     ${r.assunto ? `<p class="rg-assunto">${esc(r.assunto)}</p>` : ''}
     ${r.obs ? `<p class="rg-obs">${esc(r.obs)}</p>` : ''}
+    ${r.opEquipe ? `<p class="rg-op-txt"><b>Oportunidade · visão da equipe</b>${esc(r.opEquipe)}</p>` : ''}
+    ${r.opSup ? `<p class="rg-op-txt"><b>Oportunidade · visão do supervisor</b>${esc(r.opSup)}</p>` : ''}
+    ${r.compromisso ? `<p class="rg-op-txt"><b>Compromisso</b>${esc(r.compromisso)}</p>` : ''}
     ${ncs.length ? `<ul class="rg-nc">${ncs.map(c => `<li>❌ ${esc(c.item)}${c.obs ? ' — ' + esc(c.obs) : ''}</li>`).join('')}</ul>` : ''}
     ${fotos.length ? galeria(fotos) : ''}
   </div>`;
@@ -1177,19 +1272,23 @@ el('ad-rg-lista').addEventListener('click', async e => {
 });
 
 // ---------- formulário de registro ----------
-let rgTipo = null, rgFotos = [], rgFotosItem = {}, rgColabs = new Set(), rgLista = [];
-function abrirRegistro(){
-  const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
-  rgTipo = null; rgFotos = []; rgFotosItem = {}; rgColabs = new Set();
-  rgLista = tecnicosDaEquipe(a.equipe);
+let rgTipo = null, rgFotos = [], rgFotosItem = {}, rgColabs = new Set(), rgLista = [], rgCtx = null;
+function abrirRegistro(ctx){
+  // ctx (do ciclo semanal): tipo e técnico já definidos
+  rgCtx = ctx && ctx.tipo ? ctx : null;
+  const a = rgCtx ? { id: rgCtx.acao, equipe: rgCtx.equipe, acao: rgCtx.titulo, tipo: 'Individual', tecnico: rgCtx.tecnico } : acoes.find(x => x.id === acaoAberta);
+  if (!a) return;
+  rgTipo = rgCtx ? rgCtx.tipo : null; rgFotos = []; rgFotosItem = {}; rgColabs = new Set();
+  rgLista = rgCtx ? [] : tecnicosDaEquipe(a.equipe);
   // tira os supervisores da lista (aparecem como técnico em algumas OS)
   rgLista = rgLista.filter(n => !EQUIPES.some(e => e.key === n));
   if (a.tecnico && !rgLista.includes(a.tecnico)) rgLista.unshift(a.tecnico);
   if (a.tipo === 'Individual' && a.tecnico) rgColabs.add(a.tecnico);
-  el('rg-sub').textContent = a.acao + ' · ' + labelEquipe(a.equipe);
+  el('rg-sub').textContent = (rgCtx ? rgCtx.tecnico + ' · ' : '') + a.acao + ' · ' + labelEquipe(a.equipe);
+  el('rg-colabs-wrap').style.display = rgCtx ? 'none' : '';
   el('rg-data').value = hojeISO();
   ['rg-prot', 'rg-assunto', 'rg-obs', 'rg-foto-legenda', 'rg-busca', 'rg-nota'].forEach(id => { el(id).value = ''; });
-  el('rg-opcoes').innerHTML = REG_TIPOS.map(t => `<button type="button" class="rg-op" data-k="${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('');
+  el('rg-opcoes').innerHTML = REG_TIPOS.filter(t => !rgCtx || t.k === rgCtx.tipo).map(t => `<button type="button" class="rg-op" data-k="${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('');
   aplicarTipoReg(); renderColabs(); renderPrevFotos();
   el('rg-modal').style.display = 'flex';
 }
@@ -1274,7 +1373,7 @@ function fecharRegistro(){ el('rg-modal').style.display = 'none'; }
 el('rg-cancelar').onclick = fecharRegistro;
 el('rg-modal').addEventListener('click', e => { if (e.target.id === 'rg-modal') fecharRegistro(); });
 el('rg-salvar').onclick = async () => {
-  const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
+  const a = rgCtx ? { id: rgCtx.acao } : acoes.find(x => x.id === acaoAberta); if (!a) return;
   if (!rgTipo){ OPS.showToast('⚠️ Escolha o que foi feito'); return; }
   if (!rgColabs.size){ OPS.showToast('⚠️ Selecione pelo menos um colaborador'); return; }
   const t = tipoReg(rgTipo);
@@ -1292,6 +1391,7 @@ el('rg-salvar').onclick = async () => {
     protocolo: t.aud ? el('rg-prot').value.trim() : '', nota: t.aud ? el('rg-nota').value : '',
     assunto: t.aud ? '' : el('rg-assunto').value.trim(), obs: el('rg-obs').value.trim(),
     checklist: JSON.stringify(checklist), usuario: usuario(), criadoEm: agora,
+    tec: rgCtx ? rgCtx.tecnico : '', ciclo: rgCtx ? rgCtx.ciclo : '',
   };
   const fotos = [];
   Object.entries(rgFotosItem).forEach(([i, foto]) => {
@@ -1300,6 +1400,7 @@ el('rg-salvar').onclick = async () => {
   });
   rgFotos.forEach(f => fotos.push(f));
   const novas = fotos.map((f, i) => ({ id: id + '|F' + i, acao: a.id, reg: id, foto: f.foto, legenda: f.legenda, data: agora, usuario: usuario() }));
+  reg.nFotos = novas.length;
   const btn = el('rg-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
   try{
     if (novas.length){
@@ -1311,6 +1412,7 @@ el('rg-salvar').onclick = async () => {
     if (!r2.ok) throw new Error('registro');
     regCache = r2.lista;
     fecharRegistro();
+    if (rgCtx){ rgCtx.onSaved(); return; }
     await atualizarContadores(a);
     renderRegistros(acoes.find(x => x.id === a.id) || a);
   }catch(err){
@@ -1322,6 +1424,233 @@ el('rg-salvar').onclick = async () => {
 el('ad-editar').onclick = () => abrirModal(acaoAberta);
 el('ad-fechar').onclick = () => { el('ad-modal').style.display = 'none'; acaoAberta = null; };
 el('ad-modal').addEventListener('click', e => { if (e.target.id === 'ad-modal'){ el('ad-modal').style.display = 'none'; acaoAberta = null; } });
+
+// ---------- ciclo semanal dos ofensores ----------
+// Toda segunda a semana anterior entra na base; quem gerou reabertura nela vira
+// "ofensor" do ciclo e precisa do pacote abaixo, executado na semana seguinte.
+const CICLO_REQ = [
+  { k: 'interna', n: 3, curto: 'interna' },
+  { k: 'durante_atendimento', n: 1, curto: 'durante' },
+  { k: 'pos_atendimento', n: 1, curto: 'pós' },
+];
+const CICLO_TOTAL_AUD = CICLO_REQ.reduce((t, r) => t + r.n, 0);
+const cicloId = sem => 'CICLO|' + sem;
+let cicloTecAberto = null;
+function semanasCiclo(){ return [...new Set(osData.filter(r => r.rec).map(r => segunda(r.ab)))].sort().reverse(); }
+const prazoCiclo = sem => { const d = new Date(domingo(sem) + 'T12:00:00'); d.setDate(d.getDate() + 7); return isoLocal(d); };
+function regsCiclo(sem, tec){
+  return (regCache || []).filter(r => r.acao === cicloId(sem) && (!tec || r.tec === tec))
+    .map(r => ({ ...r, data: String(r.data || '').slice(0, 10), colabs: jsonArr(r.colabs), checklist: jsonArr(r.checklist), nota: r.nota === '' || r.nota == null ? null : Number(r.nota), nFotos: Number(r.nFotos) || 0 }))
+    .sort((x, y) => (x.data + String(x.criadoEm)).localeCompare(y.data + String(y.criadoEm)));
+}
+function ofensoresCiclo(sem){
+  const m = {};
+  osData.filter(r => r.rec && r.teca && segunda(r.ab) === sem).forEach(r => {
+    if (EQUIPES.some(e => e.key === r.teca)) return; // supervisor fechando OS não entra
+    (m[r.teca] = m[r.teca] || []).push(r);
+  });
+  return Object.entries(m).map(([tec, reabs]) => {
+    const equipe = r0 => r0.supa && EQUIPES.some(e => e.key === r0.supa) ? r0.supa : supDoTecnico(tec);
+    const regs = regsCiclo(sem, tec);
+    const feitos = {}; CICLO_REQ.forEach(q => { feitos[q.k] = regs.filter(r => r.tipo === q.k).length; });
+    const faltaAud = CICLO_REQ.reduce((t, q) => t + Math.max(0, q.n - feitos[q.k]), 0);
+    const fb = regs.filter(r => r.tipo === 'feedback_individual').slice(-1)[0] || null;
+    const fotos = regs.reduce((t, r) => t + r.nFotos, 0);
+    let ok = 0, nok = 0; regs.forEach(r => r.checklist.forEach(c => { if (c.status === 'conforme') ok++; else if (c.status === 'nao_conforme') nok++; }));
+    const status = !faltaAud && fb ? 'ok' : !faltaAud ? 'fb' : 'aud';
+    return { tec, equipe: equipe(reabs[0]), reabs: reabs.sort((a, b) => a.ab.localeCompare(b.ab)), regs, feitos, faltaAud, fb, fotos, ok, nok, status };
+  }).sort((a, b) => b.reabs.length - a.reabs.length || a.tec.localeCompare(b.tec));
+}
+function textoFalta(o){
+  if (o.status === 'ok') return 'Concluído';
+  if (o.status === 'fb') return 'Falta só o feedback';
+  const p = CICLO_REQ.map(q => { const f = q.n - o.feitos[q.k]; return f > 0 ? f + ' ' + q.curto + (f > 1 && q.k === 'interna' ? 's' : '') : ''; }).filter(Boolean);
+  return 'Falta ' + p.join(', ') + ' + feedback';
+}
+function preencherCiclos(){
+  const s = semanasCiclo(); const atual = el('cs-semana').value;
+  el('cs-semana').innerHTML = s.map((k, i) => `<option value="${k}">Reaberturas de ${ddmm(k)} a ${ddmm(domingo(k))} · executar até ${ddmm(prazoCiclo(k))}${i === 0 ? ' (atual)' : ''}</option>`).join('');
+  if (atual && s.includes(atual)) el('cs-semana').value = atual;
+}
+function renderCiclo(){
+  const sem = el('cs-semana').value; if (!sem){ el('cs-tabela').innerHTML = '<tr><td colspan="9" class="ar-empty">Sem dados de recorrência carregados.</td></tr>'; return; }
+  const fe = el('cs-equipe').value, fs = el('cs-status').value;
+  const todos = ofensoresCiclo(sem).filter(o => !fe || o.equipe === fe);
+  const lista = todos.filter(o => !fs || (fs === 'pend' ? o.status !== 'ok' : o.status === fs));
+  const audFeitas = todos.reduce((t, o) => t + (CICLO_TOTAL_AUD - o.faltaAud), 0);
+  const fbFeitos = todos.filter(o => o.fb).length;
+  const concl = todos.filter(o => o.status === 'ok').length;
+  const fotos = todos.reduce((t, o) => t + o.fotos, 0);
+  const prazo = prazoCiclo(sem), rest = diasEntre(hojeISO(), prazo);
+  el('cs-stats').innerHTML = [
+    ['Ofensores no ciclo', todos.length, 'brand'],
+    ['Concluídos', concl + ' de ' + todos.length, todos.length && concl === todos.length ? 'ok' : concl ? 'warn' : 'crit'],
+    ['Auditorias feitas', audFeitas + ' de ' + todos.length * CICLO_TOTAL_AUD, ''],
+    ['Feedbacks feitos', fbFeitos + ' de ' + todos.length, ''],
+    ['Evidências', fotos, fotos ? 'ok' : ''],
+    ['Prazo do ciclo', ddmm(prazo) + (rest >= 0 ? ' · ' + rest + 'd' : ' · vencido'), rest < 0 && concl < todos.length ? 'crit' : ''],
+  ].map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:20px">${v}</div></div>`).join('');
+  // progresso por supervisor
+  const eqs = EQUIPES.filter(e => e.key !== 'UNIDADE TOUROS' && (!fe || e.key === fe));
+  el('cs-equipes').innerHTML = eqs.map(e => {
+    const os = todos.filter(o => o.equipe === e.key); if (!os.length) return '';
+    const total = os.length * (CICLO_TOTAL_AUD + 1);
+    const feito = os.reduce((t, o) => t + (CICLO_TOTAL_AUD - o.faltaAud) + (o.fb ? 1 : 0), 0);
+    const pct = Math.round(feito / total * 100);
+    return `<div class="cs-eq"><div class="cs-eq-top"><b>${esc(e.label)}</b><span>${os.length} ofensor(es) · ${os.filter(o => o.status === 'ok').length} concluído(s) · ${os.filter(o => o.status === 'fb').length} só falta feedback · ${os.filter(o => o.status === 'aud').length} com auditoria pendente</span><b style="color:${pct >= 100 ? 'var(--ok)' : 'var(--ink)'}">${pct}%</b></div><div class="ar-prog"><span style="width:${pct}%;background:${e.cor}"></span></div></div>`;
+  }).join('');
+  const cel = (f, n) => `<td><span class="cs-cnt ${f >= n ? 'ok' : f ? 'meio' : ''}">${f}/${n}</span></td>`;
+  el('cs-tabela').innerHTML = lista.length ? lista.map(o => `<tr data-cstec="${esc(o.tec)}" style="cursor:pointer">
+      <td><b>${esc(o.tec)}</b></td><td>${esc(labelEquipe(o.equipe))}</td>
+      <td><span class="cs-cnt ${o.reabs.length > 1 ? 'crit' : ''}">${o.reabs.length}</span></td>
+      ${CICLO_REQ.map(q => cel(o.feitos[q.k], q.n)).join('')}
+      <td>${o.fb ? '<span class="cs-cnt ok">feito</span>' : o.faltaAud ? '<span class="cs-cnt">aguarda</span>' : '<span class="cs-cnt meio">liberado</span>'}</td>
+      <td>${o.fotos ? '📷 ' + o.fotos : '—'}</td>
+      <td><span class="cs-st ${o.status}">${textoFalta(o)}</span></td></tr>`).join('')
+    : `<tr><td colspan="9" class="ar-empty">${todos.length ? 'Nenhum ofensor com esse filtro.' : 'Nenhuma reabertura nessa semana.'}</td></tr>`;
+}
+['cs-semana', 'cs-equipe', 'cs-status'].forEach(id => el(id).addEventListener('change', renderCiclo));
+el('cs-tabela').addEventListener('click', e => { const tr = e.target.closest('tr[data-cstec]'); if (tr) abrirCicloTec(tr.dataset.cstec); });
+
+// ---------- tela do técnico no ciclo ----------
+async function abrirCicloTec(tec){
+  const sem = el('cs-semana').value;
+  cicloTecAberto = { tec, sem };
+  renderCicloTec();
+  el('cs-modal').style.display = 'flex';
+  if (!evidCache){ await carregarAnexos(); if (cicloTecAberto && cicloTecAberto.tec === tec) renderCicloTec(); }
+}
+function resumoAuditoriasTec(o){
+  const auds = o.regs.filter(r => tipoReg(r.tipo).aud);
+  const nc = {}; const forte = {};
+  auds.forEach(r => r.checklist.forEach(c => {
+    if (c.status === 'nao_conforme'){ const x = nc[c.item] = nc[c.item] || { n: 0, obs: [] }; x.n++; if (c.obs) x.obs.push(c.obs); }
+    else if (c.status === 'conforme') forte[c.item] = (forte[c.item] || 0) + 1;
+  }));
+  const notas = auds.map(r => r.nota).filter(n => n);
+  return { auds, nc, forte: Object.keys(forte).filter(k => !nc[k]), notaMedia: notas.length ? notas.reduce((t, n) => t + n, 0) / notas.length : null };
+}
+function preFeedbackTexto(o){
+  const r = resumoAuditoriasTec(o);
+  const probs = {}; o.reabs.forEach(x => { probs[cap(x.prob || 'sem problema')] = (probs[cap(x.prob || 'sem problema')] || 0) + 1; });
+  const rap = o.reabs.filter(x => x.dias !== '' && Number(x.dias) <= 3).length;
+  const linhas = [];
+  linhas.push(`Reaberturas na semana ${ddmm(cicloTecAberto.sem)} a ${ddmm(domingo(cicloTecAberto.sem))}: ${o.reabs.length} (${Object.entries(probs).map(([k, v]) => k + ' ' + v).join(', ')})${rap ? ' · ' + rap + ' voltaram em até 3 dias' : ''}.`);
+  linhas.push(`Auditorias realizadas: ${r.auds.length} · conformidade ${o.ok + o.nok ? pctBR(o.ok / (o.ok + o.nok)) + ' (' + o.ok + '/' + (o.ok + o.nok) + ' itens)' : '—'}${r.notaMedia ? ' · nota média ' + r.notaMedia.toFixed(1).replace('.', ',') : ''}.`);
+  const ncs = Object.entries(r.nc).sort((a, b) => b[1].n - a[1].n);
+  if (ncs.length){ linhas.push('Pontos a melhorar:'); ncs.forEach(([k, x]) => linhas.push(`• ${k}${x.n > 1 ? ' (' + x.n + 'x)' : ''}${x.obs.length ? ': ' + x.obs.join('; ') : ''}`)); }
+  if (r.forte.length) linhas.push('Pontos fortes: ' + r.forte.slice(0, 6).join('; ') + (r.forte.length > 6 ? ' e mais ' + (r.forte.length - 6) + ' item(ns) conformes' : '') + '.');
+  return linhas.join('\n');
+}
+function renderCicloTec(){
+  if (!cicloTecAberto) return;
+  const { tec, sem } = cicloTecAberto;
+  const o = ofensoresCiclo(sem).find(x => x.tec === tec);
+  if (!o){ el('cs-modal').style.display = 'none'; return; }
+  el('ct-nome').textContent = tec;
+  el('ct-sub').textContent = labelEquipe(o.equipe) + ' · ciclo das reaberturas de ' + ddmm(sem) + ' a ' + ddmm(domingo(sem)) + ' · executar até ' + ddmm(prazoCiclo(sem));
+  el('ct-status').innerHTML = `<span class="cs-st ${o.status}">${textoFalta(o)}</span>`;
+  el('ct-stats').innerHTML = [
+    ['Reaberturas geradas', o.reabs.length, 'crit'],
+    ['Auditorias', (CICLO_TOTAL_AUD - o.faltaAud) + ' de ' + CICLO_TOTAL_AUD, o.faltaAud ? 'warn' : 'ok'],
+    ['Conformidade', o.ok + o.nok ? pctBR(o.ok / (o.ok + o.nok)) : '—', o.ok + o.nok ? (o.ok / (o.ok + o.nok) >= 0.9 ? 'ok' : o.ok / (o.ok + o.nok) >= 0.7 ? 'warn' : 'crit') : ''],
+    ['Feedback', o.fb ? 'Feito ' + ddmm(o.fb.data) : o.faltaAud ? 'Aguarda auditorias' : 'Liberado', o.fb ? 'ok' : ''],
+    ['Evidências', o.fotos, o.fotos ? 'ok' : ''],
+  ].map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:20px">${v}</div></div>`).join('');
+  // etapas: uma caixa por auditoria exigida + feedback
+  const slots = [];
+  CICLO_REQ.forEach(q => {
+    const feitos = o.regs.filter(r => r.tipo === q.k);
+    for (let i = 0; i < Math.max(q.n, feitos.length); i++){
+      const r = feitos[i]; const t = tipoReg(q.k);
+      const nome = t.label + (q.n > 1 ? ' ' + (i + 1) : '');
+      if (r){
+        const ok = r.checklist.filter(c => c.status === 'conforme').length, nok = r.checklist.filter(c => c.status === 'nao_conforme').length;
+        slots.push(`<div class="ct-slot feito"><span class="ct-ic">✓</span><b>${t.icon} ${esc(nome)}</b><small>${ddmm(r.data)}${r.protocolo ? ' · OS ' + esc(r.protocolo) : ''}</small><small style="color:${nok ? 'var(--crit)' : 'var(--ok)'}">${ok}/${ok + nok} conformes${r.nFotos ? ' · 📷 ' + r.nFotos : ''}</small></div>`);
+      } else slots.push(`<button class="ct-slot" data-novo="${q.k}"><span class="ct-ic">${i + 1 > feitos.length ? '+' : ''}</span><b>${t.icon} ${esc(nome)}</b><small>Pendente · clique para registrar</small></button>`);
+    }
+  });
+  slots.push(o.fb ? `<div class="ct-slot feito fb"><span class="ct-ic">✓</span><b>🗣️ Feedback</b><small>${ddmm(o.fb.data)}${o.fb.usuario ? ' · ' + esc(o.fb.usuario) : ''}</small><small>${o.fb.nFotos ? '📷 ' + o.fb.nFotos : 'sem foto'}</small></div>`
+    : o.faltaAud ? `<div class="ct-slot bloq"><span class="ct-ic">🔒</span><b>🗣️ Feedback</b><small>Libera depois das ${CICLO_TOTAL_AUD} auditorias (faltam ${o.faltaAud})</small></div>`
+    : `<button class="ct-slot fb" data-fb="1"><span class="ct-ic">+</span><b>🗣️ Feedback</b><small>Liberado · clique para fazer com o pré-feedback</small></button>`);
+  el('ct-slots').innerHTML = slots.join('');
+  el('ct-reabs').innerHTML = o.reabs.map(r => `<tr><td>${esc(r.id)}</td><td>${ddmm(r.ab)}</td><td>${esc(cap(r.prob))}</td><td>${esc(r.pa || '')}</td><td>${r.dias === '' ? '' : r.dias + 'd'}</td><td>${esc(cap(r.grp || ''))}</td><td class="ar-txt">${esc(r.txta || '')}</td></tr>`).join('');
+  // histórico com detalhe e fotos
+  const fotosDe = id => (evidCache || []).filter(f => f.reg === id);
+  el('ct-hist').innerHTML = o.regs.length ? o.regs.slice().reverse().map(r => cardRegistro(r, fotosDe(r.id))).join('') + (evidCache ? '' : '<p class="ad-note">Carregando fotos...</p>')
+    : '<p class="ad-note">Nada registrado ainda neste ciclo.</p>';
+}
+el('ct-slots').addEventListener('click', e => {
+  if (!cicloTecAberto) return;
+  const o = ofensoresCiclo(cicloTecAberto.sem).find(x => x.tec === cicloTecAberto.tec); if (!o) return;
+  const b = e.target.closest('[data-novo]');
+  if (b){ abrirRegistro({ acao: cicloId(cicloTecAberto.sem), ciclo: cicloTecAberto.sem, tipo: b.dataset.novo, tecnico: o.tec, equipe: o.equipe, titulo: 'Ciclo ' + ddmm(cicloTecAberto.sem) + ' a ' + ddmm(domingo(cicloTecAberto.sem)), onSaved: aposSalvarCiclo }); return; }
+  if (e.target.closest('[data-fb]')) abrirFeedback(o);
+});
+el('ct-hist').addEventListener('click', async e => {
+  const rm = e.target.closest('[data-rmreg]');
+  if (rm){
+    if (!rm.dataset.confirm){ rm.dataset.confirm = '1'; rm.textContent = 'Confirmar exclusão'; return; }
+    const id = rm.dataset.rmreg; rm.disabled = true; rm.textContent = 'Excluindo...';
+    const r1 = await gravarColecao(SYNC_REG, l => l.filter(x => x.id !== id)); regCache = r1.lista;
+    if ((evidCache || []).some(f => f.reg === id)){ const r2 = await gravarColecao(SYNC_EVID, l => l.filter(x => x.reg !== id)); evidCache = r2.lista; }
+    aposSalvarCiclo(); return;
+  }
+  const fig = e.target.closest('figure'); if (!fig) return;
+  const f = (evidCache || []).find(x => x.id === fig.dataset.id); if (!f) return;
+  const z = document.createElement('div'); z.className = 'ad-zoom';
+  const im = document.createElement('img'); im.src = f.foto; const p = document.createElement('p'); p.textContent = f.legenda || '';
+  z.append(im, p); z.onclick = () => z.remove(); document.body.appendChild(z);
+});
+function aposSalvarCiclo(){ renderCiclo(); renderCicloTec(); }
+el('ct-fechar').onclick = () => { el('cs-modal').style.display = 'none'; cicloTecAberto = null; };
+el('cs-modal').addEventListener('click', e => { if (e.target.id === 'cs-modal'){ el('cs-modal').style.display = 'none'; cicloTecAberto = null; } });
+el('ct-analitico').onclick = () => { if (cicloTecAberto) abrirTecnico(cicloTecAberto.tec); };
+
+// ---------- feedback com pré-feedback ----------
+let fbFotos = [], fbCtx = null;
+function abrirFeedback(o){
+  fbCtx = { tec: o.tec, equipe: o.equipe, sem: cicloTecAberto.sem };
+  fbFotos = [];
+  el('fb-sub').textContent = o.tec + ' · ' + labelEquipe(o.equipe) + ' · ciclo ' + ddmm(fbCtx.sem) + ' a ' + ddmm(domingo(fbCtx.sem));
+  el('fb-pre').textContent = preFeedbackTexto(o);
+  el('fb-data').value = hojeISO();
+  ['fb-op-eq', 'fb-op-sup', 'fb-comp', 'fb-foto-legenda'].forEach(id => { el(id).value = ''; });
+  renderFbFotos();
+  el('fb-modal').style.display = 'flex';
+}
+function renderFbFotos(){ el('fb-prev').innerHTML = fbFotos.map((f, i) => `<div><img src="${esc(f.foto)}" alt=""><button type="button" data-rmfoto="${i}" title="Tirar foto">✕</button><small>${esc(f.legenda || 'Sem legenda')}</small></div>`).join(''); }
+el('fb-fotos').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const legenda = el('fb-foto-legenda').value.trim(); let falhas = 0;
+  for (const f of files){ try{ fbFotos.push({ foto: await comprimirFoto(f), legenda }); }catch(err){ falhas++; } }
+  el('fb-foto-legenda').value = '';
+  if (falhas) OPS.showToast('⚠️ ' + falhas + ' foto(s) não puderam ser anexadas');
+  renderFbFotos();
+});
+el('fb-prev').addEventListener('click', e => { const b = e.target.closest('[data-rmfoto]'); if (!b) return; fbFotos.splice(Number(b.dataset.rmfoto), 1); renderFbFotos(); });
+el('fb-cancelar').onclick = () => { el('fb-modal').style.display = 'none'; };
+el('fb-modal').addEventListener('click', e => { if (e.target.id === 'fb-modal') el('fb-modal').style.display = 'none'; });
+el('fb-salvar').onclick = async () => {
+  if (!fbCtx) return;
+  const opEq = el('fb-op-eq').value.trim(), opSup = el('fb-op-sup').value.trim();
+  if (!opEq && !opSup){ OPS.showToast('⚠️ Preencha pelo menos uma das oportunidades'); return; }
+  const id = cicloId(fbCtx.sem) + '|' + Date.now().toString(36);
+  const agora = new Date().toISOString();
+  const novas = fbFotos.map((f, i) => ({ id: id + '|F' + i, acao: cicloId(fbCtx.sem), reg: id, foto: f.foto, legenda: f.legenda, data: agora, usuario: usuario() }));
+  const reg = { id, acao: cicloId(fbCtx.sem), ciclo: fbCtx.sem, tec: fbCtx.tec, tipo: 'feedback_individual', data: el('fb-data').value || hojeISO(),
+    colabs: JSON.stringify([fbCtx.tec]), protocolo: '', nota: '', assunto: 'Feedback do ciclo de recorrência', obs: '',
+    prefeedback: el('fb-pre').textContent, opEquipe: opEq, opSup, compromisso: el('fb-comp').value.trim(),
+    checklist: '[]', nFotos: novas.length, usuario: usuario(), criadoEm: agora };
+  const btn = el('fb-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    if (novas.length){ const r = await gravarColecao(SYNC_EVID, l => l.concat(novas)); if (!r.ok) throw new Error('fotos'); evidCache = r.lista; }
+    const r2 = await gravarColecao(SYNC_REG, l => l.concat(reg)); if (!r2.ok) throw new Error('registro'); regCache = r2.lista;
+    el('fb-modal').style.display = 'none';
+    aposSalvarCiclo();
+  }catch(err){ OPS.showToast('⚠️ Não consegui salvar o feedback agora, tente de novo'); }
+  finally{ btn.disabled = false; btn.textContent = '✅ Concluir feedback'; }
+};
 
 // ---------- eventos ----------
 function renderTopo(){ renderStats(); renderEvolucao(); renderTabela(); }
@@ -1341,7 +1670,7 @@ function normalizarOS(lista){
 }
 async function initPage(silencioso = false){
   const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [o, m, s, a] = await Promise.all([OPS.syncPull(SYNC_OS), OPS.syncPull(SYNC_OS_META), OPS.syncPull(SYNC_SEMANAL), OPS.syncPull(SYNC_ACOES)]);
+  const [o, m, s, a, rg] = await Promise.all([OPS.syncPull(SYNC_OS), OPS.syncPull(SYNC_OS_META), OPS.syncPull(SYNC_SEMANAL), OPS.syncPull(SYNC_ACOES), OPS.syncPull(SYNC_REG)]);
   if (toast) toast.remove();
   if (o && o.length){ osData = normalizarOS(o); OPS.saveData(KEY_OS, osData); } else osData = normalizarOS(osData);
   if (m && m[0]) osMeta = m[0];
@@ -1350,6 +1679,7 @@ async function initPage(silencioso = false){
     OPS.saveData(KEY_SEMANAL, semanalSalvo);
   }
   if (a){ acoes = a.filter(x => x && x.id); OPS.saveData(KEY_ACOES, acoes); }
+  if (rg) regCache = rg.filter(x => x && x.id);
   Object.keys(supCache).forEach(k => delete supCache[k]);
   semanal = montarSemanal();
   preencherSemanas();
@@ -1357,6 +1687,8 @@ async function initPage(silencioso = false){
   renderTopo();
   renderDetalhe();
   renderAcoes();
+  preencherCiclos();
+  renderCiclo();
   return !!(o || s || a);
 }
 window.OPS_ON_REFRESH = initPage;
