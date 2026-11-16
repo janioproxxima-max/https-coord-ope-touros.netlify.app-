@@ -88,6 +88,12 @@
   .ad-zoom{ position:fixed; inset:0; background:rgba(6,8,10,.9); display:flex; align-items:center; justify-content:center; z-index:400; cursor:zoom-out; flex-direction:column; gap:10px; }
   .ad-zoom img{ max-width:92vw; max-height:84vh; border-radius:8px; }
   .ad-zoom p{ color:#e2eaf5; font-size:13px; margin:0; }
+  .ar-tabs{ display:flex; gap:6px; margin:4px 0 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .ar-tab{ font:inherit; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-1px; color:var(--ink-dim); padding:10px 18px; cursor:pointer; display:flex; flex-direction:column; align-items:flex-start; gap:2px; font-size:14.5px; font-weight:700; }
+  .ar-tab small{ font-size:11.5px; font-weight:400; color:var(--ink-faint); }
+  .ar-tab:hover{ color:var(--ink); }
+  .ar-tab.on{ color:var(--ink); border-bottom-color:var(--brand); }
+  .ar-tab .pend{ display:inline-block; margin-left:6px; padding:0 7px; border-radius:99px; font-size:11px; background:var(--crit); color:#fff; vertical-align:2px; }
   .cs-eq{ margin:4px 0 10px; }
   .cs-eq-top{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:12.5px; }
   .cs-eq-top span{ flex:1; color:var(--ink-dim); font-size:12px; }
@@ -156,6 +162,12 @@
     <p class="page-sub">Taxa = reaberturas em até 30 dias ÷ reparos realizados na semana (seg–dom) · meta 10% · atualizado toda segunda com a semana anterior.</p>
   </div>
 
+  <div class="ar-tabs" role="tablist">
+    <button class="ar-tab on" data-tab="analitico" role="tab">📊 Analítico<small>Recorrência da semana, causas, cidades e técnicos ofensores</small></button>
+    <button class="ar-tab" data-tab="plano" role="tab"><span>🎯 Plano de ação<span class="pend" id="ar-tab-pend" style="display:none"></span></span><small id="ar-tab-plano-sub">Ciclo semanal dos ofensores e ações do programa</small></button>
+  </div>
+
+  <div class="ar-pane" id="pane-analitico">
   <!-- 1. Recorrência da semana -->
   <div class="panel toolbar">
     <div class="field">
@@ -288,8 +300,11 @@
     </div>
   </div>
 
+  </div>
+
+  <div class="ar-pane" id="pane-plano" style="display:none">
   <!-- 3. Ciclo semanal -->
-  <p class="ar-sec">Ciclo semanal dos ofensores · auditorias e feedback</p>
+  <p class="ar-sec" style="margin-top:6px">Ciclo semanal dos ofensores · auditorias e feedback</p>
   <div class="panel ar-panel" style="margin-bottom:16px;">
     <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
       <div style="flex:1;min-width:260px;">
@@ -336,6 +351,7 @@
       <div class="ar-col c2"><h4><span>2 · ANDAMENTO</span><span id="ar-n2">0</span></h4><div id="ar-col2"></div></div>
       <div class="ar-col c3"><h4><span>3 · FIM</span><span id="ar-n3">0</span></h4><div id="ar-col3"></div></div>
     </div>
+  </div>
   </div>
 
   <p class="ar-src" id="ar-fonte">Fonte: Operações Proxxima › Recorrência (analítico) e Gestão › Consolidado, coordenador Jânio Dantas Martins, Unidade Touros.</p>
@@ -1509,6 +1525,13 @@ function renderCiclo(){
       <td><span class="cs-st ${o.status}">${textoFalta(o)}</span></td></tr>`).join('')
     : `<tr><td colspan="9" class="ar-empty">${todos.length ? 'Nenhum ofensor com esse filtro.' : 'Nenhuma reabertura nessa semana.'}</td></tr>`;
 }
+function atualizarAbaPlano(){
+  const sem = semanasCiclo()[0]; if (!sem) return;
+  const os = ofensoresCiclo(sem); const pend = os.filter(o => o.status !== 'ok').length;
+  el('ar-tab-pend').style.display = pend ? '' : 'none';
+  el('ar-tab-pend').textContent = pend;
+  el('ar-tab-plano-sub').textContent = os.length ? `Ciclo ${ddmm(sem)} a ${ddmm(domingo(sem))}: ${os.length - pend} de ${os.length} ofensores concluídos · até ${ddmm(prazoCiclo(sem))}` : 'Ciclo semanal dos ofensores e ações do programa';
+}
 ['cs-semana', 'cs-equipe', 'cs-status'].forEach(id => el(id).addEventListener('change', renderCiclo));
 el('cs-tabela').addEventListener('click', e => { const tr = e.target.closest('tr[data-cstec]'); if (tr) abrirCicloTec(tr.dataset.cstec); });
 
@@ -1602,7 +1625,7 @@ el('ct-hist').addEventListener('click', async e => {
   const im = document.createElement('img'); im.src = f.foto; const p = document.createElement('p'); p.textContent = f.legenda || '';
   z.append(im, p); z.onclick = () => z.remove(); document.body.appendChild(z);
 });
-function aposSalvarCiclo(){ renderCiclo(); renderCicloTec(); }
+function aposSalvarCiclo(){ renderCiclo(); renderCicloTec(); atualizarAbaPlano(); }
 el('ct-fechar').onclick = () => { el('cs-modal').style.display = 'none'; cicloTecAberto = null; };
 el('cs-modal').addEventListener('click', e => { if (e.target.id === 'cs-modal'){ el('cs-modal').style.display = 'none'; cicloTecAberto = null; } });
 el('ct-analitico').onclick = () => { if (cicloTecAberto) abrirTecnico(cicloTecAberto.tec); };
@@ -1689,8 +1712,23 @@ async function initPage(silencioso = false){
   renderAcoes();
   preencherCiclos();
   renderCiclo();
+  atualizarAbaPlano();
   return !!(o || s || a);
 }
+// ---------- abas ----------
+function mostrarAba(t){
+  if (t !== 'plano') t = 'analitico';
+  document.querySelectorAll('.ar-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  el('pane-analitico').style.display = t === 'analitico' ? '' : 'none';
+  el('pane-plano').style.display = t === 'plano' ? '' : 'none';
+  try{ localStorage.setItem('ar_aba', t); }catch(err){}
+  if (history.replaceState) history.replaceState(null, '', '#' + t);
+  // gráficos criados com a aba escondida precisam recalcular o tamanho
+  requestAnimationFrame(() => { if (window.Chart && Chart.instances) Object.values(Chart.instances).forEach(c => c.resize()); });
+}
+document.querySelectorAll('.ar-tab').forEach(b => { b.onclick = () => mostrarAba(b.dataset.tab); });
+(() => { let salvo = ''; try{ salvo = localStorage.getItem('ar_aba') || ''; }catch(err){} mostrarAba(location.hash === '#plano' || location.hash === '#analitico' ? location.hash.slice(1) : salvo); })();
+
 window.OPS_ON_REFRESH = initPage;
 initPage();
 </script>
