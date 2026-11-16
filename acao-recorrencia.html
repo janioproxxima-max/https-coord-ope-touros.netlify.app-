@@ -6,6 +6,7 @@
 <title>Ação de Recorrência · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   .ar-sec{ font-family:var(--f-display); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--brand); margin:26px 0 12px; }
   .ar-grid2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; margin-bottom:16px; }
@@ -56,6 +57,39 @@
   table.services td.ar-txt, table.services.compact tbody td.ar-txt{ white-space:normal; min-width:240px; max-width:340px; overflow-wrap:anywhere; word-break:break-word; }
   table.ar-det td{ vertical-align:top; }
   .ar-tag{ font-size:11px; color:var(--ink-faint); }
+  /* ---- ações ---- */
+  .ar-card .tags{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .ar-card .foot{ display:flex; gap:10px; font-size:11px; color:var(--ink-faint); margin-top:6px; }
+  .ar-tipo{ display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; background:var(--brand-wash); color:var(--brand); }
+  .ar-tipo.ind{ background:var(--accent2-wash); color:var(--accent2); }
+  .ad-head{ display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:6px; }
+  .ad-title{ font-size:20px; font-weight:800; margin:6px 0 2px; line-height:1.25; }
+  .ad-sub{ font-size:12.5px; color:var(--ink-dim); margin:0; }
+  .ad-fases{ display:grid; grid-template-columns:repeat(3,1fr); margin:16px 0 10px; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); }
+  .ad-fases div{ padding:9px 12px; font-family:var(--f-display); font-size:11.5px; letter-spacing:.1em; color:var(--ink-faint); background:var(--bg-panel-2); }
+  .ad-fases div.feito{ background:var(--bg-raised); color:var(--ink-dim); }
+  .ad-fases div.on{ background:var(--brand); color:#0B1512; font-weight:700; }
+  .ad-tempo{ position:relative; height:10px; background:var(--bg-raised); border-radius:5px; margin:18px 0 6px; }
+  .ad-tempo .exec{ position:absolute; left:0; top:0; bottom:0; border-radius:5px; background:var(--ok); }
+  .ad-tempo .exec.atraso{ background:var(--crit); }
+  .ad-tempo .hoje{ position:absolute; top:-6px; width:2px; height:22px; background:var(--warn); }
+  .ad-tempo-leg{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-dim); }
+  .ad-box{ background:var(--bg-panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-top:14px; }
+  .ad-box h4{ margin:0 0 8px; font-size:13px; }
+  .ad-detalhe{ white-space:pre-wrap; font-size:13px; line-height:1.5; color:var(--ink); margin:0; }
+  .ad-gal{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .ad-gal figure{ margin:0; background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; cursor:zoom-in; position:relative; }
+  .ad-gal img{ width:100%; height:120px; object-fit:cover; display:block; }
+  .ad-gal figcaption{ font-size:11px; color:var(--ink-dim); padding:6px 8px; line-height:1.3; }
+  .ad-gal .rm{ position:absolute; top:4px; right:4px; background:rgba(11,15,26,.8); color:var(--ink); border:1px solid var(--line); border-radius:4px; font-size:11px; padding:1px 6px; cursor:pointer; }
+  .ad-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .ad-file{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .ad-file input{ display:none; }
+  .ad-note{ font-size:11.5px; color:var(--ink-faint); }
+  .ad-zoom{ position:fixed; inset:0; background:rgba(6,8,10,.9); display:flex; align-items:center; justify-content:center; z-index:400; cursor:zoom-out; flex-direction:column; gap:10px; }
+  .ad-zoom img{ max-width:92vw; max-height:84vh; border-radius:8px; }
+  .ad-zoom p{ color:#e2eaf5; font-size:13px; margin:0; }
+  .ad-aud-files{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
 </style>
 </head>
 <body>
@@ -257,11 +291,63 @@
   </div>
 </div>
 
+<!-- tela da ação -->
+<div class="modal-backdrop" id="ad-modal" style="display:none">
+  <div class="modal wide">
+    <div class="ad-head">
+      <div style="flex:1">
+        <div class="tags" id="ad-tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <p class="ad-title" id="ad-titulo"></p>
+        <p class="ad-sub" id="ad-sub"></p>
+      </div>
+      <div class="ad-actions">
+        <button class="btn ghost" id="ad-editar">✏️ Editar</button>
+        <button class="btn ghost" id="ad-fechar">Fechar</button>
+      </div>
+    </div>
+    <div class="ad-fases" id="ad-fases"><div>1 · INÍCIO</div><div>2 · ANDAMENTO</div><div>3 · FIM</div></div>
+    <div class="ar-mini-stats" id="ad-stats"></div>
+    <div class="ad-tempo" id="ad-tempo"></div>
+    <div class="ad-tempo-leg" id="ad-tempo-leg"></div>
+
+    <div class="ad-box">
+      <h4>O que será feito</h4>
+      <p class="ad-detalhe" id="ad-detalhe"></p>
+    </div>
+
+    <div class="ad-box">
+      <h4 id="ad-res-titulo">Resultado na recorrência</h4>
+      <p class="ad-note" id="ad-res-nota" style="margin:0 0 8px"></p>
+      <div class="ar-chart" style="height:220px"><canvas id="ad-chart-res"></canvas></div>
+    </div>
+
+    <div class="ad-box">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <h4 style="margin:0">Auditoria</h4>
+        <label class="btn ghost ad-file">📊 Adicionar planilha<input type="file" id="ad-aud-input" accept=".xlsx,.xls,.csv"></label>
+      </div>
+      <div class="ad-aud-files" id="ad-aud-files"></div>
+      <div id="ad-aud-corpo"><p class="ad-note">Nenhuma planilha de auditoria ainda. Anexe a planilha (.xlsx ou .csv) com uma linha por item auditado: a página lê e resume sozinha.</p></div>
+    </div>
+
+    <div class="ad-box">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <h4 style="margin:0">Evidências</h4>
+        <div class="ad-actions">
+          <input class="input" id="ad-foto-legenda" type="text" placeholder="Legenda da foto (opcional)" style="min-width:220px">
+          <label class="btn ghost ad-file">📷 Adicionar fotos<input type="file" id="ad-foto-input" accept="image/*" multiple></label>
+        </div>
+      </div>
+      <div class="ad-gal" id="ad-gal"></div>
+    </div>
+  </div>
+</div>
+
 <!-- cadastro de ação -->
 <div class="modal-backdrop" id="ar-modal" style="display:none">
   <div class="modal">
     <h3 id="ar-m-title">Nova ação</h3>
-    <p class="modal-sub">Preencha o que já souber. Você pode voltar e atualizar o andamento a qualquer momento.</p>
+    <p class="modal-sub">O responsável é o supervisor da equipe. Fotos e planilha de auditoria são adicionadas depois, ao abrir a ação.</p>
     <div class="grid2">
       <div class="field"><label>Equipe</label>
         <select id="m-equipe">
@@ -269,23 +355,20 @@
           <option value="JOEL DIAS TAVARES">Joel Dias</option>
           <option value="UNIDADE TOUROS">Unidade (geral)</option>
         </select></div>
-      <div class="field"><label>Responsável</label><input class="input" id="m-resp" type="text"></div>
+      <div class="field"><label>Tipo</label>
+        <select id="m-tipo">
+          <option value="Coletivo">Coletivo (toda a equipe)</option>
+          <option value="Individual">Individual (um técnico)</option>
+        </select></div>
     </div>
-    <div class="field"><label>Ação</label><input class="input" id="m-acao" type="text" placeholder="O que será feito"></div>
-    <div class="field"><label>Causa que ataca</label><input class="input" id="m-causa" type="text" placeholder="Ex.: problema no conector em Macau"></div>
+    <div class="field" id="m-tec-wrap" style="display:none"><label>Técnico</label><select id="m-tec"></select></div>
+    <div class="field"><label>Ação</label><input class="input" id="m-acao" type="text" placeholder="Ex.: reciclagem de conector com a equipe de Macau"></div>
     <div class="grid2">
       <div class="field"><label>Início</label><input class="input" id="m-ini" type="date"></div>
       <div class="field"><label>Prazo</label><input class="input" id="m-prazo" type="date"></div>
     </div>
-    <div class="grid2">
-      <div class="field"><label>% executado</label><input class="input" id="m-pct" type="number" min="0" max="100" step="5" placeholder="0"></div>
-      <div class="field"><label>Indicador de sucesso</label><input class="input" id="m-ind" type="text" placeholder="Ex.: reaberturas por conector"></div>
-    </div>
-    <div class="grid2">
-      <div class="field"><label>Indicador antes</label><input class="input" id="m-antes" type="number" step="any"></div>
-      <div class="field"><label>Indicador agora</label><input class="input" id="m-agora" type="number" step="any"></div>
-    </div>
-    <div class="field"><label>Andamento / resultado</label><textarea id="m-obs" placeholder="O que já foi feito, o que travou, resultado"></textarea></div>
+    <div class="field"><label>% executado</label><input class="input" id="m-pct" type="number" min="0" max="100" step="5" placeholder="0"></div>
+    <div class="field"><label>O que será feito (em detalhes)</label><textarea id="m-obs" style="min-height:110px" placeholder="Passo a passo, onde, com quem, quantas visitas/auditorias, o que já foi feito e o que falta"></textarea></div>
     <div class="grid2">
       <div class="field"><label>Data de conclusão</label><input class="input" id="m-fim" type="date"></div>
       <div class="field"><label>Eficaz?</label>
@@ -681,11 +764,35 @@ el('ar-of-body').addEventListener('click', e => { const tr = e.target.closest('t
 el('ar-crit-body').addEventListener('click', e => { const a = e.target.closest('a[data-tec]'); if (a){ e.preventDefault(); abrirTecnico(a.dataset.tec); } });
 
 // ---------- ações ----------
+const SYNC_EVID = 'RecorrenciaAcoesEvidencias';
+const SYNC_AUD = 'RecorrenciaAcoesAuditoria';
+let evidCache = null, audCache = null, acaoAberta = null, audArqSel = null;
+const usuario = () => sessionStorage.getItem('ops_user') || '';
 function fase(a){
   if (a.conclusao) return 3;
   if (Number(a.pct) > 0) return 2;
   return 1;
 }
+// grava lendo a versão mais nova antes (evita apagar o que outra pessoa salvou)
+async function gravarColecao(colecao, alterar){
+  const atual = (await OPS.syncPull(colecao)) || [];
+  const nova = alterar(atual.filter(x => x && x.id));
+  const ok = await OPS.syncPushWithToast(colecao, nova);
+  return { ok, lista: nova };
+}
+function tecnicosDaEquipe(eq){
+  const set = new Set(osData.filter(r => r.tec && (eq === 'UNIDADE TOUROS' || r.sup === eq)).map(r => r.tec));
+  return [...set].sort();
+}
+function prazoBadge(a, n){
+  if (!a.prazo || n === 3) return '';
+  const hoje = hojeISO();
+  const cls = a.prazo < hoje ? 'vencido' : a.prazo === hoje ? 'hoje' : 'ok';
+  const txt = a.prazo < hoje ? 'Prazo vencido ' + ddmm(a.prazo) : a.prazo === hoje ? 'Vence hoje' : 'Prazo ' + ddmm(a.prazo);
+  return `<span class="badge-sla ${cls}">${txt}</span>`;
+}
+const tipoTag = a => a.tipo === 'Individual' ? `<span class="ar-tipo ind">Individual · ${esc(nomeCurto(a.tecnico))}</span>` : `<span class="ar-tipo">Coletivo</span>`;
+
 function renderAcoes(){
   const f = el('ar-f-equipe').value;
   const lista = acoes.filter(a => !f || a.equipe === f).sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999'));
@@ -694,32 +801,39 @@ function renderAcoes(){
     const itens = lista.filter(a => fase(a) === n);
     el('ar-n' + n).textContent = itens.length;
     el('ar-col' + n).innerHTML = itens.length ? itens.map(a => {
-      let prazo = '';
-      if (a.prazo && n !== 3){
-        const cls = a.prazo < hoje ? 'vencido' : a.prazo === hoje ? 'hoje' : 'ok';
-        const txt = a.prazo < hoje ? 'Prazo vencido ' + ddmm(a.prazo) : a.prazo === hoje ? 'Vence hoje' : 'Prazo ' + ddmm(a.prazo);
-        prazo = `<span class="badge-sla ${cls}">${txt}</span>`;
-      }
       const pct = Math.max(0, Math.min(100, Number(a.pct) || 0));
-      const pcls = (a.prazo && a.prazo < hoje && n !== 3) ? 'atraso' : '';
-      const ind = (a.antes !== '' && a.antes != null) ? `<p class="m">${esc(a.indicador || 'Indicador')}: ${esc(a.antes)} → ${a.agora !== '' && a.agora != null ? esc(a.agora) : '…'}</p>` : '';
+      const atraso = a.prazo && a.prazo < hoje && n !== 3;
       const ef = n === 3 ? `<p class="m">Concluída ${ddmm(a.conclusao)} · Eficaz: <b style="color:${a.eficaz === 'Sim' ? 'var(--ok)' : a.eficaz === 'Não' ? 'var(--crit)' : 'var(--ink-dim)'}">${esc(a.eficaz || '—')}</b></p>` : '';
       return `<div class="ar-card" data-id="${esc(a.id)}">
-        <span class="badge neutral">${esc(labelEquipe(a.equipe))}</span> ${prazo}
+        <div class="tags"><span class="badge neutral">${esc(labelEquipe(a.equipe))}</span>${tipoTag(a)}${prazoBadge(a, n)}</div>
         <p class="t">${esc(a.acao)}</p>
-        ${a.causa ? `<p class="m">Causa: ${esc(a.causa)}</p>` : ''}
-        <p class="m">Resp.: ${esc(a.responsavel || '—')}${a.inicio ? ' · início ' + ddmm(a.inicio) : ''}</p>
-        ${n !== 3 ? `<div class="ar-prog"><span class="${pcls}" style="width:${pct}%"></span></div><p class="m">${pct}% executado</p>` : ''}
-        ${ind}${ef}${a.obs ? `<p class="m">${esc(a.obs)}</p>` : ''}
+        <p class="m">${a.inicio ? 'Início ' + ddmm(a.inicio) : ''}${a.prazo ? ' · prazo ' + ddmm(a.prazo) : ''}</p>
+        ${n !== 3 ? `<div class="ar-prog"><span class="${atraso ? 'atraso' : ''}" style="width:${pct}%"></span></div><p class="m">${pct}% executado</p>` : ''}
+        ${ef}
+        <div class="foot"><span>📷 ${Number(a.nEvid) || 0} evidência(s)</span><span>📊 ${Number(a.nAud) || 0} item(ns) auditado(s)</span></div>
       </div>`;
     }).join('') : '<div class="ar-empty">Nenhuma ação</div>';
   });
 }
-const campos = { equipe: 'm-equipe', responsavel: 'm-resp', acao: 'm-acao', causa: 'm-causa', inicio: 'm-ini', prazo: 'm-prazo', pct: 'm-pct', indicador: 'm-ind', antes: 'm-antes', agora: 'm-agora', obs: 'm-obs', conclusao: 'm-fim', eficaz: 'm-eficaz' };
+
+// ---------- cadastro ----------
+function preencherTecnicos(eq, atual){
+  const lista = tecnicosDaEquipe(eq);
+  if (atual && !lista.includes(atual)) lista.unshift(atual);
+  el('m-tec').innerHTML = '<option value="">Escolha o técnico</option>' + lista.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  el('m-tec').value = atual || '';
+}
+function ajustarTipo(){ el('m-tec-wrap').style.display = el('m-tipo').value === 'Individual' ? '' : 'none'; }
+el('m-tipo').addEventListener('change', ajustarTipo);
+el('m-equipe').addEventListener('change', () => preencherTecnicos(el('m-equipe').value, ''));
+const campos = { equipe: 'm-equipe', tipo: 'm-tipo', acao: 'm-acao', inicio: 'm-ini', prazo: 'm-prazo', pct: 'm-pct', obs: 'm-obs', conclusao: 'm-fim', eficaz: 'm-eficaz' };
 function abrirModal(id){
   editId = id || null;
-  const a = id ? acoes.find(x => x.id === id) : { equipe: el('ar-f-equipe').value || 'MARCELLO ROCHA DE SOUSA JUNIOR', inicio: hojeISO() };
+  const a = id ? acoes.find(x => x.id === id) : { equipe: el('ar-f-equipe').value || 'MARCELLO ROCHA DE SOUSA JUNIOR', tipo: 'Coletivo', inicio: hojeISO() };
   Object.entries(campos).forEach(([k, fid]) => { el(fid).value = a[k] == null ? '' : a[k]; });
+  if (!el('m-tipo').value) el('m-tipo').value = 'Coletivo';
+  preencherTecnicos(el('m-equipe').value, a.tecnico || '');
+  ajustarTipo();
   el('ar-m-title').textContent = id ? 'Editar ação' : 'Nova ação';
   el('m-excluir').style.display = id ? '' : 'none';
   el('m-excluir').textContent = 'Excluir'; el('m-excluir').dataset.confirm = '';
@@ -727,10 +841,14 @@ function abrirModal(id){
   el('m-acao').focus();
 }
 function fecharModal(){ el('ar-modal').style.display = 'none'; editId = null; }
-async function salvarAcoes(){
-  OPS.saveData(KEY_ACOES, acoes);
+async function salvarAcao(nova, remover){
+  const r = await gravarColecao(SYNC_ACOES, lista => {
+    const sem = lista.filter(x => x.id !== (nova ? nova.id : remover));
+    return nova ? sem.concat(nova) : sem;
+  });
+  acoes = r.lista; OPS.saveData(KEY_ACOES, acoes);
   renderStats(); renderAcoes();
-  await OPS.syncPushWithToast(SYNC_ACOES, acoes);
+  return r.ok;
 }
 el('ar-nova').onclick = () => abrirModal(null);
 el('m-cancelar').onclick = fecharModal;
@@ -738,24 +856,308 @@ el('ar-modal').addEventListener('click', e => { if (e.target.id === 'ar-modal') 
 el('m-salvar').onclick = async () => {
   const dados = {};
   Object.entries(campos).forEach(([k, fid]) => { dados[k] = el(fid).value.trim(); });
+  dados.tecnico = dados.tipo === 'Individual' ? el('m-tec').value : '';
   if (!dados.acao){ el('m-acao').focus(); return; }
-  const base = editId ? acoes.find(x => x.id === editId) : { id: 'A' + Date.now().toString(36), criadoEm: new Date().toISOString(), criadoPor: sessionStorage.getItem('ops_user') || '' };
-  const nova = { ...base, ...dados, atualizadoEm: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || '' };
-  acoes = acoes.filter(x => x.id !== nova.id).concat(nova);
+  if (dados.tipo === 'Individual' && !dados.tecnico){ el('m-tec').focus(); return; }
+  dados.responsavel = labelEquipe(dados.equipe);
+  const base = editId ? acoes.find(x => x.id === editId) : { id: 'A' + Date.now().toString(36), criadoEm: new Date().toISOString(), criadoPor: usuario(), nEvid: 0, nAud: 0 };
+  const nova = { ...base, ...dados, atualizadoEm: new Date().toISOString(), usuario: usuario() };
+  const reabrir = el('ad-modal').style.display === 'flex';
   fecharModal();
-  await salvarAcoes();
+  await salvarAcao(nova);
+  if (reabrir) abrirAcao(nova.id);
 };
 el('m-excluir').onclick = async () => {
   const b = el('m-excluir');
   if (!b.dataset.confirm){ b.dataset.confirm = '1'; b.textContent = 'Confirmar exclusão'; return; }
-  acoes = acoes.filter(x => x.id !== editId);
+  const id = editId;
   fecharModal();
-  await salvarAcoes();
+  el('ad-modal').style.display = 'none';
+  await salvarAcao(null, id);
+  // apaga junto as fotos e a auditoria da ação
+  await gravarColecao(SYNC_EVID, l => l.filter(x => x.acao !== id)).then(r => { evidCache = r.lista; });
+  await gravarColecao(SYNC_AUD, l => l.filter(x => x.acao !== id)).then(r => { audCache = r.lista; });
 };
 ['ar-col1', 'ar-col2', 'ar-col3'].forEach(c => el(c).addEventListener('click', e => {
-  const card = e.target.closest('.ar-card'); if (card) abrirModal(card.dataset.id);
+  const card = e.target.closest('.ar-card'); if (card) abrirAcao(card.dataset.id);
 }));
 el('ar-f-equipe').addEventListener('change', renderAcoes);
+
+// ---------- tela da ação ----------
+async function carregarAnexos(forcar){
+  if (forcar || !evidCache || !audCache){
+    const [ev, au] = await Promise.all([OPS.syncPull(SYNC_EVID), OPS.syncPull(SYNC_AUD)]);
+    evidCache = (ev || []).filter(x => x && x.id);
+    audCache = (au || []).filter(x => x && x.id);
+  }
+}
+function diasEntre(a, b){ return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000); }
+async function abrirAcao(id){
+  const a = acoes.find(x => x.id === id); if (!a) return;
+  acaoAberta = id;
+  const n = fase(a), hoje = hojeISO();
+  el('ad-tags').innerHTML = `<span class="badge neutral">${esc(labelEquipe(a.equipe))}</span>${tipoTag(a)}${prazoBadge(a, n)}`;
+  el('ad-titulo').textContent = a.acao;
+  el('ad-sub').textContent = 'Responsável: ' + (a.equipe === 'UNIDADE TOUROS' ? 'coordenação' : labelEquipe(a.equipe)) + (a.tipo === 'Individual' ? ' · técnico: ' + a.tecnico : ' · toda a equipe') + (a.atualizadoEm ? ' · atualizada em ' + OPS.formatDateTimeBR(a.atualizadoEm) : '');
+  [...el('ad-fases').children].forEach((d, i) => { d.className = i + 1 < n ? 'feito' : i + 1 === n ? 'on' : ''; });
+  const pct = Math.max(0, Math.min(100, Number(a.pct) || 0));
+  const atraso = a.prazo && a.prazo < hoje && n !== 3;
+  // linha do tempo início → prazo
+  let tempo = '', leg = '';
+  if (a.inicio && a.prazo && a.prazo >= a.inicio){
+    const tot = Math.max(1, diasEntre(a.inicio, a.prazo));
+    const pos = Math.max(0, Math.min(100, diasEntre(a.inicio, hoje) / tot * 100));
+    tempo = `<div class="exec ${atraso ? 'atraso' : ''}" style="width:${pct}%"></div>${n !== 3 ? `<div class="hoje" style="left:${pos}%"></div>` : ''}`;
+    const rest = diasEntre(hoje, a.prazo);
+    leg = `<span>Início ${ddmm(a.inicio)}</span><span>${n === 3 ? 'Concluída em ' + ddmm(a.conclusao) : rest >= 0 ? 'Faltam ' + rest + ' dia(s) · barra verde = executado, traço amarelo = hoje' : 'Prazo vencido há ' + (-rest) + ' dia(s)'}</span><span>Prazo ${ddmm(a.prazo)}</span>`;
+  }
+  el('ad-tempo').innerHTML = tempo; el('ad-tempo').style.display = tempo ? '' : 'none';
+  el('ad-tempo-leg').innerHTML = leg;
+  el('ad-detalhe').textContent = a.obs || 'Detalhe ainda não preenchido. Clique em Editar para descrever o que será feito.';
+  el('ad-modal').style.display = 'flex';
+  renderStatsAcao(a, null);
+  renderResultadoAcao(a);
+  el('ad-gal').innerHTML = '<p class="ad-note">Carregando evidências...</p>';
+  el('ad-aud-corpo').innerHTML = '<p class="ad-note">Carregando auditoria...</p>';
+  await carregarAnexos();
+  if (acaoAberta !== id) return;
+  audArqSel = null;
+  renderEvidencias(a); renderAuditoria(a);
+}
+function renderStatsAcao(a, aud){
+  const pct = Math.max(0, Math.min(100, Number(a.pct) || 0));
+  const hoje = hojeISO();
+  const rest = a.prazo ? diasEntre(hoje, a.prazo) : null;
+  const ev = evidCache ? evidCache.filter(x => x.acao === a.id).length : (Number(a.nEvid) || 0);
+  const itens = aud ? aud.itens : (Number(a.nAud) || 0);
+  const cards = [
+    ['Executado', pct + '%', pct >= 100 ? 'ok' : 'brand'],
+    ['Prazo', fase(a) === 3 ? 'Concluída' : rest == null ? '—' : rest < 0 ? 'Vencido ' + (-rest) + 'd' : rest + ' dia(s)', fase(a) !== 3 && rest != null && rest < 0 ? 'crit' : ''],
+    ['Itens auditados', itens, 'brand'],
+  ];
+  if (aud && aud.conf != null) cards.push(['Conformidade', pctBR(aud.conf), aud.conf >= 0.9 ? 'ok' : aud.conf >= 0.7 ? 'warn' : 'crit']);
+  cards.push(['Evidências', ev, ev ? 'ok' : '']);
+  if (fase(a) === 3) cards.push(['Eficaz?', a.eficaz || '—', a.eficaz === 'Sim' ? 'ok' : a.eficaz === 'Não' ? 'crit' : '']);
+  el('ad-stats').innerHTML = cards.map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:22px">${v}</div></div>`).join('');
+}
+function renderResultadoAcao(a){
+  const sems = semanasTodas();
+  if (!sems.length){ el('ad-res-nota').textContent = 'Sem dados de recorrência carregados.'; return; }
+  const iniSem = a.inicio ? segunda(a.inicio) : null;
+  let idx = iniSem ? sems.indexOf(iniSem) : -1;
+  if (iniSem && idx < 0) idx = sems.filter(s => s < iniSem).length;
+  const de = Math.max(0, (idx < 0 ? sems.length : idx) - 6);
+  const janela = sems.slice(de);
+  const antesDepois = s => iniSem && s >= iniSem ? 'depois' : 'antes';
+  let ds, nota;
+  if (a.tipo === 'Individual' && a.tecnico){
+    const ger = janela.map(s => osData.filter(r => r.rec && r.teca === a.tecnico && segunda(r.ab) === s).length);
+    const feitas = janela.map(s => osData.filter(r => r.tec === a.tecnico && segunda(r.ab) === s).length);
+    el('ad-res-titulo').textContent = 'Resultado: reaberturas geradas por ' + nomeCurto(a.tecnico);
+    const soma = (arr, lado) => arr.reduce((t, v, i) => t + (antesDepois(janela[i]) === lado ? v : 0), 0);
+    const nA = janela.filter(s => antesDepois(s) === 'antes').length, nD = janela.length - nA;
+    nota = iniSem ? `Antes do início: ${soma(ger, 'antes')} reabertura(s) em ${nA} semana(s) · desde o início: ${soma(ger, 'depois')} em ${nD} semana(s). Barras claras = antes, fortes = depois.` : 'Defina a data de início para comparar antes e depois.';
+    ds = [
+      { label: 'Reaberturas geradas', data: ger, backgroundColor: janela.map(s => antesDepois(s) === 'depois' ? '#ff4d6d' : 'rgba(255,77,109,0.35)'), borderRadius: 4 },
+      { label: 'OS realizadas', data: feitas, backgroundColor: janela.map(s => antesDepois(s) === 'depois' ? '#5e7a9e' : 'rgba(94,122,158,0.35)'), borderRadius: 4, labelColor: '#e2eaf5' },
+    ];
+    novoGrafico('ad-chart-res', { type: 'bar', data: { labels: janela.map(s => ddmm(s)), datasets: ds },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend, valueLabels: {} },
+        scales: { x: { grid, ticks: tick }, y: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } } } } });
+  } else {
+    const eq = a.equipe;
+    const tx = janela.map(s => { const t = taxa(reg(s, eq)); return t == null ? null : +(t * 100).toFixed(1); });
+    el('ad-res-titulo').textContent = 'Resultado: taxa de recorrência da equipe ' + labelEquipe(eq);
+    const media = lado => { const v = janela.map((s, i) => [s, reg(s, eq)]).filter(([s, r]) => r && antesDepois(s) === lado); const re = v.reduce((t, [, r]) => t + r.reab, 0), rp = v.reduce((t, [, r]) => t + r.reparos, 0); return rp ? re / rp : null; };
+    nota = iniSem ? `Antes do início: ${pctBR(media('antes'))} · desde o início: ${pctBR(media('depois'))} · meta 10%. Barras claras = antes, fortes = depois.` : 'Defina a data de início para comparar antes e depois.';
+    novoGrafico('ad-chart-res', { type: 'bar',
+      data: { labels: janela.map(s => ddmm(s)), datasets: [
+        { label: 'Taxa da equipe', data: tx, backgroundColor: janela.map((s, i) => { const acima = tx[i] != null && tx[i] > META * 100; const forte = antesDepois(s) === 'depois'; return acima ? (forte ? '#ff4d6d' : 'rgba(255,77,109,0.35)') : (forte ? '#00e5a0' : 'rgba(0,229,160,0.35)'); }), borderRadius: 4 },
+        { label: 'Meta 10%', type: 'line', data: janela.map(() => META * 100), borderColor: '#ffd166', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, noLabels: true }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend, valueLabels: { format: v => String(v).replace('.', ',') + '%' } },
+        scales: { x: { grid, ticks: tick }, y: { beginAtZero: true, grace: '15%', grid, ticks: { ...tick, callback: v => v + '%' } } } } });
+  }
+  el('ad-res-nota').textContent = nota;
+}
+
+// ---------- evidências (fotos) ----------
+function comprimirFoto(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; }; reader.onerror = reject;
+    img.onload = () => {
+      const tentar = (maxLado, q) => {
+        let { width, height } = img;
+        if (width > height && width > maxLado){ height = height * (maxLado / width); width = maxLado; }
+        else if (height > maxLado){ width = width * (maxLado / height); height = maxLado; }
+        const c = document.createElement('canvas'); c.width = width; c.height = height;
+        c.getContext('2d').drawImage(img, 0, 0, width, height);
+        return c.toDataURL('image/jpeg', q);
+      };
+      // limite de ~50 mil caracteres por célula da planilha compartilhada
+      let r = tentar(640, 0.55);
+      if (r.length > 35000) r = tentar(480, 0.45);
+      if (r.length > 35000) r = tentar(360, 0.4);
+      if (r.length > 35000){ reject(new Error('foto_grande_demais')); return; }
+      resolve(r);
+    };
+    img.onerror = reject; reader.readAsDataURL(file);
+  });
+}
+function renderEvidencias(a){
+  const fotos = (evidCache || []).filter(x => x.acao === a.id).sort((x, y) => String(x.data).localeCompare(String(y.data)));
+  el('ad-gal').innerHTML = fotos.length ? fotos.map(f => `<figure data-id="${esc(f.id)}">
+      <img src="${esc(f.foto)}" alt="${esc(f.legenda || 'Evidência')}">
+      <button class="rm" data-rm="${esc(f.id)}" title="Remover foto">✕</button>
+      <figcaption>${esc(f.legenda || 'Sem legenda')}<br><span class="ar-tag">${f.data ? OPS.formatDateTimeBR(f.data) : ''}${f.usuario ? ' · ' + esc(f.usuario) : ''}</span></figcaption></figure>`).join('')
+    : '<p class="ad-note">Nenhuma foto ainda. Use “Adicionar fotos” para registrar o antes/depois, a reciclagem, a CTO corrigida etc.</p>';
+}
+async function atualizarContadores(a){
+  const nEvid = (evidCache || []).filter(x => x.acao === a.id).length;
+  const nAud = (audCache || []).filter(x => x.acao === a.id).length;
+  if (Number(a.nEvid) === nEvid && Number(a.nAud) === nAud) return;
+  await salvarAcao({ ...a, nEvid, nAud });
+}
+el('ad-foto-input').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const a = acoes.find(x => x.id === acaoAberta); if (!a || !files.length) return;
+  const legenda = el('ad-foto-legenda').value.trim();
+  const novas = []; let falhas = 0;
+  for (const [i, f] of files.entries()){
+    try{ novas.push({ id: a.id + '|F' + Date.now().toString(36) + i, acao: a.id, foto: await comprimirFoto(f), legenda, data: new Date().toISOString(), usuario: usuario() }); }
+    catch(err){ falhas++; }
+  }
+  if (!novas.length){ OPS.showToast('⚠️ Não consegui ler a(s) foto(s)'); return; }
+  const r = await gravarColecao(SYNC_EVID, l => l.concat(novas));
+  evidCache = r.lista; el('ad-foto-legenda').value = '';
+  if (falhas) OPS.showToast('⚠️ ' + falhas + ' foto(s) não puderam ser anexadas');
+  renderEvidencias(a); await atualizarContadores(a); renderStatsAcao(acoes.find(x => x.id === a.id), resumoAud(a));
+});
+el('ad-gal').addEventListener('click', async e => {
+  const rm = e.target.closest('[data-rm]');
+  if (rm){
+    e.stopPropagation();
+    if (!rm.dataset.confirm){ rm.dataset.confirm = '1'; rm.textContent = 'Remover?'; return; }
+    const a = acoes.find(x => x.id === acaoAberta);
+    const r = await gravarColecao(SYNC_EVID, l => l.filter(x => x.id !== rm.dataset.rm));
+    evidCache = r.lista; renderEvidencias(a); await atualizarContadores(a); renderStatsAcao(acoes.find(x => x.id === a.id), resumoAud(a));
+    return;
+  }
+  const fig = e.target.closest('figure'); if (!fig) return;
+  const f = (evidCache || []).find(x => x.id === fig.dataset.id); if (!f) return;
+  const z = document.createElement('div'); z.className = 'ad-zoom';
+  const im = document.createElement('img'); im.src = f.foto; const p = document.createElement('p'); p.textContent = f.legenda || '';
+  z.append(im, p); z.onclick = () => z.remove(); document.body.appendChild(z);
+});
+
+// ---------- auditoria (planilha) ----------
+const RX_OK = /^(sim|ok|conforme|aprovad|realizad|conclu|corrigid|feito|atende|bom|adequad)/i;
+const RX_NOK = /(n[aã]o|nok|reprovad|pendente|inadequad|irregular|ruim|falha|errad)/i;
+function linhasAud(a, arq){ return (audCache || []).filter(x => x.acao === a.id && (!arq || x.arq === arq)).sort((x, y) => Number(x.i) - Number(y.i)).map(x => { try{ return JSON.parse(x.linha); }catch(err){ return {}; } }); }
+function analisarAud(rows){
+  const cols = []; rows.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  const vals = c => rows.map(r => String(r[c] == null ? '' : r[c]).trim()).filter(Boolean);
+  let status = cols.find(c => /status|resultado|conform|situa[cç]|avalia|parecer|aprova/i.test(c));
+  if (!status) status = cols.find(c => { const v = vals(c); const d = new Set(v.map(x => x.toLowerCase())); return v.length >= rows.length * 0.6 && d.size <= 6 && v.filter(x => RX_OK.test(x) || RX_NOK.test(x)).length >= v.length * 0.7; });
+  const tec = cols.find(c => /t[eé]cnico|colaborador|respons/i.test(c));
+  const out = { itens: rows.length, cols, status, tec, conf: null, ok: 0, nok: 0, porStatus: {}, porTec: {} };
+  if (status){
+    vals(status).forEach(v => { out.porStatus[v] = (out.porStatus[v] || 0) + 1; if (RX_NOK.test(v)) out.nok++; else if (RX_OK.test(v)) out.ok++; });
+    if (out.ok + out.nok) out.conf = out.ok / (out.ok + out.nok);
+  }
+  if (tec) rows.forEach(r => { const t = String(r[tec] || '').trim(); if (!t) return; const x = out.porTec[t] = out.porTec[t] || { itens: 0, nok: 0 }; x.itens++; if (status && RX_NOK.test(String(r[status] || ''))) x.nok++; });
+  return out;
+}
+function resumoAud(a){ const rows = linhasAud(a); return rows.length ? analisarAud(rows) : null; }
+function renderAuditoria(a){
+  const regs = (audCache || []).filter(x => x.acao === a.id);
+  const arqs = []; regs.forEach(x => { if (!arqs.find(y => y.arq === x.arq)) arqs.push({ arq: x.arq, nome: x.nome, enviadoEm: x.enviadoEm, usuario: x.usuario }); });
+  arqs.sort((x, y) => String(x.enviadoEm).localeCompare(String(y.enviadoEm)));
+  renderStatsAcao(a, resumoAud(a));
+  if (!arqs.length){
+    el('ad-aud-files').innerHTML = '';
+    el('ad-aud-corpo').innerHTML = '<p class="ad-note">Nenhuma planilha de auditoria ainda. Anexe a planilha (.xlsx ou .csv) com uma linha por item auditado e, se tiver, colunas de técnico e de resultado (ex.: Conforme / Não conforme). A página lê e resume sozinha.</p>';
+    return;
+  }
+  if (!audArqSel || !arqs.find(x => x.arq === audArqSel)) audArqSel = arqs.length > 1 ? '' : arqs[0].arq;
+  el('ad-aud-files').innerHTML = (arqs.length > 1 ? `<button class="btn ghost" data-arq="" style="padding:5px 10px;font-size:12px;${audArqSel === '' ? 'border-color:var(--brand);color:var(--brand)' : ''}">Todas (${arqs.length})</button>` : '') +
+    arqs.map(x => `<button class="btn ghost" data-arq="${esc(x.arq)}" style="padding:5px 10px;font-size:12px;${audArqSel === x.arq ? 'border-color:var(--brand);color:var(--brand)' : ''}">📊 ${esc(x.nome)} · ${x.enviadoEm ? ddmm(String(x.enviadoEm).slice(0, 10)) : ''}</button>`).join('') +
+    (audArqSel ? ` <button class="btn danger" data-rmarq="${esc(audArqSel)}" style="padding:5px 10px;font-size:12px">Remover planilha</button>` : '');
+  const rows = linhasAud(a, audArqSel || null);
+  const r = analisarAud(rows);
+  const kp = [['Itens auditados', r.itens, 'brand']];
+  if (r.status){ kp.push(['Conformes', r.ok, 'ok'], ['Não conformes', r.nok, r.nok ? 'crit' : 'ok']); if (r.conf != null) kp.push(['Conformidade', pctBR(r.conf), r.conf >= 0.9 ? 'ok' : r.conf >= 0.7 ? 'warn' : 'crit']); }
+  if (r.tec) kp.push(['Técnicos auditados', Object.keys(r.porTec).length, '']);
+  const cols = r.cols.slice(0, 9);
+  const prev = rows.slice(0, 40);
+  el('ad-aud-corpo').innerHTML = `
+    <div class="ar-mini-stats">${kp.map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:20px">${v}</div></div>`).join('')}</div>
+    ${r.status || r.tec ? `<div class="ar-grid2" style="margin-bottom:10px">
+      ${r.status ? `<div><p class="ar-title">Resultado (${esc(r.status)})</p><div class="ar-chart" style="height:${Math.max(140, Object.keys(r.porStatus).length * 30 + 40)}px"><canvas id="ad-aud-st"></canvas></div></div>` : ''}
+      ${r.tec ? `<div><p class="ar-title">Itens por ${esc(r.tec)}</p><div class="ar-chart" style="height:${Math.max(140, Math.min(14, Object.keys(r.porTec).length) * 26 + 40)}px"><canvas id="ad-aud-tec"></canvas></div></div>` : ''}
+    </div>` : '<p class="ad-note">Não achei uma coluna de resultado (ex.: “Status” com Conforme/Não conforme). Se a planilha tiver, a conformidade aparece aqui.</p>'}
+    <p class="ar-title">Itens (${rows.length > 40 ? 'primeiros 40 de ' + rows.length : rows.length})</p>
+    <div class="table-wrap" style="max-height:300px"><table class="services ar-det compact">
+      <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${prev.map(row => `<tr>${cols.map(c => { const v = row[c] == null ? '' : String(row[c]); const cor = c === r.status ? (RX_NOK.test(v) ? 'color:var(--crit)' : RX_OK.test(v) ? 'color:var(--ok)' : '') : ''; return `<td class="${v.length > 40 ? 'ar-txt' : ''}" style="${cor}">${esc(v)}</td>`; }).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+  if (r.status){
+    const st = Object.entries(r.porStatus).sort((x, y) => y[1] - x[1]);
+    novoGrafico('ad-aud-st', { type: 'bar', data: { labels: st.map(x => x[0]), datasets: [{ data: st.map(x => x[1]), backgroundColor: st.map(x => RX_NOK.test(x[0]) ? '#ff4d6d' : RX_OK.test(x[0]) ? '#00e5a0' : '#5e7a9e'), borderRadius: 4 }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, valueLabels: {} },
+        scales: { x: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { grid: { display: false }, ticks: { color: '#e2eaf5' } } } } });
+  }
+  if (r.tec){
+    const tt = Object.entries(r.porTec).sort((x, y) => y[1].itens - x[1].itens).slice(0, 14);
+    const dsT = [{ label: 'Itens', data: tt.map(x => x[1].itens - (r.status ? x[1].nok : 0)), backgroundColor: '#5e7a9e', borderRadius: 4, stack: 's', labelColor: '#e2eaf5' }];
+    if (r.status) dsT.push({ label: 'Não conformes', data: tt.map(x => x[1].nok), backgroundColor: '#ff4d6d', borderRadius: 4, stack: 's' });
+    novoGrafico('ad-aud-tec', { type: 'bar', data: { labels: tt.map(x => nomeCurto(x[0])), datasets: dsT },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: !!r.status, labels: legend.labels }, valueLabels: {} },
+        scales: { x: { stacked: true, beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { stacked: true, grid: { display: false }, ticks: { color: '#e2eaf5' } } } } });
+  }
+}
+el('ad-aud-files').addEventListener('click', async e => {
+  const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
+  const rmb = e.target.closest('[data-rmarq]');
+  if (rmb){
+    if (!rmb.dataset.confirm){ rmb.dataset.confirm = '1'; rmb.textContent = 'Confirmar remoção'; return; }
+    const r = await gravarColecao(SYNC_AUD, l => l.filter(x => !(x.acao === a.id && x.arq === rmb.dataset.rmarq)));
+    audCache = r.lista; audArqSel = null; renderAuditoria(a); await atualizarContadores(a); return;
+  }
+  const b = e.target.closest('[data-arq]'); if (!b) return;
+  audArqSel = b.dataset.arq; renderAuditoria(a);
+});
+el('ad-aud-input').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  const a = acoes.find(x => x.id === acaoAberta); if (!a || !file) return;
+  if (typeof XLSX === 'undefined'){ OPS.showToast('⚠️ Leitor de planilha não carregou, recarregue a página'); return; }
+  const toast = OPS.showToast('📊 Lendo a planilha...');
+  try{
+    const ehCsv = /\.csv$/i.test(file.name);
+    const wb = ehCsv ? XLSX.read(await file.text(), { type: 'string', raw: true }) : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    let rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+    rows = rows.filter(r => Object.values(r).some(v => String(v).trim() !== '')).map(r => {
+      const o = {}; Object.entries(r).forEach(([k, v]) => { if (!/^__EMPTY/.test(k)) o[k.trim()] = String(v).slice(0, 300); }); return o;
+    });
+    if (!rows.length) throw new Error('vazia');
+    const limite = 2000; const cortou = rows.length > limite; rows = rows.slice(0, limite);
+    const arq = 'P' + Date.now().toString(36); const agora = new Date().toISOString();
+    const novos = rows.map((row, i) => ({ id: a.id + '|' + arq + '|' + i, acao: a.id, arq, nome: file.name, enviadoEm: agora, usuario: usuario(), i, linha: JSON.stringify(row) }));
+    toast.textContent = '☁️ Salvando ' + rows.length + ' linha(s)...';
+    const r = await gravarColecao(SYNC_AUD, l => l.concat(novos));
+    audCache = r.lista; audArqSel = arq;
+    toast.remove();
+    if (cortou) OPS.showToast('⚠️ Planilha com mais de ' + limite + ' linhas: guardei as primeiras ' + limite);
+    renderAuditoria(a); await atualizarContadores(a);
+  }catch(err){
+    toast.textContent = '⚠️ Não consegui ler essa planilha (' + (err.message === 'vazia' ? 'sem linhas' : 'formato') + ')';
+    setTimeout(() => toast.remove(), 4000);
+  }
+});
+el('ad-editar').onclick = () => abrirModal(acaoAberta);
+el('ad-fechar').onclick = () => { el('ad-modal').style.display = 'none'; acaoAberta = null; };
+el('ad-modal').addEventListener('click', e => { if (e.target.id === 'ad-modal'){ el('ad-modal').style.display = 'none'; acaoAberta = null; } });
 
 // ---------- eventos ----------
 function renderTopo(){ renderStats(); renderEvolucao(); renderTabela(); }
