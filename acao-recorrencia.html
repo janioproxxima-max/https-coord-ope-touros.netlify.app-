@@ -94,6 +94,28 @@
   .ar-tab:hover{ color:var(--ink); }
   .ar-tab.on{ color:var(--ink); border-bottom-color:var(--brand); }
   .ar-tab .pend{ display:inline-block; margin-left:6px; padding:0 7px; border-radius:99px; font-size:11px; background:var(--crit); color:#fff; vertical-align:2px; }
+  .vg-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:14px; margin-top:10px; }
+  .vg-card{ background:var(--bg-panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .vg-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:15px; }
+  .vg-big{ display:flex; align-items:baseline; gap:8px; margin:10px 0 2px; }
+  .vg-big b{ font-family:var(--f-display); font-size:34px; line-height:1; }
+  .vg-big span{ font-size:12px; color:var(--ink-dim); }
+  .vg-bar{ height:6px; background:var(--bg-raised); border-radius:3px; overflow:hidden; margin-top:4px; }
+  .vg-bar span{ display:block; height:100%; border-radius:3px; }
+  .vg-nums{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
+  .vg-nums.vg-nums3{ grid-template-columns:repeat(3,1fr); }
+  .vg-nums div{ background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 10px; }
+  .vg-nums b{ display:block; font-family:var(--f-display); font-size:20px; }
+  .vg-nums span{ font-size:11px; color:var(--ink-faint); }
+  .vg-etapas{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px 16px; }
+  .vg-et{ display:grid; grid-template-columns:1fr auto; gap:2px 8px; font-size:12px; color:var(--ink-dim); }
+  .vg-et b{ color:var(--ink); }
+  .vg-et .vg-bar{ grid-column:1 / -1; }
+  .vg-pend-t{ font-size:12px; font-weight:700; margin:6px 0; }
+  .vg-pend{ display:flex; flex-direction:column; gap:5px; }
+  .vg-pend button{ display:flex; justify-content:space-between; align-items:center; gap:8px; font:inherit; font-size:12.5px; text-align:left; background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm); padding:6px 10px; color:var(--ink); cursor:pointer; }
+  .vg-pend button:hover{ border-color:var(--brand); }
+  @media (max-width: 700px){ .vg-grid{ grid-template-columns:1fr; } .vg-nums{ grid-template-columns:repeat(2,1fr); } .vg-etapas{ grid-template-columns:1fr; } }
   .cs-eq{ margin:4px 0 10px; }
   .cs-eq-top{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:12.5px; }
   .cs-eq-top span{ flex:1; color:var(--ink-dim); font-size:12px; }
@@ -327,30 +349,15 @@
     </div>
   </div>
 
-  <!-- 4. Ações -->
-  <p class="ar-sec">Ações do programa · início, andamento e fim</p>
+  <!-- 4. Visão geral do coordenador -->
+  <p class="ar-sec">Visão geral do coordenador · execução do ciclo</p>
   <div class="panel ar-panel" style="margin-bottom:16px;">
-    <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
-      <div style="flex:1;min-width:240px;">
-        <p class="ar-title">Ações de recorrência</p>
-        <p class="ar-sub" style="margin:0">A fase muda sozinha: sem % executado = Início · com % executado = Andamento · com data de conclusão = Fim.</p>
-      </div>
-      <div class="field">
-        <label for="ar-f-equipe">Equipe</label>
-        <select id="ar-f-equipe">
-          <option value="">Todas</option>
-          <option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option>
-          <option value="JOEL DIAS TAVARES">Joel Dias</option>
-          <option value="UNIDADE TOUROS">Unidade (geral)</option>
-        </select>
-      </div>
-      <button class="btn primary" id="ar-nova" style="align-self:flex-end">+ Nova ação</button>
-    </div>
-    <div class="ar-kanban">
-      <div class="ar-col c1"><h4><span>1 · INÍCIO</span><span id="ar-n1">0</span></h4><div id="ar-col1"></div></div>
-      <div class="ar-col c2"><h4><span>2 · ANDAMENTO</span><span id="ar-n2">0</span></h4><div id="ar-col2"></div></div>
-      <div class="ar-col c3"><h4><span>3 · FIM</span><span id="ar-n3">0</span></h4><div id="ar-col3"></div></div>
-    </div>
+    <p class="ar-title">Execução do ciclo por supervisor</p>
+    <p class="ar-sub" id="vg-sub" style="margin:0"></p>
+    <div class="vg-grid" id="vg-cards"></div>
+    <p class="ar-title" style="margin-top:20px">Histórico dos ciclos</p>
+    <p class="ar-sub" style="margin:0 0 8px">Quanto de cada ciclo foi executado, a recorrência da semana que gerou o ciclo e a da semana seguinte (quando as ações foram feitas).</p>
+    <div class="table-wrap"><table class="services compact"><thead id="vg-hist-head"></thead><tbody id="vg-hist"></tbody></table></div>
   </div>
   </div>
 
@@ -692,10 +699,12 @@ function renderStats(){
       <div class="value">${pctBR(t)} <small>${r ? r.reab + '/' + r.reparos : ''}</small></div>
       <div class="sit" style="color:${acima ? 'var(--crit)' : 'var(--ok)'}">${t == null ? '' : acima ? 'ACIMA DA META (+' + ((t - META) * 100).toFixed(1).replace('.', ',') + ' p.p.)' : 'DENTRO DA META'}</div>${delta}</div>`;
   });
-  const abertas = acoes.filter(a => fase(a) !== 3).length;
-  const vencidas = acoes.filter(a => fase(a) !== 3 && a.prazo && a.prazo < hojeISO()).length;
-  cards.push(`<div class="stat-card ${vencidas ? 'warn' : 'brand'}"><div class="label">Ações em aberto</div>
-    <div class="value">${abertas} <small>${vencidas ? vencidas + ' com prazo vencido' : 'nenhuma vencida'}</small></div></div>`);
+  const semC = semanasCiclo()[0];
+  if (semC){
+    const osC = ofensoresCiclo(semC), concl = osC.filter(o => o.status === 'ok').length;
+    cards.push(`<div class="stat-card ${osC.length && concl === osC.length ? 'ok' : 'warn'}" style="cursor:pointer" onclick="mostrarAba('plano')"><div class="label">Ciclo dos ofensores</div>
+      <div class="value">${concl}/${osC.length} <small>concluídos · até ${ddmm(prazoCiclo(semC))}</small></div><div class="sit" style="color:var(--ink-dim)">VER PLANO DE AÇÃO →</div></div>`);
+  }
   el('ar-stats').innerHTML = ult ? cards.join('') : '<div class="stat-card"><div class="label">Sem dados</div><div class="value">—</div></div>';
   const upd = osMeta && osMeta.atualizadoEm;
   el('ar-atualizado').textContent = upd ? 'Dados atualizados em ' + OPS.formatDateTimeBR(upd) : '';
@@ -962,6 +971,7 @@ function prazoBadge(a, n){
 const tipoTag = a => a.tipo === 'Individual' ? `<span class="ar-tipo ind">Individual · ${esc(nomeCurto(a.tecnico))}</span>` : `<span class="ar-tipo">Coletivo</span>`;
 
 function renderAcoes(){
+  if (!el('ar-f-equipe')) return;
   const f = el('ar-f-equipe').value;
   const lista = acoes.filter(a => !f || a.equipe === f).sort((a, b) => (a.prazo || '9999').localeCompare(b.prazo || '9999'));
   const hoje = hojeISO();
@@ -997,7 +1007,7 @@ el('m-equipe').addEventListener('change', () => preencherTecnicos(el('m-equipe')
 const campos = { equipe: 'm-equipe', tipo: 'm-tipo', acao: 'm-acao', inicio: 'm-ini', prazo: 'm-prazo', pct: 'm-pct', obs: 'm-obs', conclusao: 'm-fim', eficaz: 'm-eficaz' };
 function abrirModal(id){
   editId = id || null;
-  const a = id ? acoes.find(x => x.id === id) : { equipe: el('ar-f-equipe').value || 'MARCELLO ROCHA DE SOUSA JUNIOR', tipo: 'Coletivo', inicio: hojeISO() };
+  const a = id ? acoes.find(x => x.id === id) : { equipe: (el('ar-f-equipe') || {}).value || 'MARCELLO ROCHA DE SOUSA JUNIOR', tipo: 'Coletivo', inicio: hojeISO() };
   Object.entries(campos).forEach(([k, fid]) => { el(fid).value = a[k] == null ? '' : a[k]; });
   if (!el('m-tipo').value) el('m-tipo').value = 'Coletivo';
   preencherTecnicos(el('m-equipe').value, a.tecnico || '');
@@ -1018,7 +1028,7 @@ async function salvarAcao(nova, remover){
   renderStats(); renderAcoes();
   return r.ok;
 }
-el('ar-nova').onclick = () => abrirModal(null);
+if (el('ar-nova')) el('ar-nova').onclick = () => abrirModal(null);
 el('m-cancelar').onclick = fecharModal;
 el('ar-modal').addEventListener('click', e => { if (e.target.id === 'ar-modal') fecharModal(); });
 el('m-salvar').onclick = async () => {
@@ -1046,10 +1056,10 @@ el('m-excluir').onclick = async () => {
   await gravarColecao(SYNC_REG, l => l.filter(x => x.acao !== id)).then(r => { regCache = r.lista; });
   await gravarColecao(SYNC_EVID, l => l.filter(x => x.acao !== id)).then(r => { evidCache = r.lista; });
 };
-['ar-col1', 'ar-col2', 'ar-col3'].forEach(c => el(c).addEventListener('click', e => {
+['ar-col1', 'ar-col2', 'ar-col3'].filter(c => el(c)).forEach(c => el(c).addEventListener('click', e => {
   const card = e.target.closest('.ar-card'); if (card) abrirAcao(card.dataset.id);
 }));
-el('ar-f-equipe').addEventListener('change', renderAcoes);
+if (el('ar-f-equipe')) el('ar-f-equipe').addEventListener('change', renderAcoes);
 
 // ---------- tela da ação ----------
 async function carregarAnexos(forcar){
@@ -1524,6 +1534,7 @@ function renderCiclo(){
       <td>${o.fotos ? '📷 ' + o.fotos : '—'}</td>
       <td><span class="cs-st ${o.status}">${textoFalta(o)}</span></td></tr>`).join('')
     : `<tr><td colspan="9" class="ar-empty">${todos.length ? 'Nenhum ofensor com esse filtro.' : 'Nenhuma reabertura nessa semana.'}</td></tr>`;
+  renderVisaoGeral();
 }
 function atualizarAbaPlano(){
   const sem = semanasCiclo()[0]; if (!sem) return;
@@ -1625,7 +1636,66 @@ el('ct-hist').addEventListener('click', async e => {
   const im = document.createElement('img'); im.src = f.foto; const p = document.createElement('p'); p.textContent = f.legenda || '';
   z.append(im, p); z.onclick = () => z.remove(); document.body.appendChild(z);
 });
-function aposSalvarCiclo(){ renderCiclo(); renderCicloTec(); atualizarAbaPlano(); }
+function aposSalvarCiclo(){ renderCiclo(); renderCicloTec(); atualizarAbaPlano(); renderStats(); }
+// ---------- visão geral do coordenador ----------
+function resumoEquipeCiclo(sem, eq){
+  const os = ofensoresCiclo(sem).filter(o => o.equipe === eq);
+  const req = CICLO_REQ.map(q => ({ ...q, feito: os.reduce((t, o) => t + Math.min(q.n, o.feitos[q.k]), 0), total: os.length * q.n }));
+  const fb = os.filter(o => o.fb).length;
+  const ok = os.reduce((t, o) => t + o.ok, 0), nok = os.reduce((t, o) => t + o.nok, 0);
+  const total = os.length * (CICLO_TOTAL_AUD + 1);
+  const feito = os.reduce((t, o) => t + (CICLO_TOTAL_AUD - o.faltaAud) + (o.fb ? 1 : 0), 0);
+  return { os, req, fb, ok, nok, conf: ok + nok ? ok / (ok + nok) : null, fotos: os.reduce((t, o) => t + o.fotos, 0),
+    pct: total ? feito / total : null, concl: os.filter(o => o.status === 'ok').length, soFb: os.filter(o => o.status === 'fb').length, pendAud: os.filter(o => o.status === 'aud').length };
+}
+const semanaSeguinte = sem => { const d = new Date(sem + 'T12:00:00'); d.setDate(d.getDate() + 7); return isoLocal(d); };
+function renderVisaoGeral(){
+  const sem = el('cs-semana').value; if (!sem) return;
+  const prazo = prazoCiclo(sem), rest = diasEntre(hojeISO(), prazo);
+  el('vg-sub').textContent = `Ciclo das reaberturas de ${ddmm(sem)} a ${ddmm(domingo(sem))} · executar até ${ddmm(prazo)}${rest >= 0 ? ' (faltam ' + rest + ' dia(s))' : ' (prazo encerrado)'} · troque o ciclo no seletor acima.`;
+  const barra = (f, t, cor) => `<div class="vg-bar"><span style="width:${t ? Math.round(f / t * 100) : 0}%;background:${cor || 'var(--brand)'}"></span></div>`;
+  el('vg-cards').innerHTML = EQUIPES.filter(e => e.key !== 'UNIDADE TOUROS').map(e => {
+    const r = resumoEquipeCiclo(sem, e.key);
+    const tx = taxa(reg(sem, e.key));
+    if (!r.os.length) return `<div class="vg-card"><div class="vg-top"><b>${esc(e.label)}</b><span class="cs-st ok">Sem ofensores no ciclo</span></div><p class="ad-note">Recorrência da semana: ${pctBR(tx)}</p></div>`;
+    const sit = r.concl === r.os.length ? ['ok', 'Ciclo concluído'] : rest < 0 ? ['aud', 'Prazo vencido · ' + (r.os.length - r.concl) + ' pendente(s)'] : ['fb', 'Em andamento · faltam ' + rest + ' dia(s)'];
+    const pend = r.os.filter(o => o.status !== 'ok').sort((a, b) => b.faltaAud - a.faltaAud || b.reabs.length - a.reabs.length);
+    const pct = Math.round(r.pct * 100);
+    return `<div class="vg-card">
+      <div class="vg-top"><b>${esc(e.label)}</b><span class="cs-st ${sit[0]}">${sit[1]}</span></div>
+      <div class="vg-big"><b style="color:${pct >= 100 ? 'var(--ok)' : pct >= 50 ? 'var(--warn)' : 'var(--crit)'}">${pct}%</b><span>do ciclo executado</span></div>
+      ${barra(pct, 100, e.cor)}
+      <div class="vg-nums">
+        <div><b>${r.os.length}</b><span>ofensores</span></div>
+        <div><b style="color:var(--ok)">${r.concl}</b><span>concluídos</span></div>
+        <div><b style="color:var(--warn)">${r.soFb}</b><span>só falta feedback</span></div>
+        <div><b style="color:var(--crit)">${r.pendAud}</b><span>auditoria pendente</span></div>
+      </div>
+      <div class="vg-etapas">
+        ${r.req.map(q => `<div class="vg-et"><span>${tipoReg(q.k).icon} ${tipoReg(q.k).label}</span><b>${q.feito}/${q.total}</b>${barra(q.feito, q.total)}</div>`).join('')}
+        <div class="vg-et"><span>🗣️ Feedback</span><b>${r.fb}/${r.os.length}</b>${barra(r.fb, r.os.length, 'var(--warn)')}</div>
+      </div>
+      <div class="vg-nums vg-nums3">
+        <div><b>${r.conf == null ? '—' : pctBR(r.conf)}</b><span>conformidade nas auditorias</span></div>
+        <div><b>${r.fotos}</b><span>evidências</span></div>
+        <div><b style="color:${tx != null && tx > META ? 'var(--crit)' : 'var(--ok)'}">${pctBR(tx)}</b><span>recorrência da semana (meta 10%)</span></div>
+      </div>
+      ${pend.length ? `<p class="vg-pend-t">Quem está pendente</p><div class="vg-pend">${pend.slice(0, 8).map(o => `<button data-cstec="${esc(o.tec)}"><b>${esc(nomeCurto(o.tec))}</b><span class="cs-st ${o.status}">${textoFalta(o)}</span></button>`).join('')}${pend.length > 8 ? `<p class="ad-note">+ ${pend.length - 8} na tabela acima</p>` : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+  // histórico
+  const eqs = EQUIPES.filter(e => e.key !== 'UNIDADE TOUROS');
+  el('vg-hist-head').innerHTML = `<tr><th rowspan="2">Ciclo</th>${eqs.map(e => `<th colspan="3" style="text-align:center">${esc(e.label)}</th>`).join('')}</tr><tr>${eqs.map(() => '<th>Executado</th><th>Recorrência na semana</th><th>Semana seguinte</th>').join('')}</tr>`;
+  el('vg-hist').innerHTML = semanasCiclo().slice(0, 8).map(s => `<tr><td><b>${ddmm(s)} a ${ddmm(domingo(s))}</b>${s === sem ? ' <span class="ar-tag">(selecionado)</span>' : ''}</td>${eqs.map(e => {
+    const r = resumoEquipeCiclo(s, e.key);
+    const t1 = taxa(reg(s, e.key)), t2 = taxa(reg(semanaSeguinte(s), e.key));
+    const p = r.pct == null ? null : Math.round(r.pct * 100);
+    const corT = t => t == null ? '' : t > META ? 'color:var(--crit)' : 'color:var(--ok)';
+    return `<td>${p == null ? '—' : `<span class="cs-cnt ${p >= 100 ? 'ok' : p ? 'meio' : ''}">${p}%</span> <span class="ar-tag">${r.concl}/${r.os.length}</span>`}</td><td style="${corT(t1)}">${pctBR(t1)}</td><td style="${corT(t2)}">${t2 == null ? '<span class="ar-tag">ainda sem dado</span>' : pctBR(t2) + (t1 != null ? ` <span class="ar-tag">${t2 < t1 ? '▼' : t2 > t1 ? '▲' : '='}</span>` : '')}</td>`;
+  }).join('')}</tr>`).join('');
+}
+el('vg-cards').addEventListener('click', e => { const b = e.target.closest('[data-cstec]'); if (b) abrirCicloTec(b.dataset.cstec); });
+
 el('ct-fechar').onclick = () => { el('cs-modal').style.display = 'none'; cicloTecAberto = null; };
 el('cs-modal').addEventListener('click', e => { if (e.target.id === 'cs-modal'){ el('cs-modal').style.display = 'none'; cicloTecAberto = null; } });
 el('ct-analitico').onclick = () => { if (cicloTecAberto) abrirTecnico(cicloTecAberto.tec); };
