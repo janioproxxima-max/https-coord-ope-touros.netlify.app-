@@ -7,20 +7,33 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
+  .ar-sec{ font-family:var(--f-display); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--brand); margin:26px 0 12px; }
   .ar-grid2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; margin-bottom:16px; }
   .ar-panel{ padding:16px 18px; }
   .ar-title{ font-size:13px; font-weight:700; margin:0 0 4px; color:var(--ink); }
   .ar-sub{ font-size:12px; color:var(--ink-dim); margin:0 0 12px; }
-  .ar-chart{ position:relative; height:280px; }
+  .ar-chart{ position:relative; height:290px; }
+  .ar-chart.tall{ height:340px; }
   .stat-card .delta{ font-size:12px; margin-top:6px; color:var(--ink-dim); }
   .stat-card .delta.up{ color:var(--crit); }
   .stat-card .delta.down{ color:var(--ok); }
+  .stat-card .sit{ font-size:11px; font-weight:700; margin-top:4px; letter-spacing:.04em; }
   table.ar-tab td, table.ar-tab th{ text-align:center; white-space:nowrap; }
   table.ar-tab td:first-child, table.ar-tab th:first-child{ text-align:left; }
   table.ar-tab td .pct{ font-family:var(--f-display); font-weight:700; font-size:14px; display:block; }
   table.ar-tab td .frac{ font-size:11px; color:var(--ink-dim); }
   table.ar-tab td.acima .pct{ color:var(--crit); }
   table.ar-tab td.dentro .pct{ color:var(--ok); }
+  table.ar-of td{ white-space:nowrap; }
+  table.ar-of td.num, table.ar-of th.num{ text-align:right; }
+  table.ar-of tbody tr{ cursor:pointer; }
+  table.ar-of .barwrap{ display:flex; align-items:center; gap:8px; min-width:150px; }
+  table.ar-of .bar{ height:8px; border-radius:4px; background:var(--accent3); }
+  table.ar-of .bar.ok{ background:var(--ok); }
+  .ar-pill{ display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+  .ar-pill.campo{ background:var(--crit-wash); color:var(--crit); }
+  .ar-pill.admin{ background:var(--warn-wash); color:var(--warn); }
+  .ar-pill.rede{ background:var(--accent2-wash); color:var(--accent2); }
   .ar-kanban{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
   @media (max-width: 1000px){ .ar-kanban{ grid-template-columns:1fr; } .ar-grid2{ grid-template-columns:1fr; } }
   .ar-col{ background:var(--bg-panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:12px; min-height:140px; }
@@ -32,12 +45,16 @@
   .ar-card .m{ font-size:11.5px; color:var(--ink-dim); margin:2px 0; }
   .ar-prog{ height:6px; background:var(--bg-raised); border-radius:3px; margin:8px 0 4px; overflow:hidden; }
   .ar-prog span{ display:block; height:100%; background:var(--ok); }
-  .ar-prog span.risco{ background:var(--warn); } .ar-prog span.atraso{ background:var(--crit); }
+  .ar-prog span.atraso{ background:var(--crit); }
   .ar-empty{ font-size:12px; color:var(--ink-faint); text-align:center; padding:18px 4px; }
-  .ar-meta-input{ width:90px; min-width:0; }
   .modal textarea{ background:var(--bg-raised); color:var(--ink); border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 10px; min-height:56px; font-family:inherit; }
   .modal .input{ min-width:0; }
+  .modal.wide{ max-width:1100px; }
   .ar-src{ font-size:11.5px; color:var(--ink-faint); margin-top:10px; }
+  .ar-mini-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:6px 0 16px; }
+  .ar-txt{ font-size:11px; color:var(--ink-dim); white-space:normal; max-width:320px; line-height:1.35; }
+  table.ar-det td{ vertical-align:top; }
+  .ar-tag{ font-size:11px; color:var(--ink-faint); }
 </style>
 </head>
 <body>
@@ -46,43 +63,43 @@
   <div class="page-head">
     <p class="eyebrow">Gestão Operacional</p>
     <h1 class="page-title">Ação de Recorrência</h1>
-    <p class="page-sub">Taxa = reaberturas em até 30 dias ÷ reparos realizados na semana (seg–dom). Atualizado toda segunda com a semana anterior.</p>
+    <p class="page-sub">Taxa = reaberturas em até 30 dias ÷ reparos realizados na semana (seg–dom) · meta 10% · atualizado toda segunda com a semana anterior.</p>
   </div>
 
-  <div class="stat-row" id="ar-stats"></div>
-
+  <!-- 1. Recorrência da semana -->
   <div class="panel toolbar">
     <div class="field">
-      <label for="ar-semanas">Semanas no gráfico</label>
-      <select id="ar-semanas">
-        <option value="6" selected>Últimas 6</option>
-        <option value="12">Últimas 12</option>
-        <option value="0">Todas</option>
-      </select>
+      <label for="ar-semana">Semana apresentada</label>
+      <select id="ar-semana"></select>
     </div>
     <div class="field">
-      <label for="ar-meta">Meta de recorrência (%)</label>
-      <input class="input ar-meta-input" id="ar-meta" type="number" step="0.1" min="0" max="100" placeholder="—">
+      <label for="ar-janela">Semanas nos gráficos</label>
+      <select id="ar-janela">
+        <option value="6" selected>Últimas 6</option>
+        <option value="12">Últimas 12</option>
+      </select>
     </div>
     <div style="flex:1"></div>
     <span class="ar-src" id="ar-atualizado"></span>
   </div>
 
+  <div class="stat-row" id="ar-stats"></div>
+
   <div class="ar-grid2">
     <div class="panel ar-panel">
-      <p class="ar-title">Taxa de recorrência por semana</p>
-      <p class="ar-sub">Unidade Touros e cada supervisor. Linha tracejada = meta.</p>
+      <p class="ar-title">Evolução da taxa de recorrência</p>
+      <p class="ar-sub">Unidade e cada supervisor · linha tracejada vermelha = meta de 10%.</p>
       <div class="ar-chart"><canvas id="ar-chart-taxa"></canvas></div>
     </div>
     <div class="panel ar-panel">
       <p class="ar-title">Reaberturas por semana</p>
-      <p class="ar-sub">Quantidade de reaberturas de cada equipe.</p>
+      <p class="ar-sub">Quantidade de reaberturas de cada equipe · total da unidade no topo.</p>
       <div class="ar-chart"><canvas id="ar-chart-qtd"></canvas></div>
     </div>
   </div>
 
   <div class="panel" style="margin-bottom:16px;">
-    <div style="padding:14px 18px 0;"><p class="ar-title">Semana a semana</p><p class="ar-sub">Reaberturas / reparos realizados · em vermelho quando passa da meta.</p></div>
+    <div style="padding:14px 18px 0;"><p class="ar-title">Semana a semana</p><p class="ar-sub">Reaberturas / reparos realizados · vermelho = acima da meta de 10%.</p></div>
     <div class="table-wrap">
       <table class="services ar-tab">
         <thead id="ar-thead"></thead>
@@ -91,6 +108,98 @@
     </div>
   </div>
 
+  <!-- 2. Análise detalhada -->
+  <p class="ar-sec">Análise detalhada · por que os clientes voltaram e quem gerou</p>
+  <div class="panel toolbar">
+    <div class="field">
+      <label for="f-periodo">Período</label>
+      <select id="f-periodo">
+        <option value="semana" selected>Semana apresentada</option>
+        <option value="6">Últimas 6 semanas</option>
+        <option value="12">Últimas 12 semanas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-sup">Supervisor</label>
+      <select id="f-sup">
+        <option value="">Todos</option>
+        <option value="MARCELLO ROCHA DE SOUSA JUNIOR">Marcello Rocha</option>
+        <option value="JOEL DIAS TAVARES">Joel Dias</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-prob">Tipo de problema</label>
+      <select id="f-prob"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label for="f-grupo">Grupo da causa</label>
+      <select id="f-grupo">
+        <option value="">Todos</option>
+        <option value="CULPA DO CAMPO">Culpa do campo</option>
+        <option value="ADMINISTRATIVO">Administrativo</option>
+        <option value="REDE EXTERNA">Rede externa</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-cid">Cidade</label>
+      <select id="f-cid"><option value="">Todas</option></select>
+    </div>
+    <button class="btn ghost" id="f-limpar" style="align-self:flex-end">Limpar</button>
+  </div>
+
+  <div class="stat-row" id="ar-det-stats"></div>
+
+  <div class="ar-grid2">
+    <div class="panel ar-panel">
+      <p class="ar-title">Reaberturas por grupo de causa</p>
+      <p class="ar-sub">Culpa do campo é o que a equipe controla diretamente.</p>
+      <div class="ar-chart"><canvas id="ar-chart-grupo"></canvas></div>
+    </div>
+    <div class="panel ar-panel">
+      <p class="ar-title">Problemas registrados nas reaberturas</p>
+      <p class="ar-sub">Os mais frequentes no período e filtros escolhidos.</p>
+      <div class="ar-chart"><canvas id="ar-chart-prob"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div style="padding:14px 18px 0;">
+      <p class="ar-title">Técnicos ofensores</p>
+      <p class="ar-sub">Ofensor = técnico que fez a OS anterior, aquela que voltou a abrir em até 30 dias. Clique no técnico para ver o analítico. % geradas = reaberturas geradas ÷ OS realizadas pelo técnico no mesmo período (em 6 ou 12 semanas a leitura fica mais justa).</p>
+    </div>
+    <div class="table-wrap">
+      <table class="services ar-of">
+        <thead><tr><th>Técnico</th><th>Supervisor</th><th class="num">OS realizadas</th><th>Reaberturas geradas</th><th class="num">% geradas</th><th class="num">Culpa do campo</th><th class="num">Retornos atendidos</th><th>Problema mais comum</th></tr></thead>
+        <tbody id="ar-of-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ar-grid2">
+    <div class="panel ar-panel">
+      <p class="ar-title">Taxa de recorrência por cidade</p>
+      <p class="ar-sub">Reaberturas ÷ reparos realizados na cidade · cidades com 5+ reparos.</p>
+      <div class="ar-chart tall"><canvas id="ar-chart-cid"></canvas></div>
+    </div>
+    <div class="panel ar-panel">
+      <p class="ar-title">Reaberturas por dia de abertura</p>
+      <p class="ar-sub">Reparos do período com e sem reabertura.</p>
+      <div class="ar-chart tall"><canvas id="ar-chart-dia"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div style="padding:14px 18px 0;"><p class="ar-title">Casos críticos · reabriu em até 3 dias</p><p class="ar-sub">Retornos rápidos no período e filtros escolhidos.</p></div>
+    <div class="table-wrap">
+      <table class="services ar-det">
+        <thead><tr><th>Reabertura</th><th>Aberta</th><th>Cidade</th><th>OS anterior</th><th>Ofensor</th><th>Problema anterior → atual</th><th>Dias</th><th>Grupo</th><th>O que o técnico anterior registrou</th></tr></thead>
+        <tbody id="ar-crit-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3. Ações -->
+  <p class="ar-sec">Ações · início, andamento e fim</p>
   <div class="panel ar-panel" style="margin-bottom:16px;">
     <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
       <div style="flex:1;min-width:240px;">
@@ -115,9 +224,39 @@
     </div>
   </div>
 
-  <p class="ar-src">Fonte: Operações Proxxima › Gestão › Consolidado, filtro coordenador Jânio Dantas Martins (métrica “Recorrência (abertas)”).</p>
+  <p class="ar-src" id="ar-fonte">Fonte: Operações Proxxima › Recorrência (analítico) e Gestão › Consolidado, coordenador Jânio Dantas Martins, Unidade Touros.</p>
 </div>
 
+<!-- analítico do técnico -->
+<div class="modal-backdrop" id="ar-tec-modal" style="display:none">
+  <div class="modal wide">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+      <div><h3 id="tm-nome">Técnico</h3><p class="modal-sub" id="tm-sub"></p></div>
+      <button class="btn ghost" id="tm-fechar">Fechar</button>
+    </div>
+    <div class="ar-mini-stats" id="tm-stats"></div>
+    <div class="ar-grid2" style="margin-bottom:10px;">
+      <div><p class="ar-title">Problemas das reaberturas que gerou</p><div class="ar-chart" style="height:200px"><canvas id="tm-chart-prob"></canvas></div></div>
+      <div><p class="ar-title">Reaberturas geradas por semana</p><div class="ar-chart" style="height:200px"><canvas id="tm-chart-sem"></canvas></div></div>
+    </div>
+    <p class="ar-title">Reaberturas que ele gerou</p>
+    <div class="table-wrap" style="max-height:340px;margin-bottom:14px;">
+      <table class="services ar-det compact">
+        <thead><tr><th>OS dele</th><th>Data</th><th>Problema</th><th>O que registrou</th><th>Reabriu</th><th>Dias</th><th>Novo problema</th><th>Quem atendeu</th><th>Grupo</th></tr></thead>
+        <tbody id="tm-geradas"></tbody>
+      </table>
+    </div>
+    <p class="ar-title">Retornos que ele atendeu (OS de recorrência fechadas por ele)</p>
+    <div class="table-wrap" style="max-height:240px;">
+      <table class="services ar-det compact">
+        <thead><tr><th>Reabertura</th><th>Data</th><th>Problema</th><th>OS anterior</th><th>Ofensor</th><th>Dias</th><th>Grupo</th></tr></thead>
+        <tbody id="tm-atendidas"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- cadastro de ação -->
 <div class="modal-backdrop" id="ar-modal" style="display:none">
   <div class="modal">
     <h3 id="ar-m-title">Nova ação</h3>
@@ -163,128 +302,384 @@
 <script>
 requireAuthThenInit('acao-recorrencia.html', 'Ação de Recorrência');
 
+const META = 0.10;
+const SYNC_OS = 'RecorrenciaOSData';
+const SYNC_OS_META = 'RecorrenciaOSMeta';
 const SYNC_SEMANAL = 'RecorrenciaSemanalData';
 const SYNC_ACOES = 'RecorrenciaAcoesData';
-const SYNC_CONFIG = 'RecorrenciaConfigData';
+const KEY_OS = 'ops_touros_rec_os_v1';
 const KEY_SEMANAL = 'ops_touros_rec_semanal_v1';
 const KEY_ACOES = 'ops_touros_rec_acoes_v1';
-const KEY_CONFIG = 'ops_touros_rec_config_v1';
 
 const EQUIPES = [
   { key: 'UNIDADE TOUROS', label: 'Unidade Touros', cor: '#00d4ff' },
   { key: 'MARCELLO ROCHA DE SOUSA JUNIOR', label: 'Marcello Rocha', cor: '#ff9a3c' },
   { key: 'JOEL DIAS TAVARES', label: 'Joel Dias', cor: '#a78bfa' },
 ];
+const GRUPOS = [
+  { key: 'CULPA DO CAMPO', label: 'Culpa do campo', cor: '#ff4d6d', cls: 'campo' },
+  { key: 'ADMINISTRATIVO', label: 'Administrativo', cor: '#ffd166', cls: 'admin' },
+  { key: 'REDE EXTERNA', label: 'Rede externa', cor: '#a78bfa', cls: 'rede' },
+];
 const labelEquipe = k => (EQUIPES.find(e => e.key === k) || { label: k }).label;
 
-// Base inicial (6 semanas) lida em 16/11/2026 do Consolidado, coord. Jânio Dantas Martins.
-// Usada só se a base compartilhada ainda estiver vazia.
-const SEED = (() => {
-  const sem = [['2026-10-05','2026-10-11'],['2026-10-12','2026-10-18'],['2026-10-19','2026-10-25'],['2026-10-26','2026-11-01'],['2026-11-02','2026-11-08'],['2026-11-09','2026-11-15']];
-  const v = {
-    'UNIDADE TOUROS': [[31,299],[35,260],[29,270],[28,234],[27,210],[40,267]],
-    'MARCELLO ROCHA DE SOUSA JUNIOR': [[17,130],[22,131],[15,142],[13,121],[18,104],[25,139]],
-    'JOEL DIAS TAVARES': [[14,169],[13,129],[14,128],[15,113],[9,106],[15,128]],
-  };
-  const out = [];
-  Object.entries(v).forEach(([eq, arr]) => arr.forEach(([reab, rep], i) => out.push({
-    id: sem[i][0] + '|' + eq, ini: sem[i][0], fim: sem[i][1], equipe: eq, reab, reparos: rep,
-    fonte: 'Consolidado Operações Proxxima', atualizadoEm: '2026-11-16T18:30:00.000Z'
-  })));
-  return out;
-})();
-
-let semanal = OPS.loadData(KEY_SEMANAL) || [];
+let osData = OPS.loadData(KEY_OS) || [];
+let semanalSalvo = OPS.loadData(KEY_SEMANAL) || [];
 let acoes = OPS.loadData(KEY_ACOES) || [];
-let config = OPS.loadData(KEY_CONFIG) || { meta: null };
+let osMeta = null;
+let semanal = [];
 const charts = {};
 let editId = null;
 
 const el = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-const ddmm = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) : '';
+const ddmm = iso => iso ? String(iso).slice(8,10) + '/' + String(iso).slice(5,7) : '';
 const pctBR = (x, d = 1) => (x == null || isNaN(x)) ? '—' : (x * 100).toFixed(d).replace('.', ',') + '%';
+const nomeCurto = n => { const p = String(n || '').split(' ').filter(Boolean); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : (p[0] || '—'); };
+const isoLocal = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const hojeISO = () => isoLocal(new Date());
+const segunda = s => { const d = new Date(String(s).slice(0, 10) + 'T12:00:00'); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return isoLocal(d); };
+const domingo = seg => { const d = new Date(seg + 'T12:00:00'); d.setDate(d.getDate() + 6); return isoLocal(d); };
 const taxa = r => r && r.reparos > 0 ? r.reab / r.reparos : null;
-const hojeISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-const meta = () => (config && config.meta != null && config.meta !== '') ? Number(config.meta) / 100 : null;
+const supLabel = s => s === 'MARCELLO ROCHA DE SOUSA JUNIOR' ? 'Marcello' : s === 'JOEL DIAS TAVARES' ? 'Joel' : nomeCurto(s);
 
-function semanasOrdenadas(){
-  const set = [...new Set(semanal.map(r => r.ini))].sort();
-  const n = +el('ar-semanas').value;
-  return n ? set.slice(-n) : set;
+// ---------- rótulos de valor nos gráficos ----------
+const valueLabels = {
+  id: 'valueLabels',
+  afterDatasetsDraw(chart, args, opts){
+    if (opts === false || opts.display === false) return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.font = '600 11px Inter, system-ui, sans-serif';
+    chart.data.datasets.forEach((ds, i) => {
+      const meta = chart.getDatasetMeta(i);
+      if (meta.hidden || ds.noLabels) return;
+      meta.data.forEach((elm, j) => {
+        const v = ds.data[j]; if (v == null || v === 0) return;
+        const txt = opts.format ? opts.format(v, ds, j) : String(v);
+        if (meta.type === 'bar'){
+          const horiz = chart.options.indexAxis === 'y';
+          const p = elm.getProps(['x', 'y', 'base', 'width', 'height'], true);
+          const size = horiz ? Math.abs(p.x - p.base) : Math.abs(p.base - p.y);
+          const w = ctx.measureText(txt).width;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          if ((horiz ? size > w + 8 : size > 16)){
+            ctx.fillStyle = ds.labelColor || '#0b0f1a';
+            ctx.fillText(txt, horiz ? (p.x + p.base) / 2 : p.x, horiz ? p.y : (p.y + p.base) / 2);
+          } else {
+            ctx.fillStyle = '#e2eaf5';
+            if (horiz){ ctx.textAlign = 'left'; ctx.fillText(txt, p.x + 4, p.y); }
+            else ctx.fillText(txt, p.x, p.y - 8);
+          }
+        } else if (meta.type === 'line'){
+          ctx.fillStyle = ds.labelColor || ds.borderColor; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText(txt, elm.x, elm.y - 7);
+        } else if (meta.type === 'doughnut'){
+          const p = elm.tooltipPosition();
+          ctx.fillStyle = '#0b0f1a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(txt, p.x, p.y);
+        }
+      });
+    });
+    ctx.restore();
+  }
+};
+const grid = { color: 'rgba(94,122,158,0.15)' }, tick = { color: '#5e7a9e' };
+const legend = { labels: { color: '#e2eaf5', boxWidth: 12 } };
+function novoGrafico(id, cfg){
+  if (typeof Chart === 'undefined') return null;
+  if (charts[id]) charts[id].destroy();
+  cfg.plugins = (cfg.plugins || []).concat(valueLabels);
+  charts[id] = new Chart(el(id), cfg);
+  return charts[id];
 }
-function reg(ini, eq){ return semanal.find(r => r.ini === ini && r.equipe === eq); }
+
+// ---------- base semanal (oficial) ----------
+function montarSemanal(){
+  if (osData.length){
+    const m = {};
+    osData.forEach(r => {
+      const k = segunda(r.ab);
+      m[k] = m[k] || { 'UNIDADE TOUROS': [0, 0], 'MARCELLO ROCHA DE SOUSA JUNIOR': [0, 0], 'JOEL DIAS TAVARES': [0, 0] };
+      m[k]['UNIDADE TOUROS'][0] += r.rec; m[k]['UNIDADE TOUROS'][1]++;
+      if (m[k][r.sup]){ m[k][r.sup][0] += r.rec; m[k][r.sup][1]++; }
+    });
+    const out = [];
+    Object.entries(m).forEach(([k, v]) => Object.entries(v).forEach(([eq, [reab, reparos]]) => out.push({ ini: k, fim: domingo(k), equipe: eq, reab, reparos })));
+    // semanas antigas que só existem na base semanal
+    semanalSalvo.forEach(r => { if (!m[r.ini]) out.push(r); });
+    return out;
+  }
+  return semanalSalvo.slice();
+}
+const semanasTodas = () => [...new Set(semanal.map(r => r.ini))].sort();
+function semanasJanela(){ const n = +el('ar-janela').value; return semanasTodas().slice(-n); }
+const reg = (ini, eq) => semanal.find(r => r.ini === ini && r.equipe === eq);
+const semanaSel = () => el('ar-semana').value || semanasTodas().slice(-1)[0];
+
+function preencherSemanas(){
+  const s = semanasTodas().slice().reverse();
+  const atual = el('ar-semana').value;
+  el('ar-semana').innerHTML = s.map(k => `<option value="${k}">${ddmm(k)} a ${ddmm(domingo(k))}${k === s[0] ? ' (última)' : ''}</option>`).join('');
+  if (atual && s.includes(atual)) el('ar-semana').value = atual;
+}
 
 function renderStats(){
-  const all = [...new Set(semanal.map(r => r.ini))].sort();
-  const ult = all[all.length - 1], ant = all[all.length - 2];
-  const m = meta();
+  const all = semanasTodas();
+  const ult = semanaSel(), ant = all[all.indexOf(ult) - 1];
   const cards = EQUIPES.map(e => {
     const r = reg(ult, e.key), p = reg(ant, e.key);
     const t = taxa(r), tp = taxa(p);
-    const cls = (m != null && t != null) ? (t > m ? 'crit' : 'ok') : 'brand';
+    const acima = t != null && t > META;
     let delta = '';
     if (t != null && tp != null){
       const d = (t - tp) * 100;
       delta = `<div class="delta ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${Math.abs(d).toFixed(1).replace('.', ',')} p.p. vs semana anterior</div>`;
     }
-    return `<div class="stat-card ${cls}"><div class="label">${esc(e.label)} · ${ddmm(ult)}–${ddmm(r ? r.fim : '')}</div>
-      <div class="value">${pctBR(t)} <small>${r ? r.reab + '/' + r.reparos : ''}</small></div>${delta}</div>`;
+    return `<div class="stat-card ${t == null ? '' : acima ? 'crit' : 'ok'}"><div class="label">${esc(e.label)}</div>
+      <div class="value">${pctBR(t)} <small>${r ? r.reab + '/' + r.reparos : ''}</small></div>
+      <div class="sit" style="color:${acima ? 'var(--crit)' : 'var(--ok)'}">${t == null ? '' : acima ? 'ACIMA DA META (+' + ((t - META) * 100).toFixed(1).replace('.', ',') + ' p.p.)' : 'DENTRO DA META'}</div>${delta}</div>`;
   });
   const abertas = acoes.filter(a => fase(a) !== 3).length;
   const vencidas = acoes.filter(a => fase(a) !== 3 && a.prazo && a.prazo < hojeISO()).length;
   cards.push(`<div class="stat-card ${vencidas ? 'warn' : 'brand'}"><div class="label">Ações em aberto</div>
     <div class="value">${abertas} <small>${vencidas ? vencidas + ' com prazo vencido' : 'nenhuma vencida'}</small></div></div>`);
   el('ar-stats').innerHTML = ult ? cards.join('') : '<div class="stat-card"><div class="label">Sem dados</div><div class="value">—</div></div>';
-  const lastUpd = semanal.map(r => r.atualizadoEm).filter(Boolean).sort().pop();
-  el('ar-atualizado').textContent = lastUpd ? 'Última atualização dos dados: ' + OPS.formatDateTimeBR(lastUpd) : '';
+  const upd = osMeta && osMeta.atualizadoEm;
+  el('ar-atualizado').textContent = upd ? 'Dados atualizados em ' + OPS.formatDateTimeBR(upd) : '';
 }
 
-function renderCharts(){
-  if (typeof Chart === 'undefined') return;
-  const sem = semanasOrdenadas();
-  const labels = sem.map(i => { const r = semanal.find(x => x.ini === i); return ddmm(i) + '–' + ddmm(r ? r.fim : ''); });
-  const m = meta();
+function renderEvolucao(){
+  const sem = semanasJanela();
+  const labels = sem.map(i => ddmm(i) + '–' + ddmm(domingo(i)));
   const ds = EQUIPES.map(e => ({
     label: e.label, data: sem.map(i => { const t = taxa(reg(i, e.key)); return t == null ? null : +(t * 100).toFixed(1); }),
     borderColor: e.cor, backgroundColor: e.cor, tension: 0, borderWidth: e.key === 'UNIDADE TOUROS' ? 3 : 2, pointRadius: 4, spanGaps: true,
   }));
-  if (m != null) ds.push({ label: 'Meta', data: sem.map(() => +(m * 100).toFixed(1)), borderColor: '#ff4d6d', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, fill: false });
-  const grid = { color: 'rgba(94,122,158,0.15)' }, tick = { color: '#5e7a9e' };
-  if (charts.taxa) charts.taxa.destroy();
-  charts.taxa = new Chart(el('ar-chart-taxa'), {
+  ds.push({ label: 'Meta 10%', data: sem.map(() => META * 100), borderColor: '#ff4d6d', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, fill: false, noLabels: true });
+  novoGrafico('ar-chart-taxa', {
     type: 'line', data: { labels, datasets: ds },
-    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { color: '#e2eaf5', boxWidth: 12 } },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 14 } },
+      plugins: { legend, valueLabels: { format: v => String(v).replace('.', ',') + '%' },
         tooltip: { callbacks: { label: c => {
-          if (c.dataset.label === 'Meta') return 'Meta: ' + String(c.parsed.y).replace('.', ',') + '%';
+          if (c.dataset.noLabels) return 'Meta: 10%';
           const e = EQUIPES[c.datasetIndex]; const r = e && reg(sem[c.dataIndex], e.key);
           return `${c.dataset.label}: ${String(c.parsed.y).replace('.', ',')}%` + (r ? ` (${r.reab}/${r.reparos})` : '');
         } } } },
-      scales: { y: { beginAtZero: true, grid, ticks: { ...tick, callback: v => v + '%' } }, x: { grid, ticks: tick } } }
+      scales: { y: { beginAtZero: true, grace: '15%', grid, ticks: { ...tick, callback: v => v + '%' } }, x: { grid, ticks: tick } } }
   });
-  if (charts.qtd) charts.qtd.destroy();
-  charts.qtd = new Chart(el('ar-chart-qtd'), {
-    type: 'bar',
-    data: { labels, datasets: EQUIPES.filter(e => e.key !== 'UNIDADE TOUROS').map(e => ({
-      label: e.label, data: sem.map(i => { const r = reg(i, e.key); return r ? r.reab : null; }), backgroundColor: e.cor, borderRadius: 4 })) },
-    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { color: '#e2eaf5', boxWidth: 12 } } },
-      scales: { x: { stacked: true, grid, ticks: tick }, y: { stacked: true, beginAtZero: true, grid, ticks: { ...tick, precision: 0 } } } }
+  const sups = EQUIPES.filter(e => e.key !== 'UNIDADE TOUROS');
+  const dsq = sups.map(e => ({ label: e.label, data: sem.map(i => { const r = reg(i, e.key); return r ? r.reab : null; }), backgroundColor: e.cor, borderRadius: 4, stack: 's' }));
+  // total da unidade: linha invisível no topo da pilha, só para o rótulo
+  dsq.push({ label: 'Total', type: 'line', data: sem.map(i => { const r = reg(i, 'UNIDADE TOUROS'); return r ? r.reab : null; }),
+    borderColor: 'rgba(0,0,0,0)', backgroundColor: 'rgba(0,0,0,0)', pointRadius: 0, labelColor: '#e2eaf5', stack: 'total' });
+  novoGrafico('ar-chart-qtd', {
+    type: 'bar', data: { labels, datasets: dsq },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, layout: { padding: { top: 16 } },
+      plugins: { legend: { labels: { ...legend.labels, filter: it => it.text !== 'Total' } }, valueLabels: { format: (v, ds) => ds.label === 'Total' ? 'Total ' + v : String(v) } },
+      scales: { x: { stacked: true, grid, ticks: tick }, y: { stacked: true, beginAtZero: true, grace: '15%', grid, ticks: { ...tick, precision: 0 } } } }
   });
 }
 
 function renderTabela(){
-  const sem = semanasOrdenadas();
-  const m = meta();
-  el('ar-thead').innerHTML = '<tr><th>Equipe</th>' + sem.map(i => { const r = semanal.find(x => x.ini === i); return `<th>${ddmm(i)}–${ddmm(r ? r.fim : '')}</th>`; }).join('') + '</tr>';
+  const sem = semanasJanela();
+  el('ar-thead').innerHTML = '<tr><th>Equipe</th>' + sem.map(i => `<th>${ddmm(i)}–${ddmm(domingo(i))}</th>`).join('') + '</tr>';
   el('ar-tbody').innerHTML = EQUIPES.map(e => '<tr><td><b>' + esc(e.label) + '</b></td>' + sem.map(i => {
     const r = reg(i, e.key), t = taxa(r);
-    const cls = (m != null && t != null) ? (t > m ? 'acima' : 'dentro') : '';
+    const cls = t == null ? '' : t > META ? 'acima' : 'dentro';
     return r ? `<td class="${cls}"><span class="pct">${pctBR(t)}</span><span class="frac">${r.reab}/${r.reparos}</span></td>` : '<td>—</td>';
   }).join('') + '</tr>').join('');
 }
 
+// ---------- análise detalhada ----------
+function periodoOS(){
+  const p = el('f-periodo').value;
+  const semanas = p === 'semana' ? [semanaSel()] : semanasTodas().slice(-(+p));
+  const set = new Set(semanas);
+  return osData.filter(r => set.has(segunda(r.ab)));
+}
+function filtros(){
+  return { sup: el('f-sup').value, prob: el('f-prob').value, grupo: el('f-grupo').value, cid: el('f-cid').value };
+}
+function preencherFiltros(){
+  const keep = (id, vals, label) => {
+    const s = el(id), cur = s.value;
+    s.innerHTML = `<option value="">${label}</option>` + vals.map(v => `<option value="${esc(v)}">${esc(v.charAt(0) + v.slice(1).toLowerCase())}</option>`).join('');
+    if (vals.includes(cur)) s.value = cur;
+  };
+  const probs = {}; osData.filter(r => r.rec).forEach(r => { probs[r.prob] = (probs[r.prob] || 0) + 1; });
+  keep('f-prob', Object.keys(probs).sort((a, b) => probs[b] - probs[a]), 'Todos');
+  keep('f-cid', [...new Set(osData.map(r => r.cid).filter(Boolean))].sort(), 'Todas');
+}
+function recFiltradas(base, f){
+  return base.filter(r => r.rec && (!f.prob || r.prob === f.prob) && (!f.grupo || r.grp === f.grupo) && (!f.cid || r.cid === f.cid));
+}
+const cap = s => s ? s.charAt(0) + s.slice(1).toLowerCase() : '';
+
+function renderDetalhe(){
+  const base = periodoOS();
+  const f = filtros();
+  const baseSup = base.filter(r => (!f.sup || r.sup === f.sup) && (!f.cid || r.cid === f.cid));
+  const recs = recFiltradas(base, f).filter(r => !f.sup || r.sup === f.sup);
+  const campo = recs.filter(r => r.grp === 'CULPA DO CAMPO').length;
+  const rapidas = recs.filter(r => r.dias !== '' && Number(r.dias) <= 3).length;
+  const tx = baseSup.length ? recs.length / baseSup.length : null;
+  const mostraTx = !(f.prob || f.grupo);
+  el('ar-det-stats').innerHTML = [
+    ['Reparos realizados', baseSup.length, 'brand'],
+    ['Reaberturas', recs.length + (mostraTx ? ` <small>${pctBR(tx)}</small>` : ''), mostraTx && tx > META ? 'crit' : ''],
+    ['Culpa do campo', campo + ` <small>${pctBR(recs.length ? campo / recs.length : null, 0)} das reaberturas</small>`, campo ? 'crit' : ''],
+    ['Reabriu em até 3 dias', rapidas, rapidas ? 'warn' : ''],
+  ].map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+
+  // grupos
+  const g = GRUPOS.map(x => recs.filter(r => r.grp === x.key).length);
+  novoGrafico('ar-chart-grupo', {
+    type: 'doughnut',
+    data: { labels: GRUPOS.map(x => x.label), datasets: [{ data: g, backgroundColor: GRUPOS.map(x => x.cor), borderColor: '#121929', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
+      plugins: { legend: { position: 'right', labels: { color: '#e2eaf5', boxWidth: 12, generateLabels: ch => ch.data.labels.map((l, i) => ({ text: `${l}: ${g[i]}`, fillStyle: GRUPOS[i].cor, strokeStyle: GRUPOS[i].cor, fontColor: '#e2eaf5', index: i })) } }, valueLabels: {} } }
+  });
+  // problemas
+  const pc = {}; recs.forEach(r => { pc[r.prob] = (pc[r.prob] || 0) + 1; });
+  const top = Object.entries(pc).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  novoGrafico('ar-chart-prob', {
+    type: 'bar',
+    data: { labels: top.map(t => cap(t[0])), datasets: [{ data: top.map(t => t[1]), backgroundColor: '#ff9a3c', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, valueLabels: {} },
+      scales: { x: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { grid: { display: false }, ticks: { color: '#e2eaf5' } } } }
+  });
+
+  renderOfensores(base, f);
+
+  // cidades
+  const cidades = {};
+  base.filter(r => !f.sup || r.sup === f.sup).forEach(r => { const c = cidades[r.cid] = cidades[r.cid] || { os: 0, rec: 0 }; c.os++; });
+  recFiltradas(base, { ...f, cid: '' }).filter(r => !f.sup || r.sup === f.sup).forEach(r => { if (cidades[r.cid]) cidades[r.cid].rec++; });
+  const lc = Object.entries(cidades).filter(([, v]) => v.os >= 5).map(([k, v]) => [k, v.rec / v.os, v]).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  novoGrafico('ar-chart-cid', {
+    type: 'bar',
+    data: { labels: lc.map(c => cap(c[0])), datasets: [{ data: lc.map(c => +(c[1] * 100).toFixed(1)), backgroundColor: lc.map(c => (mostraTx && c[1] > META) ? '#ff4d6d' : mostraTx ? '#00e5a0' : '#ff9a3c'), borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, valueLabels: { format: (v, ds, j) => String(v).replace('.', ',') + '% · ' + lc[j][2].rec + '/' + lc[j][2].os },
+        tooltip: { callbacks: { label: c => `${String(c.parsed.x).replace('.', ',')}% (${lc[c.dataIndex][2].rec}/${lc[c.dataIndex][2].os})` } } },
+      scales: { x: { beginAtZero: true, grace: '35%', grid, ticks: { ...tick, callback: v => v + '%' } }, y: { grid: { display: false }, ticks: { color: '#e2eaf5' } } } }
+  });
+  // por dia (ou por semana quando o período é longo)
+  const dias = {};
+  baseSup.forEach(r => { const d = r.ab.slice(0, 10); dias[d] = dias[d] || { os: 0, rec: 0 }; dias[d].os++; });
+  recs.forEach(r => { const d = r.ab.slice(0, 10); if (dias[d]) dias[d].rec++; });
+  const dk = Object.keys(dias).sort();
+  const muitos = dk.length > 14;
+  const agg = muitos ? (() => { const w = {}; dk.forEach(d => { const k = segunda(d); w[k] = w[k] || { os: 0, rec: 0 }; w[k].os += dias[d].os; w[k].rec += dias[d].rec; }); return w; })() : dias;
+  const ak = Object.keys(agg).sort();
+  novoGrafico('ar-chart-dia', {
+    type: 'bar',
+    data: { labels: ak.map(d => muitos ? 'sem ' + ddmm(d) : ['dom','seg','ter','qua','qui','sex','sáb'][new Date(d + 'T12:00:00').getDay()] + ' ' + ddmm(d)),
+      datasets: [
+        { label: 'Sem reabertura', data: ak.map(d => agg[d].os - agg[d].rec), backgroundColor: '#3d5470', borderRadius: 4, stack: 's', labelColor: '#e2eaf5' },
+        { label: 'Reabertura', data: ak.map(d => agg[d].rec), backgroundColor: '#ff9a3c', borderRadius: 4, stack: 's' },
+      ] },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend, valueLabels: {} },
+      scales: { x: { stacked: true, grid, ticks: tick }, y: { stacked: true, beginAtZero: true, grid, ticks: { ...tick, precision: 0 } } } }
+  });
+  // casos críticos
+  const crit = recs.filter(r => r.dias !== '' && Number(r.dias) <= 3).sort((a, b) => Number(a.dias) - Number(b.dias) || a.ab.localeCompare(b.ab));
+  el('ar-crit-body').innerHTML = crit.length ? crit.map(r => `<tr>
+    <td>${esc(r.id)}</td><td>${ddmm(r.ab)}</td><td>${esc(cap(r.cid))}</td><td>${esc(r.pa)}</td>
+    <td><a href="#" data-tec="${esc(r.teca)}">${esc(nomeCurto(r.teca))}</a></td>
+    <td>${esc(r.proba.toLowerCase())} → ${esc(r.prob.toLowerCase())}</td><td>${esc(r.dias)}</td><td>${pill(r.grp)}</td>
+    <td class="ar-txt">${esc(r.txta)}</td></tr>`).join('') : '<tr><td colspan="9" class="ar-empty">Nenhum retorno em até 3 dias</td></tr>';
+}
+const pill = g => { const x = GRUPOS.find(y => y.key === g); return x ? `<span class="ar-pill ${x.cls}">${x.label}</span>` : esc(g || '—'); };
+
+const supCache = {};
+function supDoTecnico(nome){
+  if (supCache[nome] !== undefined) return supCache[nome];
+  const c = {}; osData.forEach(r => { if (r.tec === nome) c[r.sup] = (c[r.sup] || 0) + 1; });
+  let k = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
+  if (!k){ const a = osData.find(r => r.teca === nome); k = a ? a.supa : ''; }
+  return (supCache[nome] = k || '');
+}
+function renderOfensores(base, f){
+  const recs = recFiltradas(base, f);
+  const t = {};
+  const get = n => t[n] = t[n] || { nome: n, os: 0, ger: 0, campo: 0, atend: 0, probs: {} };
+  base.forEach(r => { if (r.tec && (!f.cid || r.cid === f.cid)) get(r.tec).os++; });
+  recs.forEach(r => {
+    if (r.teca){ const x = get(r.teca); x.ger++; if (r.grp === 'CULPA DO CAMPO') x.campo++; x.probs[r.prob] = (x.probs[r.prob] || 0) + 1; }
+    if (r.tec) get(r.tec).atend++;
+  });
+  let lista = Object.values(t).map(x => ({ ...x, sup: supDoTecnico(x.nome) }));
+  if (f.sup) lista = lista.filter(x => x.sup === f.sup);
+  lista = lista.filter(x => x.ger > 0 || (!f.prob && !f.grupo && x.os > 0));
+  lista.sort((a, b) => b.ger - a.ger || b.campo - a.campo || (b.ger / Math.max(1, b.os)) - (a.ger / Math.max(1, a.os)) || b.os - a.os);
+  const max = Math.max(1, ...lista.map(x => x.ger));
+  el('ar-of-body').innerHTML = lista.length ? lista.map(x => {
+    const p = x.os ? x.ger / x.os : null;
+    const topProb = Object.entries(x.probs).sort((a, b) => b[1] - a[1])[0];
+    return `<tr data-tec="${esc(x.nome)}">
+      <td><b>${esc(x.nome)}</b></td><td>${esc(supLabel(x.sup))}</td><td class="num">${x.os}</td>
+      <td><div class="barwrap"><div class="bar ${x.ger ? '' : 'ok'}" style="width:${Math.max(4, x.ger / max * 110)}px"></div><b>${x.ger}</b></div></td>
+      <td class="num" style="color:${p != null && p > META ? 'var(--crit)' : 'var(--ok)'}">${pctBR(p)}</td>
+      <td class="num">${x.campo}</td><td class="num">${x.atend}</td>
+      <td>${topProb ? esc(topProb[0].toLowerCase()) + ' (' + topProb[1] + ')' : '—'}</td></tr>`;
+  }).join('') : '<tr><td colspan="8" class="ar-empty">Nenhum técnico com os filtros escolhidos</td></tr>';
+}
+
+// ---------- analítico do técnico ----------
+function abrirTecnico(nome){
+  if (!nome) return;
+  const base = periodoOS();
+  const f = filtros();
+  const recs = recFiltradas(base, f);
+  const ger = recs.filter(r => r.teca === nome).sort((a, b) => a.ab.localeCompare(b.ab));
+  const atend = recs.filter(r => r.tec === nome).sort((a, b) => a.ab.localeCompare(b.ab));
+  const feitas = base.filter(r => r.tec === nome && (!f.cid || r.cid === f.cid));
+  const campo = ger.filter(r => r.grp === 'CULPA DO CAMPO').length;
+  const rap = ger.filter(r => r.dias !== '' && Number(r.dias) <= 3).length;
+  const per = el('f-periodo').value === 'semana' ? 'semana ' + ddmm(semanaSel()) + ' a ' + ddmm(domingo(semanaSel())) : 'últimas ' + el('f-periodo').value + ' semanas';
+  const filtrosTxt = [f.prob && 'problema: ' + f.prob.toLowerCase(), f.grupo && 'grupo: ' + f.grupo.toLowerCase(), f.cid && 'cidade: ' + f.cid.toLowerCase()].filter(Boolean).join(' · ');
+  el('tm-nome').textContent = nome;
+  el('tm-sub').textContent = 'Supervisor: ' + supLabel(supDoTecnico(nome)) + ' · ' + per + (filtrosTxt ? ' · ' + filtrosTxt : '');
+  el('tm-stats').innerHTML = [
+    ['OS realizadas', feitas.length, 'brand'], ['Reaberturas geradas', ger.length, ger.length ? 'crit' : 'ok'],
+    ['% geradas', pctBR(feitas.length ? ger.length / feitas.length : null), feitas.length && ger.length / feitas.length > META ? 'crit' : 'ok'],
+    ['Culpa do campo', campo, campo ? 'crit' : ''], ['Reabriu em até 3 dias', rap, rap ? 'warn' : ''], ['Retornos atendidos', atend.length, ''],
+  ].map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:22px">${v}</div></div>`).join('');
+  el('ar-tec-modal').style.display = 'flex';
+  const pc = {}; ger.forEach(r => { pc[r.prob] = (pc[r.prob] || 0) + 1; });
+  const tp = Object.entries(pc).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  novoGrafico('tm-chart-prob', {
+    type: 'bar', data: { labels: tp.map(x => cap(x[0])), datasets: [{ data: tp.map(x => x[1]), backgroundColor: '#ff9a3c', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, valueLabels: {} },
+      scales: { x: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { grid: { display: false }, ticks: { color: '#e2eaf5' } } } }
+  });
+  const sems = semanasTodas().slice(-(el('f-periodo').value === '12' ? 12 : 6));
+  const porSem = sems.map(s => osData.filter(r => r.rec && r.teca === nome && segunda(r.ab) === s && (!f.prob || r.prob === f.prob) && (!f.grupo || r.grp === f.grupo)).length);
+  const feitasSem = sems.map(s => osData.filter(r => r.tec === nome && segunda(r.ab) === s).length);
+  novoGrafico('tm-chart-sem', {
+    type: 'bar', data: { labels: sems.map(s => ddmm(s)), datasets: [
+      { label: 'Reaberturas geradas', data: porSem, backgroundColor: '#ff4d6d', borderRadius: 4 },
+      { label: 'OS realizadas', data: feitasSem, backgroundColor: '#3d5470', borderRadius: 4, labelColor: '#e2eaf5' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend, valueLabels: {} },
+      scales: { x: { grid, ticks: tick }, y: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } } } }
+  });
+  el('tm-geradas').innerHTML = ger.length ? ger.map(r => `<tr>
+    <td>${esc(r.pa)}</td><td>${ddmm(r.aba)}</td><td>${esc(r.proba.toLowerCase())}</td><td class="ar-txt">${esc(r.txta)}</td>
+    <td>${esc(r.id)} <span class="ar-tag">${ddmm(r.ab)}</span></td><td>${esc(r.dias)}</td><td>${esc(r.prob.toLowerCase())}</td>
+    <td>${esc(nomeCurto(r.tec))}</td><td>${pill(r.grp)}</td></tr>`).join('') : '<tr><td colspan="9" class="ar-empty">Nenhuma reabertura gerada no período</td></tr>';
+  el('tm-atendidas').innerHTML = atend.length ? atend.map(r => `<tr>
+    <td>${esc(r.id)}</td><td>${ddmm(r.ab)}</td><td>${esc(r.prob.toLowerCase())}</td><td>${esc(r.pa)}</td>
+    <td>${esc(nomeCurto(r.teca))}</td><td>${esc(r.dias)}</td><td>${pill(r.grp)}</td></tr>`).join('') : '<tr><td colspan="7" class="ar-empty">Nenhum retorno atendido no período</td></tr>';
+}
+el('tm-fechar').onclick = () => { el('ar-tec-modal').style.display = 'none'; };
+el('ar-tec-modal').addEventListener('click', e => { if (e.target.id === 'ar-tec-modal') el('ar-tec-modal').style.display = 'none'; });
+el('ar-of-body').addEventListener('click', e => { const tr = e.target.closest('tr[data-tec]'); if (tr) abrirTecnico(tr.dataset.tec); });
+el('ar-crit-body').addEventListener('click', e => { const a = e.target.closest('a[data-tec]'); if (a){ e.preventDefault(); abrirTecnico(a.dataset.tec); } });
+
+// ---------- ações ----------
 function fase(a){
   if (a.conclusao) return 3;
   if (Number(a.pct) > 0) return 2;
@@ -314,15 +709,11 @@ function renderAcoes(){
         ${a.causa ? `<p class="m">Causa: ${esc(a.causa)}</p>` : ''}
         <p class="m">Resp.: ${esc(a.responsavel || '—')}${a.inicio ? ' · início ' + ddmm(a.inicio) : ''}</p>
         ${n !== 3 ? `<div class="ar-prog"><span class="${pcls}" style="width:${pct}%"></span></div><p class="m">${pct}% executado</p>` : ''}
-        ${ind}${ef}
+        ${ind}${ef}${a.obs ? `<p class="m">${esc(a.obs)}</p>` : ''}
       </div>`;
     }).join('') : '<div class="ar-empty">Nenhuma ação</div>';
   });
 }
-
-function renderAll(){ renderStats(); renderCharts(); renderTabela(); renderAcoes(); }
-
-// ---------- modal de ação ----------
 const campos = { equipe: 'm-equipe', responsavel: 'm-resp', acao: 'm-acao', causa: 'm-causa', inicio: 'm-ini', prazo: 'm-prazo', pct: 'm-pct', indicador: 'm-ind', antes: 'm-antes', agora: 'm-agora', obs: 'm-obs', conclusao: 'm-fim', eficaz: 'm-eficaz' };
 function abrirModal(id){
   editId = id || null;
@@ -337,7 +728,7 @@ function abrirModal(id){
 function fecharModal(){ el('ar-modal').style.display = 'none'; editId = null; }
 async function salvarAcoes(){
   OPS.saveData(KEY_ACOES, acoes);
-  renderAll();
+  renderStats(); renderAcoes();
   await OPS.syncPushWithToast(SYNC_ACOES, acoes);
 }
 el('ar-nova').onclick = () => abrirModal(null);
@@ -364,28 +755,42 @@ el('m-excluir').onclick = async () => {
   const card = e.target.closest('.ar-card'); if (card) abrirModal(card.dataset.id);
 }));
 el('ar-f-equipe').addEventListener('change', renderAcoes);
-el('ar-semanas').addEventListener('change', () => { renderCharts(); renderTabela(); });
-el('ar-meta').addEventListener('change', async () => {
-  const v = el('ar-meta').value.trim();
-  config = { ...config, meta: v === '' ? null : Number(v.replace(',', '.')), atualizadoEm: new Date().toISOString(), usuario: sessionStorage.getItem('ops_user') || '' };
-  OPS.saveData(KEY_CONFIG, config);
-  renderAll();
-  await OPS.syncPushWithToast(SYNC_CONFIG, [config]);
-});
 
+// ---------- eventos ----------
+function renderTopo(){ renderStats(); renderEvolucao(); renderTabela(); }
+el('ar-semana').addEventListener('change', () => { renderStats(); renderDetalhe(); });
+el('ar-janela').addEventListener('change', () => { renderEvolucao(); renderTabela(); });
+['f-periodo', 'f-sup', 'f-prob', 'f-grupo', 'f-cid'].forEach(id => el(id).addEventListener('change', renderDetalhe));
+el('f-limpar').onclick = () => { el('f-periodo').value = 'semana'; ['f-sup', 'f-prob', 'f-grupo', 'f-cid'].forEach(id => { el(id).value = ''; }); renderDetalhe(); };
+
+function normalizarOS(lista){
+  return (lista || []).filter(r => r && r.id && r.ab).map(r => ({
+    ...r, id: String(r.id), ab: String(r.ab), aba: String(r.aba || ''), pa: String(r.pa || ''),
+    rec: Number(r.rec) ? 1 : 0, dias: r.dias === '' || r.dias == null ? '' : Number(r.dias),
+    prob: String(r.prob || ''), proba: String(r.proba || ''), tec: String(r.tec || ''), teca: String(r.teca || ''),
+    sup: String(r.sup || ''), supa: String(r.supa || ''), cid: String(r.cid || ''), grp: String(r.grp || ''),
+    txt: String(r.txt || ''), txta: String(r.txta || ''),
+  }));
+}
 async function initPage(silencioso = false){
   const toast = silencioso ? null : OPS.showToast('☁️ Buscando dados compartilhados...');
-  const [s, a, c] = await Promise.all([OPS.syncPull(SYNC_SEMANAL), OPS.syncPull(SYNC_ACOES), OPS.syncPull(SYNC_CONFIG)]);
+  const [o, m, s, a] = await Promise.all([OPS.syncPull(SYNC_OS), OPS.syncPull(SYNC_OS_META), OPS.syncPull(SYNC_SEMANAL), OPS.syncPull(SYNC_ACOES)]);
   if (toast) toast.remove();
-  if (s && s.length){ semanal = s.filter(r => r && r.ini && r.equipe); }
-  if (!semanal.length) semanal = SEED.slice();
-  semanal = semanal.map(r => ({ ...r, ini: String(r.ini).slice(0, 10), fim: String(r.fim).slice(0, 10), reab: Number(r.reab), reparos: Number(r.reparos) }));
-  OPS.saveData(KEY_SEMANAL, semanal);
+  if (o && o.length){ osData = normalizarOS(o); OPS.saveData(KEY_OS, osData); } else osData = normalizarOS(osData);
+  if (m && m[0]) osMeta = m[0];
+  if (s && s.length){
+    semanalSalvo = s.filter(r => r && r.ini && r.equipe).map(r => ({ ...r, ini: String(r.ini).slice(0, 10), fim: String(r.fim).slice(0, 10), reab: Number(r.reab), reparos: Number(r.reparos) }));
+    OPS.saveData(KEY_SEMANAL, semanalSalvo);
+  }
   if (a){ acoes = a.filter(x => x && x.id); OPS.saveData(KEY_ACOES, acoes); }
-  if (c && c[0]){ config = c[0]; OPS.saveData(KEY_CONFIG, config); }
-  el('ar-meta').value = (config && config.meta != null) ? config.meta : '';
-  renderAll();
-  return !!(s || a || c);
+  Object.keys(supCache).forEach(k => delete supCache[k]);
+  semanal = montarSemanal();
+  preencherSemanas();
+  preencherFiltros();
+  renderTopo();
+  renderDetalhe();
+  renderAcoes();
+  return !!(o || s || a);
 }
 window.OPS_ON_REFRESH = initPage;
 initPage();
