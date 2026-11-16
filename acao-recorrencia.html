@@ -6,7 +6,6 @@
 <title>Ação de Recorrência · OPE Touros</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   .ar-sec{ font-family:var(--f-display); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--brand); margin:26px 0 12px; }
   .ar-grid2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px; margin-bottom:16px; }
@@ -89,7 +88,39 @@
   .ad-zoom{ position:fixed; inset:0; background:rgba(6,8,10,.9); display:flex; align-items:center; justify-content:center; z-index:400; cursor:zoom-out; flex-direction:column; gap:10px; }
   .ad-zoom img{ max-width:92vw; max-height:84vh; border-radius:8px; }
   .ad-zoom p{ color:#e2eaf5; font-size:13px; margin:0; }
-  .ad-aud-files{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .rg-chips{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:8px; }
+  .rg-chip{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg-panel); font-size:12px; color:var(--ink-faint); }
+  .rg-chip b{ font-family:var(--f-display); font-size:18px; color:var(--ink-faint); }
+  .rg-chip.on{ color:var(--ink); border-color:rgba(0,229,160,.35); }
+  .rg-chip.on b{ color:var(--brand); }
+  .rg-card{ background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius-sm); padding:12px 14px; margin-top:10px; }
+  .rg-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .rg-tipo{ font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:rgba(0,229,160,.12); color:var(--brand); }
+  .rg-tipo.fb{ background:rgba(255,209,102,.14); color:var(--warn); }
+  .rg-pessoas{ display:flex; gap:5px; flex-wrap:wrap; margin:6px 0; }
+  .rg-pessoa{ font-size:11px; padding:2px 8px; border-radius:999px; background:var(--bg-raised); color:var(--ink-dim); }
+  .rg-card .m{ font-size:12px; color:var(--ink-dim); margin:4px 0; }
+  .rg-assunto{ font-size:13px; font-weight:700; margin:6px 0 2px; }
+  .rg-obs{ font-size:12.5px; white-space:pre-wrap; line-height:1.45; margin:4px 0; color:var(--ink); }
+  .rg-nc{ margin:6px 0; padding-left:2px; list-style:none; font-size:12px; color:var(--crit); }
+  .rg-nc li{ margin:2px 0; }
+  .rg-card .ad-gal{ margin-top:8px; }
+  .rg-opcoes{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+  .rg-op{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg-panel-2); color:var(--ink-dim); font:inherit; font-size:12.5px; cursor:pointer; }
+  .rg-op span{ font-size:18px; }
+  .rg-op:hover{ border-color:var(--ink-faint); }
+  .rg-op.on{ border-color:var(--brand); background:rgba(0,229,160,.1); color:var(--ink); font-weight:700; }
+  .rg-colabs{ display:flex; flex-wrap:wrap; gap:6px; max-height:180px; overflow:auto; padding:2px; }
+  .rg-col{ font:inherit; font-size:11.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--bg-panel-2); color:var(--ink-dim); cursor:pointer; }
+  .rg-col.on{ background:var(--brand); border-color:var(--brand); color:#0B1512; font-weight:700; }
+  .rg-item{ border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+  .rg-item-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .rg-item-top > span{ font-size:13px; color:var(--ink-dim); flex:1; min-width:200px; }
+  .rg-prev{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .rg-prev div{ position:relative; width:84px; }
+  .rg-prev img{ width:84px; height:64px; object-fit:cover; border-radius:6px; display:block; }
+  .rg-prev small{ display:block; font-size:10px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rg-prev button{ position:absolute; top:2px; right:2px; background:rgba(11,15,26,.85); color:var(--ink); border:none; border-radius:4px; font-size:10px; cursor:pointer; padding:1px 5px; }
 </style>
 </head>
 <body>
@@ -322,23 +353,12 @@
     </div>
 
     <div class="ad-box">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-        <h4 style="margin:0">Auditoria</h4>
-        <label class="btn ghost ad-file">📊 Adicionar planilha<input type="file" id="ad-aud-input" accept=".xlsx,.xls,.csv"></label>
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <div><h4 style="margin:0">Registros da ação</h4><p class="ad-note" style="margin:2px 0 0">Auditorias, feedbacks e as fotos de evidência de cada um</p></div>
+        <button class="btn primary" id="ad-novo-reg">＋ Registrar</button>
       </div>
-      <div class="ad-aud-files" id="ad-aud-files"></div>
-      <div id="ad-aud-corpo"><p class="ad-note">Nenhuma planilha de auditoria ainda. Anexe a planilha (.xlsx ou .csv) com uma linha por item auditado: a página lê e resume sozinha.</p></div>
-    </div>
-
-    <div class="ad-box">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-        <h4 style="margin:0">Evidências</h4>
-        <div class="ad-actions">
-          <input class="input" id="ad-foto-legenda" type="text" placeholder="Legenda da foto (opcional)" style="min-width:220px">
-          <label class="btn ghost ad-file">📷 Adicionar fotos<input type="file" id="ad-foto-input" accept="image/*" multiple></label>
-        </div>
-      </div>
-      <div class="ad-gal" id="ad-gal"></div>
+      <div id="ad-rg-resumo"></div>
+      <div id="ad-rg-lista"></div>
     </div>
   </div>
 </div>
@@ -347,7 +367,7 @@
 <div class="modal-backdrop" id="ar-modal" style="display:none">
   <div class="modal">
     <h3 id="ar-m-title">Nova ação</h3>
-    <p class="modal-sub">O responsável é o supervisor da equipe. Fotos e planilha de auditoria são adicionadas depois, ao abrir a ação.</p>
+    <p class="modal-sub">Auditorias, feedbacks e fotos são registrados depois, ao abrir a ação.</p>
     <div class="grid2">
       <div class="field"><label>Equipe</label>
         <select id="m-equipe">
@@ -378,6 +398,47 @@
       <button class="btn danger" id="m-excluir" style="margin-right:auto;display:none">Excluir</button>
       <button class="btn ghost" id="m-cancelar">Cancelar</button>
       <button class="btn primary" id="m-salvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- registro (auditoria / feedback) -->
+<div class="modal-backdrop" id="rg-modal" style="display:none">
+  <div class="modal" style="max-width:min(720px,94vw)">
+    <h3>Novo registro</h3>
+    <p class="modal-sub" id="rg-sub"></p>
+    <div class="field"><label>O que foi feito</label><div class="rg-opcoes" id="rg-opcoes"></div></div>
+    <p class="ad-note" id="rg-dica" style="margin:4px 0 0">Escolha uma opção acima para continuar.</p>
+    <div id="rg-corpo" style="display:none">
+      <div class="grid2">
+        <div class="field"><label>Data</label><input class="input" id="rg-data" type="date"></div>
+        <div class="field" id="rg-prot-wrap"><label>Protocolo (se aplicável)</label><input class="input" id="rg-prot" type="text" placeholder="Ex: 8784054/1"></div>
+      </div>
+      <div class="field">
+        <label style="display:flex;justify-content:space-between;align-items:center;gap:8px">Colaboradores
+          <span><button type="button" class="btn ghost" id="rg-todos" style="padding:2px 8px;font-size:11px">Marcar todos</button> <button type="button" class="btn ghost" id="rg-nenhum" style="padding:2px 8px;font-size:11px">Limpar</button></span></label>
+        <input class="input" id="rg-busca" type="text" placeholder="Buscar colaborador" style="margin-bottom:6px">
+        <div class="rg-colabs" id="rg-colabs"></div>
+        <p class="ad-note" id="rg-n-colabs" style="margin:4px 0 0"></p>
+      </div>
+      <div id="rg-aud-wrap">
+        <div class="field"><label>Checklist</label><div id="rg-checklist" style="display:flex;flex-direction:column;gap:8px"></div></div>
+        <div class="field"><label>Nota geral (1-5)</label>
+          <select id="rg-nota"><option value="">Selecione...</option><option value="1">1 - Insatisfatório</option><option value="2">2 - Regular</option><option value="3">3 - Bom</option><option value="4">4 - Muito bom</option><option value="5">5 - Excelente</option></select></div>
+      </div>
+      <div class="field" id="rg-fb-wrap"><label>Assunto</label><input class="input" id="rg-assunto" type="text" placeholder="Ex.: teste de sinal e fotos antes de encerrar a OS"></div>
+      <div class="field"><label id="rg-obs-label">Observações</label><textarea id="rg-obs" style="min-height:80px"></textarea></div>
+      <div class="field"><label>Evidências (fotos)</label>
+        <div class="ad-actions">
+          <input class="input" id="rg-foto-legenda" type="text" placeholder="Legenda da foto (opcional)" style="min-width:200px;flex:1">
+          <label class="btn ghost ad-file">📷 Anexar fotos<input type="file" id="rg-fotos" accept="image/*" multiple></label>
+        </div>
+        <div class="rg-prev" id="rg-prev"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="rg-cancelar">Cancelar</button>
+      <button class="btn primary" id="rg-salvar">💾 Salvar registro</button>
     </div>
   </div>
 </div>
@@ -765,8 +826,8 @@ el('ar-crit-body').addEventListener('click', e => { const a = e.target.closest('
 
 // ---------- ações ----------
 const SYNC_EVID = 'RecorrenciaAcoesEvidencias';
-const SYNC_AUD = 'RecorrenciaAcoesAuditoria';
-let evidCache = null, audCache = null, acaoAberta = null, audArqSel = null;
+const SYNC_REG = 'RecorrenciaAcoesRegistros';
+let evidCache = null, regCache = null, acaoAberta = null;
 const usuario = () => sessionStorage.getItem('ops_user') || '';
 function fase(a){
   if (a.conclusao) return 3;
@@ -810,7 +871,7 @@ function renderAcoes(){
         <p class="m">${a.inicio ? 'Início ' + ddmm(a.inicio) : ''}${a.prazo ? ' · prazo ' + ddmm(a.prazo) : ''}</p>
         ${n !== 3 ? `<div class="ar-prog"><span class="${atraso ? 'atraso' : ''}" style="width:${pct}%"></span></div><p class="m">${pct}% executado</p>` : ''}
         ${ef}
-        <div class="foot"><span>📷 ${Number(a.nEvid) || 0} evidência(s)</span><span>📊 ${Number(a.nAud) || 0} item(ns) auditado(s)</span></div>
+        <div class="foot"><span>📝 ${Number(a.nReg) || 0} registro(s)</span><span>📷 ${Number(a.nEvid) || 0} evidência(s)</span></div>
       </div>`;
     }).join('') : '<div class="ar-empty">Nenhuma ação</div>';
   });
@@ -860,7 +921,7 @@ el('m-salvar').onclick = async () => {
   if (!dados.acao){ el('m-acao').focus(); return; }
   if (dados.tipo === 'Individual' && !dados.tecnico){ el('m-tec').focus(); return; }
   dados.responsavel = labelEquipe(dados.equipe);
-  const base = editId ? acoes.find(x => x.id === editId) : { id: 'A' + Date.now().toString(36), criadoEm: new Date().toISOString(), criadoPor: usuario(), nEvid: 0, nAud: 0 };
+  const base = editId ? acoes.find(x => x.id === editId) : { id: 'A' + Date.now().toString(36), criadoEm: new Date().toISOString(), criadoPor: usuario(), nEvid: 0, nReg: 0 };
   const nova = { ...base, ...dados, atualizadoEm: new Date().toISOString(), usuario: usuario() };
   const reabrir = el('ad-modal').style.display === 'flex';
   fecharModal();
@@ -874,9 +935,9 @@ el('m-excluir').onclick = async () => {
   fecharModal();
   el('ad-modal').style.display = 'none';
   await salvarAcao(null, id);
-  // apaga junto as fotos e a auditoria da ação
+  // apaga junto os registros e as fotos da ação
+  await gravarColecao(SYNC_REG, l => l.filter(x => x.acao !== id)).then(r => { regCache = r.lista; });
   await gravarColecao(SYNC_EVID, l => l.filter(x => x.acao !== id)).then(r => { evidCache = r.lista; });
-  await gravarColecao(SYNC_AUD, l => l.filter(x => x.acao !== id)).then(r => { audCache = r.lista; });
 };
 ['ar-col1', 'ar-col2', 'ar-col3'].forEach(c => el(c).addEventListener('click', e => {
   const card = e.target.closest('.ar-card'); if (card) abrirAcao(card.dataset.id);
@@ -885,10 +946,10 @@ el('ar-f-equipe').addEventListener('change', renderAcoes);
 
 // ---------- tela da ação ----------
 async function carregarAnexos(forcar){
-  if (forcar || !evidCache || !audCache){
-    const [ev, au] = await Promise.all([OPS.syncPull(SYNC_EVID), OPS.syncPull(SYNC_AUD)]);
+  if (forcar || !evidCache || !regCache){
+    const [ev, rg] = await Promise.all([OPS.syncPull(SYNC_EVID), OPS.syncPull(SYNC_REG)]);
     evidCache = (ev || []).filter(x => x && x.id);
-    audCache = (au || []).filter(x => x && x.id);
+    regCache = (rg || []).filter(x => x && x.id);
   }
 }
 function diasEntre(a, b){ return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000); }
@@ -898,7 +959,7 @@ async function abrirAcao(id){
   const n = fase(a), hoje = hojeISO();
   el('ad-tags').innerHTML = `<span class="badge neutral">${esc(labelEquipe(a.equipe))}</span>${tipoTag(a)}${prazoBadge(a, n)}`;
   el('ad-titulo').textContent = a.acao;
-  el('ad-sub').textContent = 'Responsável: ' + (a.equipe === 'UNIDADE TOUROS' ? 'coordenação' : labelEquipe(a.equipe)) + (a.tipo === 'Individual' ? ' · técnico: ' + a.tecnico : ' · toda a equipe') + (a.atualizadoEm ? ' · atualizada em ' + OPS.formatDateTimeBR(a.atualizadoEm) : '');
+  el('ad-sub').textContent = 'Equipe: ' + (a.equipe === 'UNIDADE TOUROS' ? 'Unidade Touros' : labelEquipe(a.equipe)) + (a.tipo === 'Individual' ? ' · técnico: ' + a.tecnico : ' · toda a equipe') + (a.atualizadoEm ? ' · atualizada em ' + OPS.formatDateTimeBR(a.atualizadoEm) : '');
   [...el('ad-fases').children].forEach((d, i) => { d.className = i + 1 < n ? 'feito' : i + 1 === n ? 'on' : ''; });
   const pct = Math.max(0, Math.min(100, Number(a.pct) || 0));
   const atraso = a.prazo && a.prazo < hoje && n !== 3;
@@ -917,25 +978,27 @@ async function abrirAcao(id){
   el('ad-modal').style.display = 'flex';
   renderStatsAcao(a, null);
   renderResultadoAcao(a);
-  el('ad-gal').innerHTML = '<p class="ad-note">Carregando evidências...</p>';
-  el('ad-aud-corpo').innerHTML = '<p class="ad-note">Carregando auditoria...</p>';
+  el('ad-rg-resumo').innerHTML = '';
+  el('ad-rg-lista').innerHTML = '<p class="ad-note">Carregando registros...</p>';
   await carregarAnexos();
   if (acaoAberta !== id) return;
-  audArqSel = null;
-  renderEvidencias(a); renderAuditoria(a);
+  renderRegistros(a);
 }
-function renderStatsAcao(a, aud){
+function renderStatsAcao(a, res){
   const pct = Math.max(0, Math.min(100, Number(a.pct) || 0));
   const hoje = hojeISO();
   const rest = a.prazo ? diasEntre(hoje, a.prazo) : null;
   const ev = evidCache ? evidCache.filter(x => x.acao === a.id).length : (Number(a.nEvid) || 0);
-  const itens = aud ? aud.itens : (Number(a.nAud) || 0);
+  const nReg = res ? res.regs.length : (Number(a.nReg) || 0);
   const cards = [
     ['Executado', pct + '%', pct >= 100 ? 'ok' : 'brand'],
     ['Prazo', fase(a) === 3 ? 'Concluída' : rest == null ? '—' : rest < 0 ? 'Vencido ' + (-rest) + 'd' : rest + ' dia(s)', fase(a) !== 3 && rest != null && rest < 0 ? 'crit' : ''],
-    ['Itens auditados', itens, 'brand'],
+    ['Registros', nReg, 'brand'],
   ];
-  if (aud && aud.conf != null) cards.push(['Conformidade', pctBR(aud.conf), aud.conf >= 0.9 ? 'ok' : aud.conf >= 0.7 ? 'warn' : 'crit']);
+  if (res){
+    cards.push(['Colaboradores alcançados', Object.keys(res.colabs).length, '']);
+    if (res.conf != null) cards.push(['Conformidade', pctBR(res.conf), res.conf >= 0.9 ? 'ok' : res.conf >= 0.7 ? 'warn' : 'crit']);
+  }
   cards.push(['Evidências', ev, ev ? 'ok' : '']);
   if (fase(a) === 3) cards.push(['Eficaz?', a.eficaz || '—', a.eficaz === 'Sim' ? 'ok' : a.eficaz === 'Não' ? 'crit' : '']);
   el('ad-stats').innerHTML = cards.map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:22px">${v}</div></div>`).join('');
@@ -972,7 +1035,7 @@ function renderResultadoAcao(a){
     nota = iniSem ? `Antes do início: ${pctBR(media('antes'))} · desde o início: ${pctBR(media('depois'))} · meta 10%. Barras claras = antes, fortes = depois.` : 'Defina a data de início para comparar antes e depois.';
     novoGrafico('ad-chart-res', { type: 'bar',
       data: { labels: janela.map(s => ddmm(s)), datasets: [
-        { label: 'Taxa da equipe', data: tx, backgroundColor: janela.map((s, i) => { const acima = tx[i] != null && tx[i] > META * 100; const forte = antesDepois(s) === 'depois'; return acima ? (forte ? '#ff4d6d' : 'rgba(255,77,109,0.35)') : (forte ? '#00e5a0' : 'rgba(0,229,160,0.35)'); }), borderRadius: 4 },
+        { label: 'Taxa da equipe', data: tx, backgroundColor: janela.map((s, i) => { const acima = tx[i] != null && tx[i] > META * 100; const forte = antesDepois(s) === 'depois'; return acima ? (forte ? '#ff4d6d' : 'rgba(255,77,109,0.35)') : (forte ? '#00e5a0' : 'rgba(0,229,160,0.35)'); }), borderRadius: 4, labelColor: '#e2eaf5' },
         { label: 'Meta 10%', type: 'line', data: janela.map(() => META * 100), borderColor: '#ffd166', borderDash: [6, 5], borderWidth: 2, pointRadius: 0, noLabels: true }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend, valueLabels: { format: v => String(v).replace('.', ',') + '%' } },
         scales: { x: { grid, ticks: tick }, y: { beginAtZero: true, grace: '15%', grid, ticks: { ...tick, callback: v => v + '%' } } } } });
@@ -1004,43 +1067,106 @@ function comprimirFoto(file){
     img.onerror = reject; reader.readAsDataURL(file);
   });
 }
-function renderEvidencias(a){
-  const fotos = (evidCache || []).filter(x => x.acao === a.id).sort((x, y) => String(x.data).localeCompare(String(y.data)));
-  el('ad-gal').innerHTML = fotos.length ? fotos.map(f => `<figure data-id="${esc(f.id)}">
-      <img src="${esc(f.foto)}" alt="${esc(f.legenda || 'Evidência')}">
-      <button class="rm" data-rm="${esc(f.id)}" title="Remover foto">✕</button>
-      <figcaption>${esc(f.legenda || 'Sem legenda')}<br><span class="ar-tag">${f.data ? OPS.formatDateTimeBR(f.data) : ''}${f.usuario ? ' · ' + esc(f.usuario) : ''}</span></figcaption></figure>`).join('')
-    : '<p class="ad-note">Nenhuma foto ainda. Use “Adicionar fotos” para registrar o antes/depois, a reciclagem, a CTO corrigida etc.</p>';
+// ---------- registros da ação (auditorias, feedbacks e as fotos de cada um) ----------
+const REG_TIPOS = [
+  { k: 'interna', label: 'Auditoria Interna', icon: '✅', aud: true },
+  { k: 'durante_atendimento', label: 'Auditoria Durante o Atendimento', icon: '👀', aud: true },
+  { k: 'pos_atendimento', label: 'Auditoria Pós Atendimento', icon: '📞', aud: true },
+  { k: 'feedback_coletivo', label: 'Feedback Coletivo', icon: '👥', aud: false },
+  { k: 'feedback_individual', label: 'Feedback Individual', icon: '🗣️', aud: false },
+];
+// mesmos itens da auditoria dos inspetores (Gestão Operacional)
+const REG_CHECKLIST = {
+  interna: ['Check list APR', 'Check list de Serviço', 'Verificação de material utilizado', 'Verificação do relato preenchido'],
+  pos_atendimento: ['Fotos/evidências anexadas corretamente', 'Descrição do encerramento condiz com o serviço realizado', 'Cliente confirma satisfação com o atendimento', 'Material condiz com o serviço executado', 'Aplicação de equipamentos de acordo com o plano do cliente (1R/2R/3R/4R)'],
+  durante_atendimento: ['Procedimento de segurança seguido', 'Comunicação com o cliente adequada', 'Execução técnica dentro do padrão', 'Verificação do material utilizado durante o atendimento', 'Organização do veículo', 'Fardamento adequado durante o atendimento', 'Ferramental utilizado corretamente', 'Apresentação individual'],
+};
+const tipoReg = k => REG_TIPOS.find(t => t.k === k) || { k, label: k || 'Registro', icon: '📝', aud: false };
+const jsonArr = v => { if (Array.isArray(v)) return v; try{ const x = JSON.parse(v || '[]'); return Array.isArray(x) ? x : []; }catch(err){ return []; } };
+function registrosDaAcao(a){
+  return (regCache || []).filter(r => r.acao === a.id)
+    .map(r => ({ ...r, data: String(r.data || '').slice(0, 10), colabs: jsonArr(r.colabs), checklist: jsonArr(r.checklist), nota: r.nota === '' || r.nota == null ? null : Number(r.nota) }))
+    .sort((x, y) => (y.data + String(y.criadoEm)).localeCompare(x.data + String(x.criadoEm)));
+}
+function resumoRegistros(a){
+  const regs = registrosDaAcao(a);
+  const porTipo = {}; REG_TIPOS.forEach(t => { porTipo[t.k] = 0; });
+  const colabs = {}; let ok = 0, nok = 0;
+  regs.forEach(r => {
+    porTipo[r.tipo] = (porTipo[r.tipo] || 0) + 1;
+    const t = tipoReg(r.tipo);
+    let nokReg = 0;
+    r.checklist.forEach(c => { if (c.status === 'conforme') ok++; else if (c.status === 'nao_conforme'){ nok++; nokReg++; } });
+    r.colabs.forEach(n => {
+      const x = colabs[n] = colabs[n] || { aud: 0, fb: 0, nok: 0, ult: '' };
+      if (t.aud) x.aud++; else x.fb++;
+      x.nok += nokReg;
+      if (r.data > x.ult) x.ult = r.data;
+    });
+  });
+  return { regs, porTipo, colabs, ok, nok, conf: ok + nok ? ok / (ok + nok) : null };
+}
+function galeria(fotos){
+  return `<div class="ad-gal">${fotos.map(f => `<figure data-id="${esc(f.id)}"><img src="${esc(f.foto)}" alt="${esc(f.legenda || 'Evidência')}" loading="lazy"><figcaption>${esc(f.legenda || 'Sem legenda')}</figcaption></figure>`).join('')}</div>`;
+}
+function cardRegistro(r, fotos){
+  const t = tipoReg(r.tipo);
+  const ok = r.checklist.filter(c => c.status === 'conforme').length;
+  const nok = r.checklist.filter(c => c.status === 'nao_conforme').length;
+  const pessoas = r.colabs.slice(0, 12).map(n => `<span class="rg-pessoa" title="${esc(n)}">${esc(nomeCurto(n))}</span>`).join('') + (r.colabs.length > 12 ? `<span class="rg-pessoa">+${r.colabs.length - 12}</span>` : '');
+  const info = [];
+  info.push(r.colabs.length + ' colaborador(es)');
+  if (r.protocolo) info.push('Protocolo ' + esc(r.protocolo));
+  if (r.nota) info.push('Nota ' + r.nota + '/5');
+  if (ok + nok) info.push(`<b style="color:${nok ? 'var(--crit)' : 'var(--ok)'}">${ok}/${ok + nok} conformes</b>`);
+  if (fotos.length) info.push('📷 ' + fotos.length + ' foto(s)');
+  const ncs = r.checklist.filter(c => c.status === 'nao_conforme');
+  return `<div class="rg-card">
+    <div class="rg-top">
+      <div><span class="rg-tipo ${t.aud ? '' : 'fb'}">${t.icon} ${esc(t.label)}</span> <span class="ar-tag">${r.data ? ddmm(r.data) : ''}${r.usuario ? ' · por ' + esc(r.usuario) : ''}</span></div>
+      <button class="btn ghost" data-rmreg="${esc(r.id)}" style="padding:3px 9px;font-size:11px">Excluir</button>
+    </div>
+    ${pessoas ? `<div class="rg-pessoas">${pessoas}</div>` : ''}
+    <p class="m">${info.join(' · ')}</p>
+    ${r.assunto ? `<p class="rg-assunto">${esc(r.assunto)}</p>` : ''}
+    ${r.obs ? `<p class="rg-obs">${esc(r.obs)}</p>` : ''}
+    ${ncs.length ? `<ul class="rg-nc">${ncs.map(c => `<li>❌ ${esc(c.item)}${c.obs ? ' — ' + esc(c.obs) : ''}</li>`).join('')}</ul>` : ''}
+    ${fotos.length ? galeria(fotos) : ''}
+  </div>`;
+}
+function renderRegistros(a){
+  const res = resumoRegistros(a);
+  renderStatsAcao(a, res);
+  const chips = REG_TIPOS.map(t => `<div class="rg-chip ${res.porTipo[t.k] ? 'on' : ''}"><span>${t.icon} ${t.label}</span><b>${res.porTipo[t.k]}</b></div>`).join('');
+  const cols = Object.entries(res.colabs).sort((x, y) => (y[1].aud + y[1].fb) - (x[1].aud + x[1].fb) || x[0].localeCompare(y[0]));
+  const tabela = cols.length ? `<p class="ar-title" style="margin:14px 0 6px">Por colaborador</p>
+    <div class="table-wrap" style="max-height:260px"><table class="services compact">
+      <thead><tr><th>Colaborador</th><th>Auditorias</th><th>Feedbacks</th><th>Itens não conformes</th><th>Último registro</th></tr></thead>
+      <tbody>${cols.map(([n, x]) => `<tr><td>${esc(n)}</td><td>${x.aud}</td><td>${x.fb}</td><td style="${x.nok ? 'color:var(--crit);font-weight:700' : ''}">${x.nok}</td><td>${x.ult ? ddmm(x.ult) : ''}</td></tr>`).join('')}</tbody>
+    </table></div>` : '';
+  el('ad-rg-resumo').innerHTML = `<div class="rg-chips">${chips}</div>${tabela}`;
+  const fotosDe = id => (evidCache || []).filter(f => f.acao === a.id && f.reg === id);
+  const avulsas = (evidCache || []).filter(f => f.acao === a.id && !f.reg);
+  el('ad-rg-lista').innerHTML = (res.regs.length ? `<p class="ar-title" style="margin:14px 0 0">Linha do tempo</p>` + res.regs.map(r => cardRegistro(r, fotosDe(r.id))).join('')
+      : '<p class="ad-note" style="margin-top:12px">Nenhum registro ainda. Clique em “＋ Registrar” para lançar uma auditoria ou um feedback, marcar os colaboradores e anexar as fotos.</p>')
+    + (avulsas.length ? `<div class="rg-card"><div class="rg-top"><span class="rg-tipo fb">📷 Evidências avulsas</span></div>${galeria(avulsas)}</div>` : '');
 }
 async function atualizarContadores(a){
   const nEvid = (evidCache || []).filter(x => x.acao === a.id).length;
-  const nAud = (audCache || []).filter(x => x.acao === a.id).length;
-  if (Number(a.nEvid) === nEvid && Number(a.nAud) === nAud) return;
-  await salvarAcao({ ...a, nEvid, nAud });
+  const nReg = (regCache || []).filter(x => x.acao === a.id).length;
+  if (Number(a.nEvid) === nEvid && Number(a.nReg) === nReg) return;
+  await salvarAcao({ ...a, nEvid, nReg });
 }
-el('ad-foto-input').addEventListener('change', async e => {
-  const files = [...e.target.files]; e.target.value = '';
-  const a = acoes.find(x => x.id === acaoAberta); if (!a || !files.length) return;
-  const legenda = el('ad-foto-legenda').value.trim();
-  const novas = []; let falhas = 0;
-  for (const [i, f] of files.entries()){
-    try{ novas.push({ id: a.id + '|F' + Date.now().toString(36) + i, acao: a.id, foto: await comprimirFoto(f), legenda, data: new Date().toISOString(), usuario: usuario() }); }
-    catch(err){ falhas++; }
-  }
-  if (!novas.length){ OPS.showToast('⚠️ Não consegui ler a(s) foto(s)'); return; }
-  const r = await gravarColecao(SYNC_EVID, l => l.concat(novas));
-  evidCache = r.lista; el('ad-foto-legenda').value = '';
-  if (falhas) OPS.showToast('⚠️ ' + falhas + ' foto(s) não puderam ser anexadas');
-  renderEvidencias(a); await atualizarContadores(a); renderStatsAcao(acoes.find(x => x.id === a.id), resumoAud(a));
-});
-el('ad-gal').addEventListener('click', async e => {
-  const rm = e.target.closest('[data-rm]');
+el('ad-rg-lista').addEventListener('click', async e => {
+  const rm = e.target.closest('[data-rmreg]');
   if (rm){
-    e.stopPropagation();
-    if (!rm.dataset.confirm){ rm.dataset.confirm = '1'; rm.textContent = 'Remover?'; return; }
-    const a = acoes.find(x => x.id === acaoAberta);
-    const r = await gravarColecao(SYNC_EVID, l => l.filter(x => x.id !== rm.dataset.rm));
-    evidCache = r.lista; renderEvidencias(a); await atualizarContadores(a); renderStatsAcao(acoes.find(x => x.id === a.id), resumoAud(a));
+    if (!rm.dataset.confirm){ rm.dataset.confirm = '1'; rm.textContent = 'Confirmar exclusão'; return; }
+    const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
+    const id = rm.dataset.rmreg; rm.disabled = true; rm.textContent = 'Excluindo...';
+    const r1 = await gravarColecao(SYNC_REG, l => l.filter(x => x.id !== id)); regCache = r1.lista;
+    if ((evidCache || []).some(f => f.reg === id)){ const r2 = await gravarColecao(SYNC_EVID, l => l.filter(x => x.reg !== id)); evidCache = r2.lista; }
+    await atualizarContadores(a);
+    renderRegistros(acoes.find(x => x.id === a.id) || a);
     return;
   }
   const fig = e.target.closest('figure'); if (!fig) return;
@@ -1050,111 +1176,149 @@ el('ad-gal').addEventListener('click', async e => {
   z.append(im, p); z.onclick = () => z.remove(); document.body.appendChild(z);
 });
 
-// ---------- auditoria (planilha) ----------
-const RX_OK = /^(sim|ok|conforme|aprovad|realizad|conclu|corrigid|feito|atende|bom|adequad)/i;
-const RX_NOK = /(n[aã]o|nok|reprovad|pendente|inadequad|irregular|ruim|falha|errad)/i;
-function linhasAud(a, arq){ return (audCache || []).filter(x => x.acao === a.id && (!arq || x.arq === arq)).sort((x, y) => Number(x.i) - Number(y.i)).map(x => { try{ return JSON.parse(x.linha); }catch(err){ return {}; } }); }
-function analisarAud(rows){
-  const cols = []; rows.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
-  const vals = c => rows.map(r => String(r[c] == null ? '' : r[c]).trim()).filter(Boolean);
-  let status = cols.find(c => /status|resultado|conform|situa[cç]|avalia|parecer|aprova/i.test(c));
-  if (!status) status = cols.find(c => { const v = vals(c); const d = new Set(v.map(x => x.toLowerCase())); return v.length >= rows.length * 0.6 && d.size <= 6 && v.filter(x => RX_OK.test(x) || RX_NOK.test(x)).length >= v.length * 0.7; });
-  const tec = cols.find(c => /t[eé]cnico|colaborador|respons/i.test(c));
-  const out = { itens: rows.length, cols, status, tec, conf: null, ok: 0, nok: 0, porStatus: {}, porTec: {} };
-  if (status){
-    vals(status).forEach(v => { out.porStatus[v] = (out.porStatus[v] || 0) + 1; if (RX_NOK.test(v)) out.nok++; else if (RX_OK.test(v)) out.ok++; });
-    if (out.ok + out.nok) out.conf = out.ok / (out.ok + out.nok);
-  }
-  if (tec) rows.forEach(r => { const t = String(r[tec] || '').trim(); if (!t) return; const x = out.porTec[t] = out.porTec[t] || { itens: 0, nok: 0 }; x.itens++; if (status && RX_NOK.test(String(r[status] || ''))) x.nok++; });
-  return out;
-}
-function resumoAud(a){ const rows = linhasAud(a); return rows.length ? analisarAud(rows) : null; }
-function renderAuditoria(a){
-  const regs = (audCache || []).filter(x => x.acao === a.id);
-  const arqs = []; regs.forEach(x => { if (!arqs.find(y => y.arq === x.arq)) arqs.push({ arq: x.arq, nome: x.nome, enviadoEm: x.enviadoEm, usuario: x.usuario }); });
-  arqs.sort((x, y) => String(x.enviadoEm).localeCompare(String(y.enviadoEm)));
-  renderStatsAcao(a, resumoAud(a));
-  if (!arqs.length){
-    el('ad-aud-files').innerHTML = '';
-    el('ad-aud-corpo').innerHTML = '<p class="ad-note">Nenhuma planilha de auditoria ainda. Anexe a planilha (.xlsx ou .csv) com uma linha por item auditado e, se tiver, colunas de técnico e de resultado (ex.: Conforme / Não conforme). A página lê e resume sozinha.</p>';
-    return;
-  }
-  if (!audArqSel || !arqs.find(x => x.arq === audArqSel)) audArqSel = arqs.length > 1 ? '' : arqs[0].arq;
-  el('ad-aud-files').innerHTML = (arqs.length > 1 ? `<button class="btn ghost" data-arq="" style="padding:5px 10px;font-size:12px;${audArqSel === '' ? 'border-color:var(--brand);color:var(--brand)' : ''}">Todas (${arqs.length})</button>` : '') +
-    arqs.map(x => `<button class="btn ghost" data-arq="${esc(x.arq)}" style="padding:5px 10px;font-size:12px;${audArqSel === x.arq ? 'border-color:var(--brand);color:var(--brand)' : ''}">📊 ${esc(x.nome)} · ${x.enviadoEm ? ddmm(String(x.enviadoEm).slice(0, 10)) : ''}</button>`).join('') +
-    (audArqSel ? ` <button class="btn danger" data-rmarq="${esc(audArqSel)}" style="padding:5px 10px;font-size:12px">Remover planilha</button>` : '');
-  const rows = linhasAud(a, audArqSel || null);
-  const r = analisarAud(rows);
-  const kp = [['Itens auditados', r.itens, 'brand']];
-  if (r.status){ kp.push(['Conformes', r.ok, 'ok'], ['Não conformes', r.nok, r.nok ? 'crit' : 'ok']); if (r.conf != null) kp.push(['Conformidade', pctBR(r.conf), r.conf >= 0.9 ? 'ok' : r.conf >= 0.7 ? 'warn' : 'crit']); }
-  if (r.tec) kp.push(['Técnicos auditados', Object.keys(r.porTec).length, '']);
-  const cols = r.cols.slice(0, 9);
-  const prev = rows.slice(0, 40);
-  el('ad-aud-corpo').innerHTML = `
-    <div class="ar-mini-stats">${kp.map(([l, v, c]) => `<div class="stat-card ${c}"><div class="label">${l}</div><div class="value" style="font-size:20px">${v}</div></div>`).join('')}</div>
-    ${r.status || r.tec ? `<div class="ar-grid2" style="margin-bottom:10px">
-      ${r.status ? `<div><p class="ar-title">Resultado (${esc(r.status)})</p><div class="ar-chart" style="height:${Math.max(140, Object.keys(r.porStatus).length * 30 + 40)}px"><canvas id="ad-aud-st"></canvas></div></div>` : ''}
-      ${r.tec ? `<div><p class="ar-title">Itens por ${esc(r.tec)}</p><div class="ar-chart" style="height:${Math.max(140, Math.min(14, Object.keys(r.porTec).length) * 26 + 40)}px"><canvas id="ad-aud-tec"></canvas></div></div>` : ''}
-    </div>` : '<p class="ad-note">Não achei uma coluna de resultado (ex.: “Status” com Conforme/Não conforme). Se a planilha tiver, a conformidade aparece aqui.</p>'}
-    <p class="ar-title">Itens (${rows.length > 40 ? 'primeiros 40 de ' + rows.length : rows.length})</p>
-    <div class="table-wrap" style="max-height:300px"><table class="services ar-det compact">
-      <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-      <tbody>${prev.map(row => `<tr>${cols.map(c => { const v = row[c] == null ? '' : String(row[c]); const cor = c === r.status ? (RX_NOK.test(v) ? 'color:var(--crit)' : RX_OK.test(v) ? 'color:var(--ok)' : '') : ''; return `<td class="${v.length > 40 ? 'ar-txt' : ''}" style="${cor}">${esc(v)}</td>`; }).join('')}</tr>`).join('')}</tbody>
-    </table></div>`;
-  if (r.status){
-    const st = Object.entries(r.porStatus).sort((x, y) => y[1] - x[1]);
-    novoGrafico('ad-aud-st', { type: 'bar', data: { labels: st.map(x => x[0]), datasets: [{ data: st.map(x => x[1]), backgroundColor: st.map(x => RX_NOK.test(x[0]) ? '#ff4d6d' : RX_OK.test(x[0]) ? '#00e5a0' : '#5e7a9e'), borderRadius: 4 }] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, valueLabels: {} },
-        scales: { x: { beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { grid: { display: false }, ticks: { color: '#e2eaf5' } } } } });
-  }
-  if (r.tec){
-    const tt = Object.entries(r.porTec).sort((x, y) => y[1].itens - x[1].itens).slice(0, 14);
-    const dsT = [{ label: 'Itens', data: tt.map(x => x[1].itens - (r.status ? x[1].nok : 0)), backgroundColor: '#5e7a9e', borderRadius: 4, stack: 's', labelColor: '#e2eaf5' }];
-    if (r.status) dsT.push({ label: 'Não conformes', data: tt.map(x => x[1].nok), backgroundColor: '#ff4d6d', borderRadius: 4, stack: 's' });
-    novoGrafico('ad-aud-tec', { type: 'bar', data: { labels: tt.map(x => nomeCurto(x[0])), datasets: dsT },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: !!r.status, labels: legend.labels }, valueLabels: {} },
-        scales: { x: { stacked: true, beginAtZero: true, grid, ticks: { ...tick, precision: 0 } }, y: { stacked: true, grid: { display: false }, ticks: { color: '#e2eaf5' } } } } });
-  }
-}
-el('ad-aud-files').addEventListener('click', async e => {
+// ---------- formulário de registro ----------
+let rgTipo = null, rgFotos = [], rgFotosItem = {}, rgColabs = new Set(), rgLista = [];
+function abrirRegistro(){
   const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
-  const rmb = e.target.closest('[data-rmarq]');
-  if (rmb){
-    if (!rmb.dataset.confirm){ rmb.dataset.confirm = '1'; rmb.textContent = 'Confirmar remoção'; return; }
-    const r = await gravarColecao(SYNC_AUD, l => l.filter(x => !(x.acao === a.id && x.arq === rmb.dataset.rmarq)));
-    audCache = r.lista; audArqSel = null; renderAuditoria(a); await atualizarContadores(a); return;
-  }
-  const b = e.target.closest('[data-arq]'); if (!b) return;
-  audArqSel = b.dataset.arq; renderAuditoria(a);
+  rgTipo = null; rgFotos = []; rgFotosItem = {}; rgColabs = new Set();
+  rgLista = tecnicosDaEquipe(a.equipe);
+  // tira os supervisores da lista (aparecem como técnico em algumas OS)
+  rgLista = rgLista.filter(n => !EQUIPES.some(e => e.key === n));
+  if (a.tecnico && !rgLista.includes(a.tecnico)) rgLista.unshift(a.tecnico);
+  if (a.tipo === 'Individual' && a.tecnico) rgColabs.add(a.tecnico);
+  el('rg-sub').textContent = a.acao + ' · ' + labelEquipe(a.equipe);
+  el('rg-data').value = hojeISO();
+  ['rg-prot', 'rg-assunto', 'rg-obs', 'rg-foto-legenda', 'rg-busca', 'rg-nota'].forEach(id => { el(id).value = ''; });
+  el('rg-opcoes').innerHTML = REG_TIPOS.map(t => `<button type="button" class="rg-op" data-k="${t.k}"><span>${t.icon}</span>${t.label}</button>`).join('');
+  aplicarTipoReg(); renderColabs(); renderPrevFotos();
+  el('rg-modal').style.display = 'flex';
+}
+function aplicarTipoReg(){
+  [...el('rg-opcoes').children].forEach(b => b.classList.toggle('on', b.dataset.k === rgTipo));
+  el('rg-corpo').style.display = rgTipo ? '' : 'none';
+  el('rg-dica').style.display = rgTipo ? 'none' : '';
+  if (!rgTipo) return;
+  const t = tipoReg(rgTipo);
+  el('rg-aud-wrap').style.display = t.aud ? '' : 'none';
+  el('rg-prot-wrap').style.display = t.aud ? '' : 'none';
+  el('rg-fb-wrap').style.display = t.aud ? 'none' : '';
+  el('rg-obs-label').textContent = t.aud ? 'Observações gerais' : 'O que foi conversado / combinado';
+  rgFotosItem = {};
+  el('rg-checklist').innerHTML = t.aud ? (REG_CHECKLIST[t.k] || []).map((item, i) => `
+    <div class="rg-item">
+      <div class="rg-item-top"><span>${esc(item)}</span>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn ghost rg-st" data-status="conforme" data-idx="${i}" style="padding:4px 10px;font-size:12px">✅ Conforme</button>
+          <button type="button" class="btn ghost rg-st" data-status="nao_conforme" data-idx="${i}" style="padding:4px 10px;font-size:12px">❌ Não Conforme</button>
+        </div></div>
+      <textarea class="input rg-item-obs" data-idx="${i}" placeholder="Observação (opcional)" rows="2" style="resize:vertical;font-size:12px;min-height:0"></textarea>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label class="btn ghost ad-file" style="padding:4px 10px;font-size:12px;margin:0">📷 Anexar imagem<input type="file" accept="image/*" class="rg-item-foto" data-idx="${i}"></label>
+        <span class="rg-item-st ad-note" data-idx="${i}"></span>
+      </div>
+    </div>`).join('') : '';
+  if (rgTipo === 'feedback_coletivo' && rgColabs.size <= 1){ rgLista.forEach(n => rgColabs.add(n)); renderColabs(); }
+}
+function renderColabs(){
+  const q = el('rg-busca').value.trim().toLowerCase();
+  const vis = rgLista.filter(n => !q || n.toLowerCase().includes(q));
+  el('rg-colabs').innerHTML = vis.length ? vis.map(n => `<button type="button" class="rg-col ${rgColabs.has(n) ? 'on' : ''}" data-n="${esc(n)}">${rgColabs.has(n) ? '✓ ' : ''}${esc(n)}</button>`).join('') : '<p class="ad-note">Nenhum colaborador encontrado.</p>';
+  el('rg-n-colabs').textContent = rgColabs.size + ' selecionado(s) de ' + rgLista.length;
+}
+function renderPrevFotos(){
+  el('rg-prev').innerHTML = rgFotos.map((f, i) => `<div><img src="${esc(f.foto)}" alt=""><button type="button" data-rmfoto="${i}" title="Tirar foto">✕</button><small>${esc(f.legenda || 'Sem legenda')}</small></div>`).join('');
+}
+el('ad-novo-reg').onclick = abrirRegistro;
+el('rg-opcoes').addEventListener('click', e => { const b = e.target.closest('.rg-op'); if (!b) return; rgTipo = b.dataset.k; aplicarTipoReg(); });
+el('rg-colabs').addEventListener('click', e => {
+  const b = e.target.closest('.rg-col'); if (!b) return;
+  const n = b.dataset.n; if (rgColabs.has(n)) rgColabs.delete(n); else rgColabs.add(n);
+  renderColabs();
 });
-el('ad-aud-input').addEventListener('change', async e => {
-  const file = e.target.files[0]; e.target.value = '';
-  const a = acoes.find(x => x.id === acaoAberta); if (!a || !file) return;
-  if (typeof XLSX === 'undefined'){ OPS.showToast('⚠️ Leitor de planilha não carregou, recarregue a página'); return; }
-  const toast = OPS.showToast('📊 Lendo a planilha...');
+el('rg-busca').addEventListener('input', renderColabs);
+el('rg-todos').onclick = () => { const q = el('rg-busca').value.trim().toLowerCase(); rgLista.filter(n => !q || n.toLowerCase().includes(q)).forEach(n => rgColabs.add(n)); renderColabs(); };
+el('rg-nenhum').onclick = () => { rgColabs.clear(); renderColabs(); };
+el('rg-checklist').addEventListener('click', e => {
+  const btn = e.target.closest('.rg-st'); if (!btn) return;
+  const item = btn.closest('.rg-item');
+  item.querySelectorAll('.rg-st').forEach(b => {
+    const ativo = b === btn && b.dataset.ativo !== '1';
+    b.dataset.ativo = ativo ? '1' : '';
+    b.style.background = ativo ? (b.dataset.status === 'conforme' ? 'var(--ok)' : 'var(--crit)') : '';
+    b.style.color = ativo ? '#0B1512' : '';
+    b.style.borderColor = ativo ? 'transparent' : '';
+  });
+});
+el('rg-checklist').addEventListener('change', async e => {
+  const input = e.target.closest('.rg-item-foto'); if (!input) return;
+  const idx = input.dataset.idx, file = input.files[0];
+  const st = el('rg-checklist').querySelector(`.rg-item-st[data-idx="${idx}"]`);
+  if (!file) return;
+  st.textContent = 'Comprimindo...';
+  try{ rgFotosItem[idx] = await comprimirFoto(file); st.textContent = '✅ Imagem anexada'; st.style.color = 'var(--ok)'; }
+  catch(err){ st.textContent = '⚠️ Não consegui anexar essa imagem'; st.style.color = 'var(--crit)'; }
+});
+el('rg-fotos').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const legenda = el('rg-foto-legenda').value.trim();
+  let falhas = 0;
+  for (const f of files){
+    try{ rgFotos.push({ foto: await comprimirFoto(f), legenda }); }catch(err){ falhas++; }
+  }
+  el('rg-foto-legenda').value = '';
+  if (falhas) OPS.showToast('⚠️ ' + falhas + ' foto(s) não puderam ser anexadas');
+  renderPrevFotos();
+});
+el('rg-prev').addEventListener('click', e => { const b = e.target.closest('[data-rmfoto]'); if (!b) return; rgFotos.splice(Number(b.dataset.rmfoto), 1); renderPrevFotos(); });
+function fecharRegistro(){ el('rg-modal').style.display = 'none'; }
+el('rg-cancelar').onclick = fecharRegistro;
+el('rg-modal').addEventListener('click', e => { if (e.target.id === 'rg-modal') fecharRegistro(); });
+el('rg-salvar').onclick = async () => {
+  const a = acoes.find(x => x.id === acaoAberta); if (!a) return;
+  if (!rgTipo){ OPS.showToast('⚠️ Escolha o que foi feito'); return; }
+  if (!rgColabs.size){ OPS.showToast('⚠️ Selecione pelo menos um colaborador'); return; }
+  const t = tipoReg(rgTipo);
+  const itens = t.aud ? (REG_CHECKLIST[t.k] || []) : [];
+  const checklist = itens.map((item, i) => {
+    const b = el('rg-checklist').querySelector(`.rg-st[data-idx="${i}"][data-ativo="1"]`);
+    const o = el('rg-checklist').querySelector(`.rg-item-obs[data-idx="${i}"]`);
+    return { item, status: b ? b.dataset.status : '', obs: o ? o.value.trim() : '' };
+  });
+  const id = a.id + '|R' + Date.now().toString(36);
+  const agora = new Date().toISOString();
+  const reg = {
+    id, acao: a.id, tipo: rgTipo, data: el('rg-data').value || hojeISO(),
+    colabs: JSON.stringify([...rgColabs]),
+    protocolo: t.aud ? el('rg-prot').value.trim() : '', nota: t.aud ? el('rg-nota').value : '',
+    assunto: t.aud ? '' : el('rg-assunto').value.trim(), obs: el('rg-obs').value.trim(),
+    checklist: JSON.stringify(checklist), usuario: usuario(), criadoEm: agora,
+  };
+  const fotos = [];
+  Object.entries(rgFotosItem).forEach(([i, foto]) => {
+    const c = checklist[i]; if (!c) return;
+    fotos.push({ foto, legenda: c.item + (c.status === 'nao_conforme' ? ' (não conforme)' : c.status === 'conforme' ? ' (conforme)' : '') });
+  });
+  rgFotos.forEach(f => fotos.push(f));
+  const novas = fotos.map((f, i) => ({ id: id + '|F' + i, acao: a.id, reg: id, foto: f.foto, legenda: f.legenda, data: agora, usuario: usuario() }));
+  const btn = el('rg-salvar'); btn.disabled = true; btn.textContent = 'Salvando...';
   try{
-    const ehCsv = /\.csv$/i.test(file.name);
-    const wb = ehCsv ? XLSX.read(await file.text(), { type: 'string', raw: true }) : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    let rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-    rows = rows.filter(r => Object.values(r).some(v => String(v).trim() !== '')).map(r => {
-      const o = {}; Object.entries(r).forEach(([k, v]) => { if (!/^__EMPTY/.test(k)) o[k.trim()] = String(v).slice(0, 300); }); return o;
-    });
-    if (!rows.length) throw new Error('vazia');
-    const limite = 2000; const cortou = rows.length > limite; rows = rows.slice(0, limite);
-    const arq = 'P' + Date.now().toString(36); const agora = new Date().toISOString();
-    const novos = rows.map((row, i) => ({ id: a.id + '|' + arq + '|' + i, acao: a.id, arq, nome: file.name, enviadoEm: agora, usuario: usuario(), i, linha: JSON.stringify(row) }));
-    toast.textContent = '☁️ Salvando ' + rows.length + ' linha(s)...';
-    const r = await gravarColecao(SYNC_AUD, l => l.concat(novos));
-    audCache = r.lista; audArqSel = arq;
-    toast.remove();
-    if (cortou) OPS.showToast('⚠️ Planilha com mais de ' + limite + ' linhas: guardei as primeiras ' + limite);
-    renderAuditoria(a); await atualizarContadores(a);
+    if (novas.length){
+      const r = await gravarColecao(SYNC_EVID, l => l.concat(novas));
+      if (!r.ok) throw new Error('fotos');
+      evidCache = r.lista;
+    }
+    const r2 = await gravarColecao(SYNC_REG, l => l.concat(reg));
+    if (!r2.ok) throw new Error('registro');
+    regCache = r2.lista;
+    fecharRegistro();
+    await atualizarContadores(a);
+    renderRegistros(acoes.find(x => x.id === a.id) || a);
   }catch(err){
-    toast.textContent = '⚠️ Não consegui ler essa planilha (' + (err.message === 'vazia' ? 'sem linhas' : 'formato') + ')';
-    setTimeout(() => toast.remove(), 4000);
+    OPS.showToast('⚠️ Não consegui salvar o registro agora, tente de novo');
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Salvar registro';
   }
-});
+};
 el('ad-editar').onclick = () => abrirModal(acaoAberta);
 el('ad-fechar').onclick = () => { el('ad-modal').style.display = 'none'; acaoAberta = null; };
 el('ad-modal').addEventListener('click', e => { if (e.target.id === 'ad-modal'){ el('ad-modal').style.display = 'none'; acaoAberta = null; } });
