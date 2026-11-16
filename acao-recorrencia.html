@@ -379,6 +379,7 @@ async function initPage(silencioso = false){
   if (toast) toast.remove();
   if (s && s.length){ semanal = s.filter(r => r && r.ini && r.equipe); }
   if (!semanal.length) semanal = SEED.slice();
+  semanal = semanal.map(r => ({ ...r, ini: String(r.ini).slice(0, 10), fim: String(r.fim).slice(0, 10), reab: Number(r.reab), reparos: Number(r.reparos) }));
   OPS.saveData(KEY_SEMANAL, semanal);
   if (a){ acoes = a.filter(x => x && x.id); OPS.saveData(KEY_ACOES, acoes); }
   if (c && c[0]){ config = c[0]; OPS.saveData(KEY_CONFIG, config); }
