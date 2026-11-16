@@ -1722,6 +1722,7 @@ const OPS_NAV_LINKS = [
   { href: 'produtividade-tempo-real.html', label: 'Produtividade Tempo Real', icon: '⚡' },
   { href: 'mundo-jira.html',       label: 'Mundo Jira',         icon: '🎫' },
   { href: 'gestao-operacional.html', label: 'Gestão Operacional', icon: '🧭' },
+  { href: 'acao-recorrencia.html', label: 'Ação de Recorrência', icon: '🔁' },
   { href: 'atividades.html',      label: 'Atividades',         icon: '📋' },
   { href: 'alerta.html',           label: 'Alerta',             icon: '🚨' },
   { href: 'gestao-pessoas.html',   label: 'Gestão de Pessoas',  icon: '👥' },
@@ -1804,6 +1805,8 @@ function hasAccess(moduleKey, access){
   if (moduleKey === 'produtividade-tempo-real') moduleKey = 'gestao-operacional';
   // Férias faz parte de Gestão de Pessoas - mesma permissão
   if (moduleKey === 'ferias') moduleKey = 'gestao-pessoas';
+  // Ação de Recorrência faz parte de Gestão Operacional - mesma permissão
+  if (moduleKey === 'acao-recorrencia') moduleKey = 'gestao-operacional';
   return Array.isArray(access) && access.includes(moduleKey);
 }
 
