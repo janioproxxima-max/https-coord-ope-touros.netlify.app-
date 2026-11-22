@@ -456,6 +456,7 @@ function classifyStatusChamado(r){
 function isAlwaysHidden(r){
   if (FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
   // tipos não catalogados de atendimento financeiro/CRE — nunca precisam aparecer
+  if (OPS.isForaDaArea(r.tituloCompleto) || OPS.isForaDaArea(r.tipoCurto)) return true;
   if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
   // desconsiderar sempre, venha como tipo de serviço ou dentro do título
   const nCompleto = OPS.normalize(r.tituloCompleto);

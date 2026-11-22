@@ -676,6 +676,8 @@ const OPS = (() => {
     { full: 'REDES/TI - AMPLIAÇÃO', norm: 'redes/ti - ampliacao', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
     { full: 'REDES/TI - MANUTENÇÃO CORRETIVA RÁDIO', norm: 'redes/ti - manutencao corretiva radio', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
     { full: 'REDES/TI - RÁDIO MANUTENÇÃO', norm: 'redes/ti - radio manutencao', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
+    // Fora da área da Unidade Touros (e também não é N2) — tratado como REDES pra ficar oculto em todo o site
+    { full: 'MANUTENÇÃO REDES - ATIVAÇÃO - CORPORATIVO-DEDICADO', norm: 'manutencao redes - ativacao - corporativo-dedicado', tipo: 'REDES', tempo: 0.0, pontos: 0.0 },
     { full: 'OPERAÇÕES - RETENÇÃO CLIENTE CRITICO', norm: 'operacoes - retencao cliente critico', tipo: 'RETENÇÃO CLIENTE CRITICO', tempo: 24.0, pontos: 1.33 },
     { full: 'OPERAÇÕES - UPGRADE PLANO/TROCA DE EQUIPAMENTO', norm: 'operacoes - upgrade plano/troca de equipamento', tipo: 'SERVIÇOS ADICIONAIS', tempo: 48.0, pontos: 1.33 },
   ];
@@ -790,6 +792,14 @@ const OPS = (() => {
       pontos = 2.40;
     }
     return { encontrado: !!found, produtivo, pontos };
+  }
+
+  // Serviços que não fazem parte da área de operação da Unidade Touros
+  // (nem do N2): Manutenção Redes e Corporativo-Dedicado. Checa pelo título
+  // pra pegar também registros já importados antes da regra existir.
+  function isForaDaArea(titulo){
+    const n = normalize(titulo);
+    return n.startsWith('manutencao redes') || (n.includes('corporativo') && n.includes('dedicado'));
   }
 
   // Busca o tipo de serviço no catálogo por nome completo (coluna "Tipo de Serviço").
@@ -1654,7 +1664,7 @@ const OPS = (() => {
     classifyType, allTypes, TYPE_OTHER,
     load, save, clearAll, uid, loadFallbackFromIdb,
     loadData, saveData, loadDataFallbackFromIdb, parseCSV, downloadCSV, downloadXLSX, readSpreadsheetFile,
-    SERVICE_CATALOG, lookupService, parseBRDateTime, elapsedHoursSince,
+    SERVICE_CATALOG, lookupService, isForaDaArea, parseBRDateTime, elapsedHoursSince,
     SLA_FECHAMENTO_AJUSTADO, fechamentoSla,
     PRODUTIVIDADE_CATALOG, lookupProdutividade,
     TOUROS_UNIT_CITIES, NATAL_UNIT_CITIES, CAICO_UNIT_CITIES, PARELHAS_UNIT_CITIES, UNIT_CITIES, TOUROS_PROJECT_CODE, NATAL_PROJECT_CODE, UNIT_PROJECT_CODE,

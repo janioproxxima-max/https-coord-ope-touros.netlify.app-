@@ -3931,6 +3931,7 @@ const GOSLA_RECOLHIMENTO_TROCA_ENDERECO = 'operacoes - recolhimento/troca de end
 const GOSLA_FULLY_HIDDEN_TIPOS = ['REDES', 'RETRABALHO', 'SUPERVISÃO - ANÁLISE DE INSATISFAÇÃO'];
 function goSlaIsAlwaysHidden(r){
   if (GOSLA_FULLY_HIDDEN_TIPOS.includes(r.tipoCurto)) return true;
+  if (OPS.isForaDaArea(r.tituloCompleto) || OPS.isForaDaArea(r.tipoCurto)) return true;
   if (!r.catalogado && OPS.normalize(r.tituloCompleto).includes('atendimento financeiro')) return true;
   const nCompleto = OPS.normalize(r.tituloCompleto);
   if (nCompleto.includes('bot backoffice') || nCompleto.includes('solicitacao inativa')) return true;
