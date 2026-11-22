@@ -803,7 +803,7 @@ const SLA_GROUPS = {
   reparo:    { label: 'SLA Reparo (VT)', meta: 90, tipos: ['SEM ACESSO','CABO BAIXO','DIFICULDADE DE ACESSO','PROBLEMA RECORRENTE','RETENÇÃO CLIENTE CRITICO','AÇÕES PREVENTIVAS'] },
   sa:        { label: 'SLA Serviço Adicional', meta: 90, tipos: ['SERVIÇOS ADICIONAIS'] },
   ativacao:  { label: 'SLA Ativação', meta: 95, tipos: ['ATIVAÇÃO'] },
-  mde:       { label: 'SLA Mud. de Endereço', meta: 95, tipos: ['TROCA DE ENDEREÇO'] },
+  mde:       { label: 'SLA Mud. de Endereço', meta: 90, tipos: ['TROCA DE ENDEREÇO'] },
 };
 const META_SLA_GERAL = 80;
 // estimativa de reparos/dia: 200 serviços a cada 2 dias = 100/dia
@@ -3951,7 +3951,7 @@ const GOSLA_TABS = [
   { key: 'VT',  label: 'SLA 24HS (Reparo)',           horas: 24, meta: 90 },
   { key: 'SA',  label: 'SLA 48HS (Serviços Adicional)', horas: 48, meta: 95 },
   { key: 'AT',  label: 'SLA 72HS (Ativação)',          horas: 72, meta: 95 },
-  { key: 'MDE', label: 'SLA 72HS (Mudança de Endereço)', horas: 72, meta: 95 },
+  { key: 'MDE', label: 'SLA 72HS (Mudança de Endereço)', horas: 72, meta: 90 },
 ];
 let goSlaAbaAtiva = 'TODOS';
 let goSlaMapaRecords = null;
